@@ -1,0 +1,681 @@
+"""pysysfan CLI entry point."""
+
+import logging
+import sys
+
+import click
+from rich.console import Console
+from rich.table import Table
+from rich.panel import Panel
+from rich.text import Text
+
+from pysysfan import __version__
+
+console = Console()
+
+
+def check_admin():
+    """Check if we're running with administrator privileges."""
+    try:
+        import ctypes
+        return ctypes.windll.shell32.IsUserAnAdmin() != 0
+    except Exception:
+        return False
+
+
+def _print_version(ctx, _param, value):
+    if not value or ctx.resilient_parsing:
+        return
+    click.echo(f"pysysfan, version {__version__}")
+    ctx.exit()
+
+
+@click.group(context_settings={"help_option_names": ["-h", "--help"]})
+@click.option(
+    "-v", "--version",
+    is_flag=True, is_eager=True, expose_value=False, callback=_print_version,
+    help="Show the version and exit.",
+)
+@click.option("--verbose", is_flag=True, help="Enable verbose logging.")
+def main(verbose: bool):
+    """pysysfan — Python fan control daemon for Windows.
+
+    Controls system fan speeds based on temperature curves using
+    LibreHardwareMonitor.
+    """
+    level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(
+        level=level,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+
+
+# ── LHM subcommand group ──────────────────────────────────────────────
+
+
+@main.group()
+def lhm():
+    """Manage the LibreHardwareMonitor library."""
+    pass
+
+
+@lhm.command("download")
+@click.option(
+    "--target", "-t",
+    type=click.Path(),
+    default=None,
+    help="Directory to download LHM into. Default: ~/.pysysfan/lib/",
+)
+def lhm_download(target):
+    """Download the latest LibreHardwareMonitor release from GitHub."""
+    from pathlib import Path
+    from pysysfan.lhm.download import download_latest
+
+    target_dir = Path(target) if target else None
+
+    try:
+        download_latest(target_dir)
+    except Exception as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise SystemExit(1)
+
+
+@lhm.command("info")
+def lhm_info():
+    """Show information about the installed LHM library."""
+    from pysysfan.lhm import get_lhm_dll_path, get_lhm_version, LHM_DIR
+
+    try:
+        dll_path = get_lhm_dll_path()
+        console.print(f"[bold green]✓[/] DLL found: {dll_path}")
+    except FileNotFoundError as e:
+        console.print(f"[bold red]✗[/] {e}")
+        raise SystemExit(1)
+
+    # Check for version marker file
+    version_file = LHM_DIR / ".lhm_version"
+    if version_file.is_file():
+        lines = version_file.read_text().strip().split("\n")
+        if lines:
+            console.print(f"  Release: {lines[0]}")
+        if len(lines) > 1:
+            console.print(f"  Asset: {lines[1]}")
+
+
+# ── Scan command ──────────────────────────────────────────────────────
+
+
+@main.command()
+@click.option(
+    "--type", "-t",
+    "sensor_type",
+    type=click.Choice(["all", "temp", "fan", "control"], case_sensitive=False),
+    default="all",
+    help="Filter by sensor type.",
+)
+@click.option("--json", "as_json", is_flag=True, help="Output as JSON.")
+def scan(sensor_type: str, as_json: bool):
+    """Scan and display all detected hardware sensors.
+
+    Requires administrator privileges and PawnIO driver.
+    """
+    if not check_admin():
+        console.print(
+            "[bold yellow]⚠ Warning:[/] Not running as Administrator. "
+            "Hardware access may fail.\n"
+            "  Run PowerShell as Admin and try again."
+        )
+
+    from pysysfan.hardware import HardwareManager
+
+    try:
+        with HardwareManager() as hw:
+            result = hw.scan()
+    except FileNotFoundError as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        raise SystemExit(1)
+    except Exception as e:
+        console.print(f"[bold red]Error accessing hardware:[/] {e}")
+        console.print(
+            "\n[dim]Common causes:[/]\n"
+            "  • Not running as Administrator\n"
+            "  • PawnIO driver not installed (winget install PawnIO)\n"
+            "  • LibreHardwareMonitorLib.dll not found (pysysfan lhm download)\n"
+        )
+        raise SystemExit(1)
+
+    if as_json:
+        _output_scan_json(result, sensor_type)
+    else:
+        _output_scan_tables(result, sensor_type)
+
+
+def _output_scan_json(result, sensor_type: str):
+    """Output scan results as JSON."""
+    import json
+
+    data = {}
+    if sensor_type in ("all", "temp"):
+        data["temperatures"] = [
+            {"hardware": s.hardware_name, "sensor": s.sensor_name,
+             "value": s.value, "identifier": s.identifier}
+            for s in result.temperatures
+        ]
+    if sensor_type in ("all", "fan"):
+        data["fans"] = [
+            {"hardware": s.hardware_name, "sensor": s.sensor_name,
+             "value": s.value, "identifier": s.identifier}
+            for s in result.fans
+        ]
+    if sensor_type in ("all", "control"):
+        data["controls"] = [
+            {"hardware": c.hardware_name, "sensor": c.sensor_name,
+             "value": c.current_value, "identifier": c.identifier,
+             "controllable": c.has_control}
+            for c in result.controls
+        ]
+
+    click.echo(json.dumps(data, indent=2))
+
+
+def _output_scan_tables(result, sensor_type: str):
+    """Output scan results as rich tables."""
+    if sensor_type in ("all", "temp"):
+        table = Table(
+            title="🌡️  Temperature Sensors",
+            show_header=True,
+            header_style="bold cyan",
+        )
+        table.add_column("Hardware", style="dim")
+        table.add_column("Sensor")
+        table.add_column("Value", justify="right")
+        table.add_column("Identifier", style="dim")
+
+        for s in result.temperatures:
+            value_str = f"{s.value:.1f}°C" if s.value is not None else "N/A"
+            table.add_row(s.hardware_name, s.sensor_name, value_str, s.identifier)
+
+        console.print(table)
+        console.print()
+
+    if sensor_type in ("all", "fan"):
+        table = Table(
+            title="🌀  Fan Speeds",
+            show_header=True,
+            header_style="bold cyan",
+        )
+        table.add_column("Hardware", style="dim")
+        table.add_column("Sensor")
+        table.add_column("RPM", justify="right")
+        table.add_column("Identifier", style="dim")
+
+        for s in result.fans:
+            value_str = f"{s.value:.0f}" if s.value is not None else "N/A"
+            table.add_row(s.hardware_name, s.sensor_name, value_str, s.identifier)
+
+        console.print(table)
+        console.print()
+
+    if sensor_type in ("all", "control"):
+        table = Table(
+            title="🎛️  Fan Controls",
+            show_header=True,
+            header_style="bold cyan",
+        )
+        table.add_column("Hardware", style="dim")
+        table.add_column("Control")
+        table.add_column("Current %", justify="right")
+        table.add_column("Controllable", justify="center")
+        table.add_column("Identifier", style="dim")
+
+        for c in result.controls:
+            value_str = f"{c.current_value:.1f}%" if c.current_value is not None else "N/A"
+            ctrl_str = "[green]✓[/]" if c.has_control else "[red]✗[/]"
+            table.add_row(
+                c.hardware_name, c.sensor_name, value_str, ctrl_str, c.identifier
+            )
+
+        console.print(table)
+        console.print()
+
+    # Summary
+    summary = Text()
+    summary.append(f"Found: ", style="bold")
+    summary.append(f"{len(result.temperatures)} temps", style="yellow")
+    summary.append(", ")
+    summary.append(f"{len(result.fans)} fans", style="cyan")
+    summary.append(", ")
+    controllable = sum(1 for c in result.controls if c.has_control)
+    summary.append(f"{controllable}/{len(result.controls)} controllable outputs", style="green")
+    console.print(Panel(summary, title="Summary"))
+
+
+# ── Config subcommand group ───────────────────────────────────────────
+
+
+@main.group()
+@click.option(
+    "--path", "-p",
+    type=click.Path(),
+    default=None,
+    envvar="PYSYSFAN_CONFIG",
+    help="Path to config file. Default: ~/.pysysfan/config.yaml",
+)
+@click.pass_context
+def config(ctx, path):
+    """Manage pysysfan configuration."""
+    from pysysfan.config import DEFAULT_CONFIG_PATH
+    from pathlib import Path
+    ctx.ensure_object(dict)
+    ctx.obj["config_path"] = Path(path) if path else DEFAULT_CONFIG_PATH
+
+
+@config.command("init")
+@click.option("--force", is_flag=True, help="Overwrite existing config file.")
+@click.pass_context
+def config_init(ctx, force: bool):
+    """Generate a starter config file.
+
+    Runs 'pysysfan scan' first so the example includes real sensor identifiers
+    from your hardware.
+    """
+    from pathlib import Path
+    from pysysfan.config import DEFAULT_CONFIG_PATH, Config, FanConfig, CurveConfig
+
+    config_path: Path = ctx.obj["config_path"]
+
+    if config_path.is_file() and not force:
+        console.print(
+            f"[yellow]Config already exists:[/] {config_path}\n"
+            "Use --force to overwrite."
+        )
+        raise SystemExit(0)
+
+    # Try to scan for real sensor IDs
+    temp_ids: dict[str, str] = {}
+    control_ids: dict[str, str] = {}
+
+    try:
+        from pysysfan.hardware import HardwareManager
+        with HardwareManager() as hw:
+            result = hw.scan()
+        for s in result.temperatures:
+            key = s.hardware_name.replace(" ", "_").lower()
+            temp_ids[key] = s.identifier
+        for c in result.controls:
+            if c.has_control:
+                key = c.sensor_name.replace(" ", "_").lower()
+                control_ids[key] = c.identifier
+    except Exception:
+        pass  # Fall back to placeholder IDs if scan fails
+
+    # Build a commented-up example config manually so YAML has nice comments
+    first_temp = next(iter(temp_ids.values()), "/amdcpu/0/temperature/0")
+    first_ctrl = next(iter(control_ids.values()), "/motherboard/control/0")
+
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(f"""\
+# pysysfan Configuration
+# Run 'pysysfan scan' to discover sensor identifiers for your hardware.
+
+general:
+  poll_interval: 2  # seconds between control updates
+
+fans:
+  # Example: map a fan header to a temperature source and curve
+  cpu_fan:
+    # Sensor identifier from 'pysysfan scan --type control'
+    sensor: "{first_ctrl}"
+    # Which temperature curve to use (see 'curves' below)
+    curve: balanced
+    # Temperature sensor identifier from 'pysysfan scan --type temp'
+    source: "{first_temp}"
+
+curves:
+  silent:
+    hysteresis: 3
+    points:
+      - [30, 20]  # 30°C -> 20%
+      - [50, 40]
+      - [70, 70]
+      - [85, 100]
+
+  balanced:
+    hysteresis: 3
+    points:
+      - [30, 30]
+      - [60, 60]
+      - [75, 85]
+      - [85, 100]
+
+  performance:
+    hysteresis: 2
+    points:
+      - [30, 50]
+      - [50, 70]
+      - [65, 90]
+      - [75, 100]
+""")
+    console.print(f"[bold green]Config written:[/] {config_path}")
+    if temp_ids or control_ids:
+        console.print("[dim]Sensor identifiers were populated from a live scan.[/]")
+    else:
+        console.print(
+            "[yellow]Tip:[/] Run as Administrator then [bold]pysysfan scan[/] to find "
+            "your actual sensor identifiers."
+        )
+
+
+@config.command("validate")
+@click.pass_context
+def config_validate(ctx):
+    """Validate the config file and check sensors exist on this hardware."""
+    from pathlib import Path
+    from pysysfan.config import Config
+
+    config_path: Path = ctx.obj["config_path"]
+
+    if not config_path.is_file():
+        console.print(f"[red]Config not found:[/] {config_path}. Run 'pysysfan config init' first.")
+        raise SystemExit(1)
+
+    # Load and parse config
+    try:
+        cfg = Config.load(config_path)
+    except Exception as e:
+        console.print(f"[red]Config parse error:[/] {e}")
+        raise SystemExit(1)
+
+    console.print(f"[bold green]Config OK:[/] {config_path}")
+    console.print(f"  Fans defined   : {len(cfg.fans)}")
+    console.print(f"  Curves defined : {len(cfg.curves)}")
+    console.print(f"  Poll interval  : {cfg.poll_interval}s")
+
+    # Validate curve references
+    errors = []
+    for fan_name, fan in cfg.fans.items():
+        if fan.curve not in cfg.curves:
+            errors.append(f"Fan '{fan_name}' references unknown curve '{fan.curve}'")
+
+    if errors:
+        for e in errors:
+            console.print(f"  [red]✗[/] {e}")
+        raise SystemExit(1)
+
+    # Optionally verify sensor IDs against live hardware
+    try:
+        from pysysfan.hardware import HardwareManager
+        with HardwareManager() as hw:
+            result = hw.scan()
+        all_ids = {s.identifier for s in result.all_sensors}
+        all_ids |= {c.identifier for c in result.controls}
+
+        for fan_name, fan in cfg.fans.items():
+            if fan.source_id not in all_ids:
+                console.print(f"  [yellow]⚠[/]  Fan '{fan_name}': source '{fan.source_id}' not found in current hardware scan")
+            if fan.sensor_id not in all_ids:
+                console.print(f"  [yellow]⚠[/]  Fan '{fan_name}': control '{fan.sensor_id}' not found in current hardware scan")
+        console.print("  [green]Hardware check complete.[/]")
+    except Exception:
+        console.print("  [dim]Hardware check skipped (run as admin for full validation).[/]")
+
+
+@config.command("show")
+@click.pass_context
+def config_show(ctx):
+    """Display the current config file contents."""
+    from pathlib import Path
+    from pysysfan.config import Config
+
+    config_path: Path = ctx.obj["config_path"]
+
+    if not config_path.is_file():
+        console.print(f"[red]Config not found:[/] {config_path}. Run 'pysysfan config init' first.")
+        raise SystemExit(1)
+
+    raw = config_path.read_text()
+    console.print(f"[bold]Config:[/] {config_path}\n")
+    # Use rich syntax highlighting
+    from rich.syntax import Syntax
+    console.print(Syntax(raw, "yaml", theme="monokai", line_numbers=True))
+
+
+# ── Run command ───────────────────────────────────────────────────────
+
+
+@main.command()
+@click.option(
+    "--once", is_flag=True,
+    help="Run a single control pass then exit (useful for testing).",
+)
+@click.option(
+    "--config", "-c", "config_path",
+    type=click.Path(exists=False),
+    default=None,
+    envvar="PYSYSFAN_CONFIG",
+    help="Path to config file. Default: ~/.pysysfan/config.yaml",
+)
+def run(once: bool, config_path: str | None):
+    """Start the fan control daemon.
+
+    Requires administrator privileges and PawnIO driver.
+    """
+    from pathlib import Path
+    from pysysfan.config import DEFAULT_CONFIG_PATH
+    from pysysfan.daemon import FanDaemon
+
+    if not check_admin():
+        console.print(
+            "[bold yellow]⚠ Warning:[/] Not running as Administrator.\n"
+            "  Motherboard sensors and fan controls require admin privileges.\n"
+            "  Re-launch in an elevated PowerShell for full functionality."
+        )
+
+    cfg_path = Path(config_path) if config_path else DEFAULT_CONFIG_PATH
+
+    if not cfg_path.is_file():
+        console.print(
+            f"[red]Config not found:[/] {cfg_path}\n"
+            "Run [bold]pysysfan config init[/] first."
+        )
+        raise SystemExit(1)
+
+    daemon = FanDaemon(config_path=cfg_path)
+
+    if once:
+        console.print("[bold]Running single control pass...[/]")
+        try:
+            applied = daemon.run_once()
+            if applied:
+                for fan, pct in applied.items():
+                    console.print(f"  [green]✓[/] {fan}: set to {pct:.1f}%")
+            else:
+                console.print("[yellow]No fans were controlled.[/] Check sensor IDs in config.")
+        except Exception as e:
+            console.print(f"[red]Error:[/] {e}")
+            raise SystemExit(1)
+    else:
+        console.print(f"[bold green]Starting pysysfan daemon[/] (config: {cfg_path})")
+        console.print("Press Ctrl+C to stop and restore BIOS fan control.\n")
+        try:
+            daemon.run()
+        except KeyboardInterrupt:
+            pass  # daemon.run() already handles cleanup
+        except Exception as e:
+            console.print(f"[red]Daemon error:[/] {e}")
+            raise SystemExit(1)
+
+
+# ── Service subcommand group ──────────────────────────────────────────
+
+
+@main.group()
+def service():
+    """Manage pysysfan as a Windows startup service (Task Scheduler)."""
+    pass
+
+
+@service.command("install")
+@click.option(
+    "--config", "-c", "config_path",
+    type=click.Path(),
+    default=None,
+    help="Config file path to pass to the daemon. Default: ~/.pysysfan/config.yaml",
+)
+def service_install(config_path: str | None):
+    """Install pysysfan as a Windows startup task.
+
+    Creates a Task Scheduler task that runs 'pysysfan run' at system startup
+    with the highest privileges. Requires administrator access.
+    """
+    from pysysfan.service import install_task
+
+    if not check_admin():
+        console.print("[red]Error:[/] Installing a startup task requires Administrator privileges.")
+        raise SystemExit(1)
+
+    try:
+        install_task(config_path=config_path)
+        console.print("[bold green]✓ Startup task installed.[/]")
+        console.print("  pysysfan will now start automatically at boot.")
+        console.print("  Use [bold]pysysfan service status[/] to check.")
+    except Exception as e:
+        console.print(f"[red]Failed to install task:[/] {e}")
+        raise SystemExit(1)
+
+
+@service.command("uninstall")
+def service_uninstall():
+    """Remove the pysysfan startup task."""
+    from pysysfan.service import uninstall_task
+
+    if not check_admin():
+        console.print("[red]Error:[/] Removing a startup task requires Administrator privileges.")
+        raise SystemExit(1)
+
+    try:
+        uninstall_task()
+        console.print("[bold green]✓ Startup task removed.[/]")
+    except Exception as e:
+        console.print(f"[red]Failed to remove task:[/] {e}")
+        raise SystemExit(1)
+
+
+@service.command("status")
+def service_status():
+    """Check whether the pysysfan startup task is installed and running."""
+    from pysysfan.service import get_task_status
+
+    status = get_task_status()
+    if status is None:
+        console.print("[yellow]Task not installed.[/] Run [bold]pysysfan service install[/].")
+    else:
+        console.print(f"[bold]Task status:[/] {status}")
+
+
+# ── Status / Monitor commands ─────────────────────────────────────────
+
+
+def _build_status_table(result) -> Table:
+    """Build a rich Table from a hardware scan result."""
+    from rich.table import Table
+
+    table = Table(
+        title="pysysfan Sensor Status",
+        show_header=True,
+        header_style="bold cyan",
+        expand=True,
+    )
+    table.add_column("Type", style="dim", width=8)
+    table.add_column("Hardware")
+    table.add_column("Sensor")
+    table.add_column("Value", justify="right")
+
+    for s in result.temperatures:
+        val = f"{s.value:.1f} °C" if s.value is not None else "N/A"
+        table.add_row("Temp", s.hardware_name, s.sensor_name, f"[yellow]{val}[/]")
+
+    for s in result.fans:
+        val = f"{s.value:.0f} RPM" if s.value is not None else "N/A"
+        table.add_row("Fan", s.hardware_name, s.sensor_name, f"[cyan]{val}[/]")
+
+    for c in result.controls:
+        val = f"{c.current_value:.1f} %" if c.current_value is not None else "N/A"
+        ctrl = "[green]ctrl[/]" if c.has_control else "[dim]read[/]"
+        table.add_row("Control", c.hardware_name, f"{c.sensor_name} {ctrl}", f"[green]{val}[/]")
+
+    return table
+
+
+@main.command()
+def status():
+    """Show a snapshot of current hardware sensor readings."""
+    if not check_admin():
+        console.print(
+            "[bold yellow]⚠[/] Not running as Administrator — "
+            "motherboard sensors may not appear."
+        )
+
+    from pysysfan.hardware import HardwareManager
+
+    try:
+        with HardwareManager() as hw:
+            result = hw.scan()
+    except Exception as e:
+        console.print(f"[red]Error accessing hardware:[/] {e}")
+        raise SystemExit(1)
+
+    table = _build_status_table(result)
+    console.print(table)
+
+
+@main.command()
+@click.option(
+    "--interval", "-i",
+    type=float,
+    default=2.0,
+    show_default=True,
+    help="Refresh interval in seconds.",
+)
+def monitor(interval: float):
+    """Live-updating sensor dashboard. Press Ctrl+C to exit."""
+    import time
+    from rich.live import Live
+    from rich.spinner import Spinner
+    from rich.panel import Panel
+    from pysysfan.hardware import HardwareManager
+
+    if not check_admin():
+        console.print(
+            "[bold yellow]⚠[/] Not running as Administrator — "
+            "motherboard sensors may not appear."
+        )
+
+    try:
+        hw = HardwareManager()
+        hw.open()
+    except Exception as e:
+        console.print(f"[red]Error:[/] {e}")
+        raise SystemExit(1)
+
+    try:
+        with Live(console=console, refresh_per_second=4, screen=False) as live:
+            while True:
+                try:
+                    result = hw.scan()
+                    table = _build_status_table(result)
+                    import datetime
+                    ts = datetime.datetime.now().strftime("%H:%M:%S")
+                    live.update(Panel(
+                        table,
+                        title=f"[bold green]pysysfan Monitor[/] — [dim]updated {ts}, Ctrl+C to exit[/]",
+                    ))
+                except Exception as e:
+                    live.update(f"[red]Error:[/] {e}")
+
+                time.sleep(interval)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        hw.close()
