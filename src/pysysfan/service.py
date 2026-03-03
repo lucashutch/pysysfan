@@ -44,12 +44,18 @@ def install_task(config_path: str | None = None) -> None:
     # /F           — force overwrite if task already exists
     result = subprocess.run(
         [
-            "schtasks", "/Create",
-            "/TN", TASK_NAME,
-            "/TR", cmd_args,
-            "/SC", "ONSTART",
-            "/RL", "HIGHEST",
-            "/RU", "SYSTEM",
+            "schtasks",
+            "/Create",
+            "/TN",
+            TASK_NAME,
+            "/TR",
+            cmd_args,
+            "/SC",
+            "ONSTART",
+            "/RL",
+            "HIGHEST",
+            "/RU",
+            "SYSTEM",
             "/F",
         ],
         capture_output=True,
@@ -74,7 +80,10 @@ def uninstall_task() -> None:
     )
 
     if result.returncode != 0:
-        if "cannot find" in result.stderr.lower() or "does not exist" in result.stderr.lower():
+        if (
+            "cannot find" in result.stderr.lower()
+            or "does not exist" in result.stderr.lower()
+        ):
             raise FileNotFoundError(f"Task '{TASK_NAME}' is not installed.")
         raise RuntimeError(
             f"schtasks /Delete failed (exit {result.returncode}):\n"

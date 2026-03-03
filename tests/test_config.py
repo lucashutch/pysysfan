@@ -1,8 +1,6 @@
 """Tests for pysysfan.config — Config loading, saving, and validation."""
 
 import pytest
-import yaml
-from pathlib import Path
 
 from pysysfan.config import Config, FanConfig, CurveConfig, DEFAULT_CONFIG_DIR
 
@@ -47,11 +45,13 @@ def test_save_and_reload(tmp_path):
     """Config.save() → Config.load() should produce an identical config."""
     original = Config(
         poll_interval=3.0,
-        fans={"test_fan": FanConfig(
-            sensor_id="/mb/control/1",
-            curve="silent",
-            source_id="/cpu/temp/0",
-        )},
+        fans={
+            "test_fan": FanConfig(
+                sensor_id="/mb/control/1",
+                curve="silent",
+                source_id="/cpu/temp/0",
+            )
+        },
         curves={
             "silent": CurveConfig(
                 points=[(30, 20), (50, 40), (80, 100)],

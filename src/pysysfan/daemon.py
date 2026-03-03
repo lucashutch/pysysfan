@@ -40,11 +40,14 @@ class FanDaemon:
         curves: dict[str, FanCurve] = {}
         for name, c in cfg.curves.items():
             curves[name] = FanCurve(name=name, points=c.points, hysteresis=c.hysteresis)
-            logger.debug(f"Loaded curve '{name}' with {len(c.points)} points, hysteresis={c.hysteresis}°C")
+            logger.debug(
+                f"Loaded curve '{name}' with {len(c.points)} points, hysteresis={c.hysteresis}°C"
+            )
         return curves
 
     def _open_hardware(self):
         from pysysfan.hardware import HardwareManager
+
         hw = HardwareManager()
         hw.open()
         return hw
@@ -90,7 +93,9 @@ class FanDaemon:
         for fan_name, fan_cfg in cfg.fans.items():
             curve = self._curves.get(fan_cfg.curve)
             if curve is None:
-                logger.warning(f"Fan '{fan_name}': curve '{fan_cfg.curve}' not found, skipping.")
+                logger.warning(
+                    f"Fan '{fan_name}': curve '{fan_cfg.curve}' not found, skipping."
+                )
                 continue
 
             temp = self._get_temperature(fan_cfg.source_id, temps)
@@ -103,7 +108,9 @@ class FanDaemon:
 
             if temp == 0.0:
                 # LHM sometimes returns 0.0 for unavailable sensors (not None)
-                logger.debug(f"Fan '{fan_name}': source returned 0.0°C — skipping this pass.")
+                logger.debug(
+                    f"Fan '{fan_name}': source returned 0.0°C — skipping this pass."
+                )
                 continue
 
             target_pct = curve.evaluate(temp)

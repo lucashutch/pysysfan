@@ -1,7 +1,7 @@
 """Fan curve logic with linear interpolation and hysteresis."""
 
 from __future__ import annotations
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import bisect
 
 
@@ -19,10 +19,7 @@ class FanCurve:
     """
 
     def __init__(
-        self,
-        name: str,
-        points: list[tuple[float, float]],
-        hysteresis: float = 2.0
+        self, name: str, points: list[tuple[float, float]], hysteresis: float = 2.0
     ):
         """
         Args:
@@ -32,9 +29,11 @@ class FanCurve:
         """
         self.name = name
         # Sort points by temperature
-        self._points = sorted([CurvePoint(t, s) for t, s in points], key=lambda p: p.temperature)
+        self._points = sorted(
+            [CurvePoint(t, s) for t, s in points], key=lambda p: p.temperature
+        )
         self.hysteresis = hysteresis
-        
+
         if not self._points:
             raise ValueError(f"Curve '{name}' must have at least one point.")
 
@@ -57,12 +56,12 @@ class FanCurve:
             # If temp hasn't dropped by at least 'hysteresis' since we peaked,
             # or if the current temp is still high enough to justify the last speed,
             # we stay at the higher speed.
-            
+
             # Simple implementation: if temp is falling, we don't drop speed
             # unless current_temp + hysteresis < temp_that_justified_last_speed.
             # But a simpler way: just check if the new target speed is lower,
             # and if current_temp > (temp_required_for_last_speed - hysteresis).
-            
+
             # Find what temp would result in self._last_speed
             # (Note: this is simplified, works best for monotonic curves)
             if current_temp > (self._last_temp - self.hysteresis):
@@ -76,7 +75,7 @@ class FanCurve:
         """Perform linear interpolation between defined points."""
         if temp <= self._points[0].temperature:
             return self._points[0].speed
-        
+
         if temp >= self._points[-1].temperature:
             return self._points[-1].speed
 

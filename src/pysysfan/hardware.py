@@ -12,6 +12,7 @@ logger = logging.getLogger(__name__)
 
 class SensorKind(IntEnum):
     """Mirrors LibreHardwareMonitor.Hardware.SensorType enum values."""
+
     VOLTAGE = 0
     CURRENT = 1
     POWER = 2
@@ -36,6 +37,7 @@ class SensorKind(IntEnum):
 @dataclass
 class SensorInfo:
     """Represents a hardware sensor reading."""
+
     hardware_name: str
     hardware_type: str
     sensor_name: str
@@ -49,6 +51,7 @@ class SensorInfo:
 @dataclass
 class ControlInfo:
     """Represents a controllable fan output."""
+
     hardware_name: str
     sensor_name: str
     identifier: str
@@ -59,6 +62,7 @@ class ControlInfo:
 @dataclass
 class HardwareScanResult:
     """Result of a full hardware scan."""
+
     temperatures: list[SensorInfo] = field(default_factory=list)
     fans: list[SensorInfo] = field(default_factory=list)
     controls: list[ControlInfo] = field(default_factory=list)
@@ -197,7 +201,9 @@ class HardwareManager:
                     hardware_name=str(hw.Name),
                     sensor_name=str(sensor.Name),
                     identifier=identifier,
-                    current_value=float(sensor.Value) if sensor.Value is not None else None,
+                    current_value=float(sensor.Value)
+                    if sensor.Value is not None
+                    else None,
                     has_control=has_ctrl,
                 )
                 result.controls.append(ctrl_info)
@@ -213,14 +219,16 @@ class HardwareManager:
         temps = []
         for hw, sensor in self._iter_sensors():
             if int(sensor.SensorType) == SensorKind.TEMPERATURE:
-                temps.append(SensorInfo(
-                    hardware_name=str(hw.Name),
-                    hardware_type=self._hardware_type_name(hw),
-                    sensor_name=str(sensor.Name),
-                    sensor_type="Temperature",
-                    identifier=str(sensor.Identifier),
-                    value=float(sensor.Value) if sensor.Value is not None else None,
-                ))
+                temps.append(
+                    SensorInfo(
+                        hardware_name=str(hw.Name),
+                        hardware_type=self._hardware_type_name(hw),
+                        sensor_name=str(sensor.Name),
+                        sensor_type="Temperature",
+                        identifier=str(sensor.Identifier),
+                        value=float(sensor.Value) if sensor.Value is not None else None,
+                    )
+                )
         return temps
 
     def get_fan_speeds(self) -> list[SensorInfo]:
@@ -229,14 +237,16 @@ class HardwareManager:
         fans = []
         for hw, sensor in self._iter_sensors():
             if int(sensor.SensorType) == SensorKind.FAN:
-                fans.append(SensorInfo(
-                    hardware_name=str(hw.Name),
-                    hardware_type=self._hardware_type_name(hw),
-                    sensor_name=str(sensor.Name),
-                    sensor_type="Fan",
-                    identifier=str(sensor.Identifier),
-                    value=float(sensor.Value) if sensor.Value is not None else None,
-                ))
+                fans.append(
+                    SensorInfo(
+                        hardware_name=str(hw.Name),
+                        hardware_type=self._hardware_type_name(hw),
+                        sensor_name=str(sensor.Name),
+                        sensor_type="Fan",
+                        identifier=str(sensor.Identifier),
+                        value=float(sensor.Value) if sensor.Value is not None else None,
+                    )
+                )
         return fans
 
     def set_fan_speed(self, control_identifier: str, percent: float):

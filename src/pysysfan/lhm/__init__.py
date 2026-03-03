@@ -113,7 +113,7 @@ def get_lhm_version() -> str | None:
 
     try:
         _ensure_clr()
-        import clr  # type: ignore[import-untyped]
+        import clr  # noqa: F401  # type: ignore[import-untyped]
         from System.Reflection import Assembly  # type: ignore[import-untyped]
 
         asm = Assembly.LoadFrom(str(dll_path))

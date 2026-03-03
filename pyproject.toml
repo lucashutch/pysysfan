@@ -1,6 +1,6 @@
 [project]
 name = "pysysfan"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Python fan control daemon for Windows."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -16,10 +16,24 @@ dependencies = [
 pysysfan = "pysysfan.cli:main"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/pysysfan"]
 
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
+    "ruff",
 ]
+
+[tool.uv]
+package = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]

@@ -5,7 +5,6 @@ import os
 import yaml
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
 
 DEFAULT_CONFIG_DIR = Path.home() / ".pysysfan"
 DEFAULT_CONFIG_PATH = DEFAULT_CONFIG_DIR / "config.yaml"
@@ -41,21 +40,21 @@ class Config:
             data = yaml.safe_load(f) or {}
 
         poll_interval = data.get("general", {}).get("poll_interval", 2.0)
-        
+
         fans = {}
         for name, fan_data in data.get("fans", {}).items():
             fans[name] = FanConfig(
                 sensor_id=fan_data["sensor"],
                 curve=fan_data["curve"],
                 source_id=fan_data["source"],
-                header_name=fan_data.get("header")
+                header_name=fan_data.get("header"),
             )
 
         curves = {}
         for name, curve_data in data.get("curves", {}).items():
             curves[name] = CurveConfig(
                 points=[(float(p[0]), float(p[1])) for p in curve_data["points"]],
-                hysteresis=curve_data.get("hysteresis", 2.0)
+                hysteresis=curve_data.get("hysteresis", 2.0),
             )
 
         # Basic presets
@@ -70,7 +69,6 @@ class Config:
 
     def save(self, path: Path | str):
         """Save configuration to a YAML file."""
-        import os
         path = Path(path)
         path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -81,17 +79,19 @@ class Config:
                     "sensor": f.sensor_id,
                     "curve": f.curve,
                     "source": f.source_id,
-                    **({"header": f.header_name} if f.header_name else {})
+                    **({"header": f.header_name} if f.header_name else {}),
                 }
                 for name, f in self.fans.items()
             },
             "curves": {
                 name: {
-                    "points": [list(p) for p in c.points],  # tuples → lists for clean YAML
+                    "points": [
+                        list(p) for p in c.points
+                    ],  # tuples → lists for clean YAML
                     "hysteresis": c.hysteresis,
                 }
                 for name, c in self.curves.items()
-            }
+            },
         }
 
         with open(path, "w") as f:
@@ -110,13 +110,13 @@ def init_default_config(path: Path | str = DEFAULT_CONFIG_PATH):
     """Creates a default config file if it doesn't exist."""
     if os.path.exists(path):
         return
-    
+
     config = get_default_config()
     # Add an example fan to the default config for documentation
     config.fans["example_cpu_fan"] = FanConfig(
         sensor_id="/motherboard/nct6791d/control/0",
         curve="balanced",
         source_id="/amdcpu/0/temperature/0",
-        header_name="CPU Fan 1"
+        header_name="CPU Fan 1",
     )
     config.save(path)

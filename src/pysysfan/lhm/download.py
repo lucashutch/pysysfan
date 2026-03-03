@@ -50,7 +50,9 @@ def find_zip_asset(release: dict) -> dict | None:
 
 def download_and_extract_dll(asset: dict, target_dir: Path) -> Path:
     """Download a release ZIP and extract LibreHardwareMonitorLib.dll."""
-    click.echo(f"  Downloading {asset['name']} ({asset['size'] / 1024 / 1024:.1f} MB)...")
+    click.echo(
+        f"  Downloading {asset['name']} ({asset['size'] / 1024 / 1024:.1f} MB)..."
+    )
 
     resp = requests.get(asset["browser_download_url"], timeout=120, stream=True)
     resp.raise_for_status()
@@ -62,7 +64,8 @@ def download_and_extract_dll(asset: dict, target_dir: Path) -> Path:
     with zipfile.ZipFile(content) as zf:
         # Verify the main DLL is in the archive
         dll_entries = [
-            name for name in zf.namelist()
+            name
+            for name in zf.namelist()
             if name.lower().endswith(LHM_DLL_NAME.lower())
         ]
 
@@ -88,7 +91,9 @@ def download_and_extract_dll(asset: dict, target_dir: Path) -> Path:
 
     dll_path = target_dir / LHM_DLL_NAME
     if not dll_path.is_file():
-        raise FileNotFoundError(f"Expected {dll_path} after extraction but it's missing.")
+        raise FileNotFoundError(
+            f"Expected {dll_path} after extraction but it's missing."
+        )
 
     return dll_path
 
@@ -123,5 +128,7 @@ def download_latest(target_dir: Path | None = None) -> Path:
     version_file = target_dir / ".lhm_version"
     version_file.write_text(f"{version}\n{asset['name']}\n")
 
-    click.echo(f"\n  ✓ LibreHardwareMonitorLib.dll ({version}) installed to {target_dir}")
+    click.echo(
+        f"\n  ✓ LibreHardwareMonitorLib.dll ({version}) installed to {target_dir}"
+    )
     return dll_path

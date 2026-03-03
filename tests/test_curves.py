@@ -1,7 +1,7 @@
 """Tests for pysysfan.curves — FanCurve interpolation, clamping, and hysteresis."""
 
 import pytest
-from pysysfan.curves import FanCurve, CurvePoint
+from pysysfan.curves import FanCurve
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────

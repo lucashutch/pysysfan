@@ -1,7 +1,6 @@
 """pysysfan CLI entry point."""
 
 import logging
-import sys
 
 import click
 from rich.console import Console
@@ -18,6 +17,7 @@ def check_admin():
     """Check if we're running with administrator privileges."""
     try:
         import ctypes
+
         return ctypes.windll.shell32.IsUserAnAdmin() != 0
     except Exception:
         return False
@@ -32,8 +32,12 @@ def _print_version(ctx, _param, value):
 
 @click.group(context_settings={"help_option_names": ["-h", "--help"]})
 @click.option(
-    "-v", "--version",
-    is_flag=True, is_eager=True, expose_value=False, callback=_print_version,
+    "-v",
+    "--version",
+    is_flag=True,
+    is_eager=True,
+    expose_value=False,
+    callback=_print_version,
     help="Show the version and exit.",
 )
 @click.option("--verbose", is_flag=True, help="Enable verbose logging.")
@@ -62,7 +66,8 @@ def lhm():
 
 @lhm.command("download")
 @click.option(
-    "--target", "-t",
+    "--target",
+    "-t",
     type=click.Path(),
     default=None,
     help="Directory to download LHM into. Default: ~/.pysysfan/lib/",
@@ -84,7 +89,7 @@ def lhm_download(target):
 @lhm.command("info")
 def lhm_info():
     """Show information about the installed LHM library."""
-    from pysysfan.lhm import get_lhm_dll_path, get_lhm_version, LHM_DIR
+    from pysysfan.lhm import get_lhm_dll_path, LHM_DIR
 
     try:
         dll_path = get_lhm_dll_path()
@@ -108,7 +113,8 @@ def lhm_info():
 
 @main.command()
 @click.option(
-    "--type", "-t",
+    "--type",
+    "-t",
     "sensor_type",
     type=click.Choice(["all", "temp", "fan", "control"], case_sensitive=False),
     default="all",
@@ -158,21 +164,33 @@ def _output_scan_json(result, sensor_type: str):
     data = {}
     if sensor_type in ("all", "temp"):
         data["temperatures"] = [
-            {"hardware": s.hardware_name, "sensor": s.sensor_name,
-             "value": s.value, "identifier": s.identifier}
+            {
+                "hardware": s.hardware_name,
+                "sensor": s.sensor_name,
+                "value": s.value,
+                "identifier": s.identifier,
+            }
             for s in result.temperatures
         ]
     if sensor_type in ("all", "fan"):
         data["fans"] = [
-            {"hardware": s.hardware_name, "sensor": s.sensor_name,
-             "value": s.value, "identifier": s.identifier}
+            {
+                "hardware": s.hardware_name,
+                "sensor": s.sensor_name,
+                "value": s.value,
+                "identifier": s.identifier,
+            }
             for s in result.fans
         ]
     if sensor_type in ("all", "control"):
         data["controls"] = [
-            {"hardware": c.hardware_name, "sensor": c.sensor_name,
-             "value": c.current_value, "identifier": c.identifier,
-             "controllable": c.has_control}
+            {
+                "hardware": c.hardware_name,
+                "sensor": c.sensor_name,
+                "value": c.current_value,
+                "identifier": c.identifier,
+                "controllable": c.has_control,
+            }
             for c in result.controls
         ]
 
@@ -230,7 +248,9 @@ def _output_scan_tables(result, sensor_type: str):
         table.add_column("Identifier", style="dim")
 
         for c in result.controls:
-            value_str = f"{c.current_value:.1f}%" if c.current_value is not None else "N/A"
+            value_str = (
+                f"{c.current_value:.1f}%" if c.current_value is not None else "N/A"
+            )
             ctrl_str = "[green]✓[/]" if c.has_control else "[red]✗[/]"
             table.add_row(
                 c.hardware_name, c.sensor_name, value_str, ctrl_str, c.identifier
@@ -241,13 +261,15 @@ def _output_scan_tables(result, sensor_type: str):
 
     # Summary
     summary = Text()
-    summary.append(f"Found: ", style="bold")
+    summary.append("Found: ", style="bold")
     summary.append(f"{len(result.temperatures)} temps", style="yellow")
     summary.append(", ")
     summary.append(f"{len(result.fans)} fans", style="cyan")
     summary.append(", ")
     controllable = sum(1 for c in result.controls if c.has_control)
-    summary.append(f"{controllable}/{len(result.controls)} controllable outputs", style="green")
+    summary.append(
+        f"{controllable}/{len(result.controls)} controllable outputs", style="green"
+    )
     console.print(Panel(summary, title="Summary"))
 
 
@@ -256,7 +278,8 @@ def _output_scan_tables(result, sensor_type: str):
 
 @main.group()
 @click.option(
-    "--path", "-p",
+    "--path",
+    "-p",
     type=click.Path(),
     default=None,
     envvar="PYSYSFAN_CONFIG",
@@ -267,6 +290,7 @@ def config(ctx, path):
     """Manage pysysfan configuration."""
     from pysysfan.config import DEFAULT_CONFIG_PATH
     from pathlib import Path
+
     ctx.ensure_object(dict)
     ctx.obj["config_path"] = Path(path) if path else DEFAULT_CONFIG_PATH
 
@@ -281,7 +305,6 @@ def config_init(ctx, force: bool):
     from your hardware.
     """
     from pathlib import Path
-    from pysysfan.config import DEFAULT_CONFIG_PATH, Config, FanConfig, CurveConfig
 
     config_path: Path = ctx.obj["config_path"]
 
@@ -298,6 +321,7 @@ def config_init(ctx, force: bool):
 
     try:
         from pysysfan.hardware import HardwareManager
+
         with HardwareManager() as hw:
             result = hw.scan()
         for s in result.temperatures:
@@ -377,7 +401,9 @@ def config_validate(ctx):
     config_path: Path = ctx.obj["config_path"]
 
     if not config_path.is_file():
-        console.print(f"[red]Config not found:[/] {config_path}. Run 'pysysfan config init' first.")
+        console.print(
+            f"[red]Config not found:[/] {config_path}. Run 'pysysfan config init' first."
+        )
         raise SystemExit(1)
 
     # Load and parse config
@@ -406,6 +432,7 @@ def config_validate(ctx):
     # Optionally verify sensor IDs against live hardware
     try:
         from pysysfan.hardware import HardwareManager
+
         with HardwareManager() as hw:
             result = hw.scan()
         all_ids = {s.identifier for s in result.all_sensors}
@@ -413,12 +440,18 @@ def config_validate(ctx):
 
         for fan_name, fan in cfg.fans.items():
             if fan.source_id not in all_ids:
-                console.print(f"  [yellow]⚠[/]  Fan '{fan_name}': source '{fan.source_id}' not found in current hardware scan")
+                console.print(
+                    f"  [yellow]⚠[/]  Fan '{fan_name}': source '{fan.source_id}' not found in current hardware scan"
+                )
             if fan.sensor_id not in all_ids:
-                console.print(f"  [yellow]⚠[/]  Fan '{fan_name}': control '{fan.sensor_id}' not found in current hardware scan")
+                console.print(
+                    f"  [yellow]⚠[/]  Fan '{fan_name}': control '{fan.sensor_id}' not found in current hardware scan"
+                )
         console.print("  [green]Hardware check complete.[/]")
     except Exception:
-        console.print("  [dim]Hardware check skipped (run as admin for full validation).[/]")
+        console.print(
+            "  [dim]Hardware check skipped (run as admin for full validation).[/]"
+        )
 
 
 @config.command("show")
@@ -426,18 +459,20 @@ def config_validate(ctx):
 def config_show(ctx):
     """Display the current config file contents."""
     from pathlib import Path
-    from pysysfan.config import Config
 
     config_path: Path = ctx.obj["config_path"]
 
     if not config_path.is_file():
-        console.print(f"[red]Config not found:[/] {config_path}. Run 'pysysfan config init' first.")
+        console.print(
+            f"[red]Config not found:[/] {config_path}. Run 'pysysfan config init' first."
+        )
         raise SystemExit(1)
 
     raw = config_path.read_text()
     console.print(f"[bold]Config:[/] {config_path}\n")
     # Use rich syntax highlighting
     from rich.syntax import Syntax
+
     console.print(Syntax(raw, "yaml", theme="monokai", line_numbers=True))
 
 
@@ -446,11 +481,14 @@ def config_show(ctx):
 
 @main.command()
 @click.option(
-    "--once", is_flag=True,
+    "--once",
+    is_flag=True,
     help="Run a single control pass then exit (useful for testing).",
 )
 @click.option(
-    "--config", "-c", "config_path",
+    "--config",
+    "-c",
+    "config_path",
     type=click.Path(exists=False),
     default=None,
     envvar="PYSYSFAN_CONFIG",
@@ -491,7 +529,9 @@ def run(once: bool, config_path: str | None):
                 for fan, pct in applied.items():
                     console.print(f"  [green]✓[/] {fan}: set to {pct:.1f}%")
             else:
-                console.print("[yellow]No fans were controlled.[/] Check sensor IDs in config.")
+                console.print(
+                    "[yellow]No fans were controlled.[/] Check sensor IDs in config."
+                )
         except Exception as e:
             console.print(f"[red]Error:[/] {e}")
             raise SystemExit(1)
@@ -518,7 +558,9 @@ def service():
 
 @service.command("install")
 @click.option(
-    "--config", "-c", "config_path",
+    "--config",
+    "-c",
+    "config_path",
     type=click.Path(),
     default=None,
     help="Config file path to pass to the daemon. Default: ~/.pysysfan/config.yaml",
@@ -532,7 +574,9 @@ def service_install(config_path: str | None):
     from pysysfan.service import install_task
 
     if not check_admin():
-        console.print("[red]Error:[/] Installing a startup task requires Administrator privileges.")
+        console.print(
+            "[red]Error:[/] Installing a startup task requires Administrator privileges."
+        )
         raise SystemExit(1)
 
     try:
@@ -551,7 +595,9 @@ def service_uninstall():
     from pysysfan.service import uninstall_task
 
     if not check_admin():
-        console.print("[red]Error:[/] Removing a startup task requires Administrator privileges.")
+        console.print(
+            "[red]Error:[/] Removing a startup task requires Administrator privileges."
+        )
         raise SystemExit(1)
 
     try:
@@ -569,7 +615,9 @@ def service_status():
 
     status = get_task_status()
     if status is None:
-        console.print("[yellow]Task not installed.[/] Run [bold]pysysfan service install[/].")
+        console.print(
+            "[yellow]Task not installed.[/] Run [bold]pysysfan service install[/]."
+        )
     else:
         console.print(f"[bold]Task status:[/] {status}")
 
@@ -603,7 +651,9 @@ def _build_status_table(result) -> Table:
     for c in result.controls:
         val = f"{c.current_value:.1f} %" if c.current_value is not None else "N/A"
         ctrl = "[green]ctrl[/]" if c.has_control else "[dim]read[/]"
-        table.add_row("Control", c.hardware_name, f"{c.sensor_name} {ctrl}", f"[green]{val}[/]")
+        table.add_row(
+            "Control", c.hardware_name, f"{c.sensor_name} {ctrl}", f"[green]{val}[/]"
+        )
 
     return table
 
@@ -632,7 +682,8 @@ def status():
 
 @main.command()
 @click.option(
-    "--interval", "-i",
+    "--interval",
+    "-i",
     type=float,
     default=2.0,
     show_default=True,
@@ -642,7 +693,6 @@ def monitor(interval: float):
     """Live-updating sensor dashboard. Press Ctrl+C to exit."""
     import time
     from rich.live import Live
-    from rich.spinner import Spinner
     from rich.panel import Panel
     from pysysfan.hardware import HardwareManager
 
@@ -666,11 +716,14 @@ def monitor(interval: float):
                     result = hw.scan()
                     table = _build_status_table(result)
                     import datetime
+
                     ts = datetime.datetime.now().strftime("%H:%M:%S")
-                    live.update(Panel(
-                        table,
-                        title=f"[bold green]pysysfan Monitor[/] — [dim]updated {ts}, Ctrl+C to exit[/]",
-                    ))
+                    live.update(
+                        Panel(
+                            table,
+                            title=f"[bold green]pysysfan Monitor[/] — [dim]updated {ts}, Ctrl+C to exit[/]",
+                        )
+                    )
                 except Exception as e:
                     live.update(f"[red]Error:[/] {e}")
 
