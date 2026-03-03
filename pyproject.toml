@@ -17,6 +17,7 @@ dependencies = [
 pysysfan = "pysysfan.cli:main"
 pysysfan-install-lhm = "pysysfan.install:install_lhm"
 pysysfan-install-pawnio = "pysysfan.install:install_pawnio"
+pysysfan-linux-install = "pysysfan.install_linux:main"
 
 [project.optional-dependencies]
 linux = [

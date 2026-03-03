@@ -92,18 +92,23 @@ Each phase is an atomic, testable unit (feature branch / commit).
 - [x] Support both system-wide and user services
 - [x] Comprehensive tests with mocked systemctl
 
-#### Phase 7.4: Linux Installer Script ⏳
-- [ ] Create `install-pysysfan.sh`
-- [ ] Auto-detect distro (apt/dnf/pacman)
-- [ ] Install lm-sensors and dependencies
-- [ ] Run sensors-detect automatically
-- [ ] Auto-enable ThinkPad fan_control
-- [ ] Optional systemd service installation
+#### Phase 7.4: Linux Installer Script ✅
+- [x] Create Python installer module (`install_linux.py`)
+- [x] Add CLI entry point `pysysfan-linux-install`
+- [x] Create minimal bash wrapper (`install-pysysfan.sh`)
+- [x] Auto-detect distro (apt/dnf/pacman/zypper)
+- [x] Install lm-sensors and dependencies
+- [x] Run sensors-detect automatically
+- [x] Auto-enable ThinkPad fan_control
+- [x] Optional systemd service installation
+- [x] Dry-run mode for testing
+- [x] Comprehensive Python tests
 
 #### Phase 7.5: Testing & Documentation ⏳
-- [ ] Add platform detection tests
-- [ ] Add Linux hardware tests (mock-based)
-- [ ] Add Linux service tests
+- [x] Add platform detection tests (Phase 1)
+- [x] Add Linux hardware tests (mock-based)
+- [x] Add Linux service tests
+- [x] Add Linux installer tests
 - [ ] Update README with Linux instructions
 - [ ] Create docs/linux.md
 - [ ] Test on ThinkPad P14s Gen3
