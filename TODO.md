@@ -14,5 +14,6 @@
 - Improve code structure
 - Ensure no files are larger than 500 lines
 
-## bugs
-- remove LHM manager in the main CLI (should only be available in the lhm manager entry point like the pawnio manager)
+## Auto Populate Config
+- Implement hardware auto-detection
+- Automatically populate config with detected sensors and fans using the 

@@ -19,11 +19,6 @@ pysysfan-install-lhm = "pysysfan.install:install_lhm"
 pysysfan-install-pawnio = "pysysfan.install:install_pawnio"
 pysysfan-linux-install = "pysysfan.install_linux:main"
 
-[project.optional-dependencies]
-linux = [
-    "pysensors>=0.0.4",
-]
-
 [build-system]
 requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
@@ -42,7 +37,7 @@ dev = [
 ]
 
 [tool.uv]
-package = true
+package = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
