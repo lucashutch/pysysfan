@@ -104,14 +104,15 @@ Each phase is an atomic, testable unit (feature branch / commit).
 - [x] Dry-run mode for testing
 - [x] Comprehensive Python tests
 
-#### Phase 7.5: Testing & Documentation ⏳
+#### Phase 7.5: Testing & Documentation ✅
 - [x] Add platform detection tests (Phase 1)
 - [x] Add Linux hardware tests (mock-based)
 - [x] Add Linux service tests
 - [x] Add Linux installer tests
-- [ ] Update README with Linux instructions
-- [ ] Create docs/linux.md
-- [ ] Test on ThinkPad P14s Gen3
+- [x] Update README with Linux instructions
+- [x] Create docs/linux.md
+- [x] Create docs/windows.md
+- [ ] Test on ThinkPad P14s Gen3 (requires hardware access)
 
 ---
 
