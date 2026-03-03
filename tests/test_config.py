@@ -17,9 +17,10 @@ general:
 
 fans:
   gpu_fan:
-    sensor: "/gpu/control/0"
-    curve: balanced
-    source: "/gpu/temperature/0"
+    fan_id: "/gpu/control/0"
+    curve: "silent"
+    temp_id: "/gpu/temperature/0"
+    header: "GPU Header"
 
 curves:
   balanced:
@@ -32,10 +33,11 @@ curves:
 
     cfg = Config.load(cfg_file)
     assert cfg.poll_interval == 5.0
-    assert "gpu_fan" in cfg.fans
-    assert cfg.fans["gpu_fan"].sensor_id == "/gpu/control/0"
-    assert cfg.fans["gpu_fan"].curve == "balanced"
-    assert cfg.fans["gpu_fan"].source_id == "/gpu/temperature/0"
+    assert len(cfg.fans) == 1
+    assert cfg.fans["gpu_fan"].fan_id == "/gpu/control/0"
+    assert cfg.fans["gpu_fan"].curve == "silent"
+    assert cfg.fans["gpu_fan"].temp_id == "/gpu/temperature/0"
+    assert cfg.fans["gpu_fan"].header_name == "GPU Header"
     assert "balanced" in cfg.curves
     assert cfg.curves["balanced"].hysteresis == 3.0
     assert len(cfg.curves["balanced"].points) == 3
@@ -47,9 +49,9 @@ def test_save_and_reload(tmp_path):
         poll_interval=3.0,
         fans={
             "test_fan": FanConfig(
-                sensor_id="/mb/control/1",
+                fan_id="/mb/control/1",
                 curve="silent",
-                source_id="/cpu/temp/0",
+                temp_id="/cpu/temp/0",
             )
         },
         curves={
@@ -66,7 +68,7 @@ def test_save_and_reload(tmp_path):
     reloaded = Config.load(cfg_file)
     assert reloaded.poll_interval == original.poll_interval
     assert list(reloaded.fans.keys()) == list(original.fans.keys())
-    assert reloaded.fans["test_fan"].sensor_id == "/mb/control/1"
+    assert reloaded.fans["test_fan"].fan_id == "/mb/control/1"
     assert reloaded.curves["silent"].hysteresis == 4.0
     assert reloaded.curves["silent"].points == [(30, 20), (50, 40), (80, 100)]
 
@@ -173,10 +175,10 @@ def test_save_includes_header_name(tmp_path):
     cfg = Config(
         fans={
             "fan1": FanConfig(
-                sensor_id="/mb/control/0",
+                fan_id="/mb/control/0",
                 curve="balanced",
-                source_id="/cpu/temp/0",
-                header_name="CPU Fan 1",
+                temp_id="/cpu/temp/0",
+                header_name="Header A",
             ),
         },
     )
@@ -187,7 +189,7 @@ def test_save_includes_header_name(tmp_path):
 
     with open(cfg_file) as f:
         data = yaml.safe_load(f)
-    assert data["fans"]["fan1"]["header"] == "CPU Fan 1"
+    assert data["fans"]["fan1"]["header"] == "Header A"
 
 
 def test_save_omits_header_when_none(tmp_path):
@@ -195,9 +197,9 @@ def test_save_omits_header_when_none(tmp_path):
     cfg = Config(
         fans={
             "fan1": FanConfig(
-                sensor_id="/mb/control/0",
+                fan_id="/mb/control/0",
                 curve="balanced",
-                source_id="/cpu/temp/0",
+                temp_id="/cpu/temp/0",
             ),
         },
     )

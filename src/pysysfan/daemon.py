@@ -131,10 +131,10 @@ class FanDaemon:
                 )
                 continue
 
-            temp = self._get_temperature(fan_cfg.source_id, temps)
+            temp = self._get_temperature(fan_cfg.temp_id, temps)
             if temp is None:
                 logger.warning(
-                    f"Fan '{fan_name}': temperature source '{fan_cfg.source_id}' not found. "
+                    f"Fan '{fan_name}': temperature source '{fan_cfg.temp_id}' not found. "
                     "Is the daemon running as Administrator?"
                 )
                 continue
@@ -149,7 +149,7 @@ class FanDaemon:
             target_pct = curve.evaluate(temp)
 
             try:
-                self._hw.set_fan_speed(fan_cfg.sensor_id, target_pct)
+                self._hw.set_fan_speed(fan_cfg.fan_id, target_pct)
                 applied[fan_name] = target_pct
                 logger.debug(f"Fan '{fan_name}': {temp:.1f}°C → {target_pct:.1f}%")
             except Exception as e:

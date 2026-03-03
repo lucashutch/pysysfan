@@ -17,9 +17,9 @@ def _sample_config() -> Config:
         poll_interval=1.0,
         fans={
             "cpu_fan": FanConfig(
-                sensor_id="/mb/control/0",
+                fan_id="/mb/control/0",
                 curve="balanced",
-                source_id="/cpu/temp/0",
+                temp_id="/cpu/temp/0",
             ),
         },
         curves={
