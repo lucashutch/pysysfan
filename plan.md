@@ -50,4 +50,19 @@ Each phase is an atomic, testable unit (feature branch / commit).
 
 ---
 
+### Phase 6: Installer Script ✅
+- [x] PawnIO driver download module (`src/pysysfan/pawnio/`)
+  - Driver status detection via `sc query`
+  - GitHub release download and installer launch
+- [x] Independent install entry points (`src/pysysfan/install.py`)
+  - `pysysfan-install-lhm` — standalone LHM download
+  - `pysysfan-install-pawnio` — standalone PawnIO install
+- [x] Batch installer (`install-pysysfan.bat`)
+  - Double-click runnable, install/upgrade detection
+  - Installs UV, pysysfan, LHM, and PawnIO
+- [x] Unit tests for new modules (18 tests)
+
+---
+
 ### Future Phases → see [TODO.md](TODO.md)
+
