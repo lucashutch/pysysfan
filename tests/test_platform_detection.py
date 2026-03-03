@@ -62,11 +62,12 @@ class TestGetHardwareManager:
             assert manager_class is WindowsHardwareManager
 
     def test_returns_linux_manager_on_linux(self):
-        """Should raise not supported error on Linux (Phase 2)."""
+        """Should return LinuxHardwareManager on Linux."""
         with patch("sys.platform", "linux"):
-            with pytest.raises(PlatformNotSupportedError) as exc_info:
-                get_hardware_manager()
-            assert "not yet implemented" in str(exc_info.value).lower()
+            manager_class = get_hardware_manager()
+            from pysysfan.platforms.linux import LinuxHardwareManager
+
+            assert manager_class is LinuxHardwareManager
 
     def test_raises_on_unsupported_platform(self):
         """Should raise on unsupported platforms."""
@@ -87,11 +88,12 @@ class TestGetServiceManager:
             assert service_module is windows_service
 
     def test_returns_linux_service_on_linux(self):
-        """Should raise not supported error on Linux (Phase 3)."""
+        """Should return Linux service module on Linux."""
         with patch("sys.platform", "linux"):
-            with pytest.raises(PlatformNotSupportedError) as exc_info:
-                get_service_manager()
-            assert "not yet implemented" in str(exc_info.value).lower()
+            service_module = get_service_manager()
+            from pysysfan.platforms import linux_service
+
+            assert service_module is linux_service
 
 
 class TestBaseHardwareManager:
@@ -222,15 +224,6 @@ class TestHardwareScanResult:
 class TestHardwareModuleBackwardCompatibility:
     """Tests that hardware.py re-exports work correctly."""
 
-    def test_hardware_manager_export(self):
-        """Should be able to import HardwareManager from hardware module."""
-        # This will raise PlatformNotSupportedError on Linux (expected in Phase 1)
-        with patch("sys.platform", "win32"):
-            from pysysfan.hardware import HardwareManager
-            from pysysfan.platforms.windows import WindowsHardwareManager
-
-            assert HardwareManager is WindowsHardwareManager
-
     def test_types_export(self):
         """Should be able to import types from hardware module."""
         from pysysfan.hardware import (
@@ -249,8 +242,7 @@ class TestHardwareModuleBackwardCompatibility:
 
     def test_get_hardware_manager_export(self):
         """Should export get_hardware_manager function."""
-        with patch("sys.platform", "win32"):
-            from pysysfan.hardware import get_hardware_manager
-            from pysysfan.platforms import get_hardware_manager as platforms_getter
+        from pysysfan.hardware import get_hardware_manager
+        from pysysfan.platforms import get_hardware_manager as platforms_getter
 
-            assert get_hardware_manager is platforms_getter
+        assert get_hardware_manager is platforms_getter

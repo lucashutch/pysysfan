@@ -76,19 +76,21 @@ Each phase is an atomic, testable unit (feature branch / commit).
 - [x] Update CLI service commands for cross-platform
 - [x] All existing tests pass
 
-#### Phase 7.2: Linux Hardware Implementation ⏳
-- [ ] Create `LinuxHardwareManager` class
-- [ ] Implement pysensors-based sensor discovery
-- [ ] Implement sysfs PWM fan control
-- [ ] Add ThinkPad-specific support (auto-enable fan_control)
-- [ ] Support generic SuperIO chips (nct6775, it87, etc.)
-- [ ] Add Linux dependencies to pyproject.toml
+#### Phase 7.2: Linux Hardware Implementation ✅
+- [x] Create `LinuxHardwareManager` class (`platforms/linux.py`)
+- [x] Implement pysensors-based sensor discovery
+- [x] Implement sysfs PWM fan control
+- [x] Add ThinkPad-specific support (auto-enable fan_control)
+- [x] Support generic SuperIO chips (nct6775, it87, etc.)
+- [x] Add Linux dependencies to pyproject.toml (pysensors)
+- [x] Comprehensive tests with mocked hardware
 
-#### Phase 7.3: Systemd Service Integration ⏳
-- [ ] Create `platforms/linux_service.py`
-- [ ] Implement systemd service install/uninstall/status
-- [ ] Create systemd unit templates
-- [ ] Test service lifecycle
+#### Phase 7.3: Systemd Service Integration ✅
+- [x] Create `platforms/linux_service.py`
+- [x] Implement systemd service install/uninstall/status
+- [x] Create systemd unit templates (system and user)
+- [x] Support both system-wide and user services
+- [x] Comprehensive tests with mocked systemctl
 
 #### Phase 7.4: Linux Installer Script ⏳
 - [ ] Create `install-pysysfan.sh`

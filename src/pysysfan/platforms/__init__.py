@@ -79,12 +79,9 @@ def get_hardware_manager() -> Type[BaseHardwareManager]:
 
         return WindowsHardwareManager
     elif platform == "linux":
-        # Phase 2: Import Linux implementation
-        # For now, raise an error indicating Linux is not yet implemented
-        raise PlatformNotSupportedError(
-            "Linux support is not yet implemented. "
-            "This is coming in Phase 2 of the Linux support plan."
-        )
+        from pysysfan.platforms.linux import LinuxHardwareManager
+
+        return LinuxHardwareManager
     else:
         # This should never happen due to detect_platform check
         raise PlatformNotSupportedError(f"Unexpected platform: {platform}")
@@ -105,10 +102,8 @@ def get_service_manager():
 
         return windows_service
     elif platform == "linux":
-        # Phase 3: Import Linux service implementation
-        raise PlatformNotSupportedError(
-            "Linux systemd service support is not yet implemented. "
-            "This is coming in Phase 3 of the Linux support plan."
-        )
+        from pysysfan.platforms import linux_service
+
+        return linux_service
     else:
         raise PlatformNotSupportedError(f"Unexpected platform: {platform}")
