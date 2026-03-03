@@ -39,5 +39,5 @@ jobs:
           uv run pytest | tee pytest_output.txt
           echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY
           echo '```text' >> $GITHUB_STEP_SUMMARY
-          sed -n '/coverage: platform/,/TOTAL/p' pytest_output.txt >> $GITHUB_STEP_SUMMARY
+          sed -n '/^Name.*Stmts/,/^TOTAL/p' pytest_output.txt >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY

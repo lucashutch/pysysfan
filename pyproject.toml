@@ -31,6 +31,7 @@ packages = ["src/pysysfan"]
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
+    "pytest-cov>=6.0",
     "ruff",
 ]
 
@@ -40,3 +41,20 @@ package = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+addopts = [
+    "--cov=pysysfan",
+    "--cov-report=term-missing",
+    "--cov-config=pyproject.toml",
+]
+
+[tool.coverage.run]
+source = ["pysysfan"]
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_empty = true

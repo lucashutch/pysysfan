@@ -134,3 +134,109 @@ def test_load_empty_file(tmp_path):
 def test_default_config_dir():
     """Default config directory should use .pysysfan."""
     assert DEFAULT_CONFIG_DIR.name == ".pysysfan"
+
+
+# ── UpdateConfig ─────────────────────────────────────────────────────
+
+
+def test_load_update_config(tmp_path):
+    """Loading config with update section should parse auto_check and notify_only."""
+    cfg_file = tmp_path / "with_update.yaml"
+    cfg_file.write_text("""\
+general:
+  poll_interval: 2
+fans: {}
+curves: {}
+update:
+  auto_check: false
+  notify_only: false
+""")
+    cfg = Config.load(cfg_file)
+    assert cfg.update.auto_check is False
+    assert cfg.update.notify_only is False
+
+
+def test_load_default_update_config(tmp_path):
+    """Loading config without update section should use defaults."""
+    cfg_file = tmp_path / "no_update.yaml"
+    cfg_file.write_text("general:\n  poll_interval: 2\nfans: {}\ncurves: {}\n")
+    cfg = Config.load(cfg_file)
+    assert cfg.update.auto_check is True
+    assert cfg.update.notify_only is True
+
+
+# ── Save with header_name ────────────────────────────────────────────
+
+
+def test_save_includes_header_name(tmp_path):
+    """Config.save should include header_name when set."""
+    cfg = Config(
+        fans={
+            "fan1": FanConfig(
+                sensor_id="/mb/control/0",
+                curve="balanced",
+                source_id="/cpu/temp/0",
+                header_name="CPU Fan 1",
+            ),
+        },
+    )
+    cfg_file = tmp_path / "header.yaml"
+    cfg.save(cfg_file)
+
+    import yaml
+
+    with open(cfg_file) as f:
+        data = yaml.safe_load(f)
+    assert data["fans"]["fan1"]["header"] == "CPU Fan 1"
+
+
+def test_save_omits_header_when_none(tmp_path):
+    """Config.save should not include header key when header_name is None."""
+    cfg = Config(
+        fans={
+            "fan1": FanConfig(
+                sensor_id="/mb/control/0",
+                curve="balanced",
+                source_id="/cpu/temp/0",
+            ),
+        },
+    )
+    cfg_file = tmp_path / "no_header.yaml"
+    cfg.save(cfg_file)
+
+    import yaml
+
+    with open(cfg_file) as f:
+        data = yaml.safe_load(f)
+    assert "header" not in data["fans"]["fan1"]
+
+
+# ── get_default_config / init_default_config ─────────────────────────
+
+
+def test_get_default_config():
+    """get_default_config should return a Config with default values."""
+    from pysysfan.config import get_default_config
+
+    cfg = get_default_config()
+    assert cfg.poll_interval == 2.0
+    assert len(cfg.fans) == 0
+
+
+def test_init_default_config_creates_file(tmp_path):
+    """init_default_config should create a config file when it doesn't exist."""
+    from pysysfan.config import init_default_config
+
+    cfg_file = tmp_path / "config.yaml"
+    init_default_config(cfg_file)
+    assert cfg_file.is_file()
+
+
+def test_init_default_config_skips_existing(tmp_path):
+    """init_default_config should not overwrite an existing file."""
+    from pysysfan.config import init_default_config
+
+    cfg_file = tmp_path / "config.yaml"
+    cfg_file.write_text("original content")
+    init_default_config(cfg_file)
+    assert cfg_file.read_text() == "original content"
