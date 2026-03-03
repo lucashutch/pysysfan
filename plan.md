@@ -64,5 +64,49 @@ Each phase is an atomic, testable unit (feature branch / commit).
 
 ---
 
+### Phase 7: Linux Support 🚧
+
+#### Phase 7.1: Hardware Abstraction Layer (HAL) ✅
+- [x] Create `platforms/` package structure
+- [x] Abstract base class `BaseHardwareManager` (`platforms/base.py`)
+- [x] Move Windows implementation to `platforms/windows.py`
+- [x] Move Windows service to `platforms/windows_service.py`
+- [x] Create platform factory (`platforms/__init__.py`)
+- [x] Update `hardware.py` to use factory pattern
+- [x] Update CLI service commands for cross-platform
+- [x] All existing tests pass
+
+#### Phase 7.2: Linux Hardware Implementation ⏳
+- [ ] Create `LinuxHardwareManager` class
+- [ ] Implement pysensors-based sensor discovery
+- [ ] Implement sysfs PWM fan control
+- [ ] Add ThinkPad-specific support (auto-enable fan_control)
+- [ ] Support generic SuperIO chips (nct6775, it87, etc.)
+- [ ] Add Linux dependencies to pyproject.toml
+
+#### Phase 7.3: Systemd Service Integration ⏳
+- [ ] Create `platforms/linux_service.py`
+- [ ] Implement systemd service install/uninstall/status
+- [ ] Create systemd unit templates
+- [ ] Test service lifecycle
+
+#### Phase 7.4: Linux Installer Script ⏳
+- [ ] Create `install-pysysfan.sh`
+- [ ] Auto-detect distro (apt/dnf/pacman)
+- [ ] Install lm-sensors and dependencies
+- [ ] Run sensors-detect automatically
+- [ ] Auto-enable ThinkPad fan_control
+- [ ] Optional systemd service installation
+
+#### Phase 7.5: Testing & Documentation ⏳
+- [ ] Add platform detection tests
+- [ ] Add Linux hardware tests (mock-based)
+- [ ] Add Linux service tests
+- [ ] Update README with Linux instructions
+- [ ] Create docs/linux.md
+- [ ] Test on ThinkPad P14s Gen3
+
+---
+
 ### Future Phases → see [TODO.md](TODO.md)
 
