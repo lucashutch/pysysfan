@@ -12,9 +12,9 @@ DEFAULT_CONFIG_PATH = DEFAULT_CONFIG_DIR / "config.yaml"
 
 @dataclass
 class FanConfig:
-    sensor_id: str
+    fan_id: str
     curve: str
-    source_id: str
+    temp_id: str
     header_name: str | None = None
 
 
@@ -52,10 +52,12 @@ class Config:
 
         fans = {}
         for name, fan_data in data.get("fans", {}).items():
+            # Support backwards compatibility for old config keys for a smooth transition if needed,
+            # but default to the new ones
             fans[name] = FanConfig(
-                sensor_id=fan_data["sensor"],
+                fan_id=fan_data.get("fan_id", fan_data.get("sensor")),
                 curve=fan_data["curve"],
-                source_id=fan_data["source"],
+                temp_id=fan_data.get("temp_id", fan_data.get("source")),
                 header_name=fan_data.get("header"),
             )
 
@@ -94,9 +96,9 @@ class Config:
             "general": {"poll_interval": self.poll_interval},
             "fans": {
                 name: {
-                    "sensor": f.sensor_id,
+                    "fan_id": f.fan_id,
                     "curve": f.curve,
-                    "source": f.source_id,
+                    "temp_id": f.temp_id,
                     **({"header": f.header_name} if f.header_name else {}),
                 }
                 for name, f in self.fans.items()
@@ -136,9 +138,9 @@ def init_default_config(path: Path | str = DEFAULT_CONFIG_PATH):
     config = get_default_config()
     # Add an example fan to the default config for documentation
     config.fans["example_cpu_fan"] = FanConfig(
-        sensor_id="/motherboard/nct6791d/control/0",
+        fan_id="/motherboard/nct6791d/control/0",
         curve="balanced",
-        source_id="/amdcpu/0/temperature/0",
+        temp_id="/amdcpu/0/temperature/0",
         header_name="CPU Fan 1",
     )
     config.save(path)

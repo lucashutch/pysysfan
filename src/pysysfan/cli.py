@@ -151,15 +151,31 @@ def scan(sensor_type: str, as_json: bool):
         )
         raise SystemExit(1)
 
+    from pysysfan.config import DEFAULT_CONFIG_DIR
+    import json
+
+    scan_data = _get_scan_dict(result, sensor_type)
+
+    # Always save the JSON dump to ~/.pysysfan/scan.json
+    scan_dir = DEFAULT_CONFIG_DIR
+    scan_dir.mkdir(parents=True, exist_ok=True)
+    scan_file = scan_dir / "scan.json"
+    try:
+        scan_file.write_text(json.dumps(scan_data, indent=2))
+        if not as_json:
+            console.print(f"[dim]Saved scan results to {scan_file}[/]")
+    except Exception as e:
+        if not as_json:
+            console.print(f"[yellow]Failed to save {scan_file}: {e}[/]")
+
     if as_json:
-        _output_scan_json(result, sensor_type)
+        click.echo(json.dumps(scan_data, indent=2))
     else:
         _output_scan_tables(result, sensor_type)
 
 
-def _output_scan_json(result, sensor_type: str):
-    """Output scan results as JSON."""
-    import json
+def _get_scan_dict(result, sensor_type: str) -> dict:
+    """Return scan results as a dictionary."""
 
     data = {}
     if sensor_type in ("all", "temp"):
@@ -194,7 +210,7 @@ def _output_scan_json(result, sensor_type: str):
             for c in result.controls
         ]
 
-    click.echo(json.dumps(data, indent=2))
+    return data
 
 
 def _output_scan_tables(result, sensor_type: str):
@@ -350,11 +366,11 @@ fans:
   # Example: map a fan header to a temperature source and curve
   cpu_fan:
     # Sensor identifier from 'pysysfan scan --type control'
-    sensor: "{first_ctrl}"
+    fan_id: "{first_ctrl}"
     # Which temperature curve to use (see 'curves' below)
     curve: balanced
     # Temperature sensor identifier from 'pysysfan scan --type temp'
-    source: "{first_temp}"
+    temp_id: "{first_temp}"
 
 curves:
   silent:
@@ -439,13 +455,13 @@ def config_validate(ctx):
         all_ids |= {c.identifier for c in result.controls}
 
         for fan_name, fan in cfg.fans.items():
-            if fan.source_id not in all_ids:
+            if fan.temp_id not in all_ids:
                 console.print(
-                    f"  [yellow]⚠[/]  Fan '{fan_name}': source '{fan.source_id}' not found in current hardware scan"
+                    f"  [yellow]⚠[/]  Fan '{fan_name}': temp_id '{fan.temp_id}' not found in current hardware scan"
                 )
-            if fan.sensor_id not in all_ids:
+            if fan.fan_id not in all_ids:
                 console.print(
-                    f"  [yellow]⚠[/]  Fan '{fan_name}': control '{fan.sensor_id}' not found in current hardware scan"
+                    f"  [yellow]⚠[/]  Fan '{fan_name}': fan_id '{fan.fan_id}' not found in current hardware scan"
                 )
         console.print("  [green]Hardware check complete.[/]")
     except Exception:

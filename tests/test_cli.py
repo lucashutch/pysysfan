@@ -150,7 +150,7 @@ class TestConfigValidate:
         cfg_file = tmp_path / "config.yaml"
         cfg_file.write_text(
             "general:\n  poll_interval: 2\n"
-            "fans:\n  f1:\n    sensor: /mb/c/0\n    curve: nonexistent\n    source: /cpu/t/0\n"
+            "fans:\n  f1:\n    fan_id: /mb/c/0\n    curve: nonexistent\n    temp_id: /cpu/t/0\n"
             "curves: {}\n"
         )
         runner = CliRunner()
@@ -237,16 +237,18 @@ class TestOutputFormatters:
     """Tests for _output_scan_json and _output_scan_tables."""
 
     def test_output_scan_json(self):
-        """Should format scan results as JSON."""
-        from pysysfan.cli import _output_scan_json
+        """Should format scan results as JSON dict."""
+        from pysysfan.cli import _get_scan_dict
 
         result = HardwareScanResult(
             temperatures=[SensorInfo("CPU", "Proc", "Core", "Temp", "/cpu/t/0", 55.0)],
             fans=[SensorInfo("MB", "Board", "Fan1", "Fan", "/mb/f/0", 1200.0)],
             controls=[ControlInfo("MB", "Fan Ctrl", "/mb/c/0", 75.0, has_control=True)],
         )
-        # Should not raise
-        _output_scan_json(result, "all")
+        data = _get_scan_dict(result, "all")
+        assert "temperatures" in data
+        assert "fans" in data
+        assert "controls" in data
 
     def test_output_scan_tables(self):
         """Should format scan results as tables without error."""
@@ -271,23 +273,28 @@ class TestOutputFormatters:
 
     def test_output_scan_json_fan_only(self):
         """Should only include fan data when type is fan."""
-        from pysysfan.cli import _output_scan_json
+        from pysysfan.cli import _get_scan_dict
 
         result = HardwareScanResult(
             fans=[SensorInfo("MB", "Board", "Fan1", "Fan", "/mb/f/0", None)],
         )
-        _output_scan_json(result, "fan")
+        data = _get_scan_dict(result, "fan")
+        assert "fans" in data
+        assert "temperatures" not in data
+        assert "controls" not in data
 
     def test_output_scan_json_control_only(self):
         """Should only include control data when type is control."""
-        from pysysfan.cli import _output_scan_json
+        from pysysfan.cli import _get_scan_dict
 
         result = HardwareScanResult(
             controls=[
                 ControlInfo("MB", "Fan Ctrl", "/mb/c/0", None, has_control=False)
             ],
         )
-        _output_scan_json(result, "control")
+        data = _get_scan_dict(result, "control")
+        assert "controls" in data
+        assert "fans" not in data
 
 
 # ── _build_status_table ──────────────────────────────────────────────

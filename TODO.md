@@ -9,11 +9,10 @@
   - Hardware status overview
   - Seamlessly updates the YAML config file used by the background daemon
 
-## ~~Improve testing~~ ✅
-- ~~Add coverage~~ — `pytest-cov` configured with 80% `fail_under`
-- ~~Add more tests~~ — 188 tests across 12 test files, 82% coverage
-
 ## Modularise codebase
 - Split into smaller modules
 - Improve code structure
 - Ensure no files are larger than 500 lines
+
+## bugs
+- remove LHM manager in the main CLI (should only be available in the lhm manager entry point like the pawnio manager)
