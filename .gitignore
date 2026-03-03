@@ -27,3 +27,7 @@ Thumbs.db
 # LHM binaries (downloaded at runtime)
 *.dll
 *.pdb
+
+uv.lock
+
+.coverage
