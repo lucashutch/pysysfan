@@ -10,17 +10,25 @@
 ## Installation
 Use `uv` to install:
 ```bash
-uv tool install .
+uv tool install pysysfan
 ```
 
+### One-Click Installer
+Download and double-click [`install-pysysfan.bat`](install-pysysfan.bat) to automatically install everything:
+- **UV** (Python package manager)
+- **pysysfan** (this tool)
+- **LibreHardwareMonitor** (sensor library)
+- **PawnIO** (ring0 driver for fan control)
+
+### Manual Installation
 You can also run it directly inside the repository:
 ```bash
 uv run pysysfan --help
 ```
 
 ## First Setup
-1. Open an Administrator PowerShell.
-2. Run `pysysfan scan` to see your sensors.
+1. Open an Administrator PowerShell, or prefix commands with `sudo` (Windows 11 24H2+).
+2. Run `sudo pysysfan scan` to see your sensors.
 3. Run `pysysfan config init --force` to create a starter configuration file at `~/.pysysfan/config.yaml`.
 4. Edit the configuration file to map your fans to the correct sensors and curves.
 5. Run `pysysfan config validate` to ensure your configuration is valid.

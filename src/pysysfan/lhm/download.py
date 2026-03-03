@@ -98,8 +98,22 @@ def download_and_extract_dll(asset: dict, target_dir: Path) -> Path:
     return dll_path
 
 
+def get_installed_version(target_dir: Path | None = None) -> str | None:
+    """Read the locally recorded LHM version, or None if not recorded."""
+    lib_dir = target_dir if target_dir else LHM_DIR
+    version_file = lib_dir / ".lhm_version"
+    if version_file.is_file():
+        lines = version_file.read_text().strip().splitlines()
+        if lines:
+            return lines[0]
+    return None
+
+
 def download_latest(target_dir: Path | None = None) -> Path:
     """Download the latest LHM release and extract the DLL.
+
+    Skips the download if the installed version already matches the
+    latest release on GitHub.
 
     Args:
         target_dir: Directory to extract to. Defaults to ~/.pysysfan/lib/
@@ -114,6 +128,13 @@ def download_latest(target_dir: Path | None = None) -> Path:
     release = get_latest_release_info()
     version = release.get("tag_name", "unknown")
     click.echo(f"  Latest version: {version}")
+
+    # Check if already up-to-date
+    installed_version = get_installed_version(target_dir)
+    dll_path = target_dir / LHM_DLL_NAME
+    if installed_version == version and dll_path.is_file():
+        click.echo(f"\n  ✓ LHM {version} is already installed and up-to-date.")
+        return dll_path
 
     asset = find_zip_asset(release)
     if asset is None:
