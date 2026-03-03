@@ -304,6 +304,45 @@ def find_python_tool() -> Literal["uv", "pip3", "pip", ""]:
     return ""
 
 
+def install_pysensors(dry_run: bool = False) -> bool:
+    """Install pysensors Python package (Linux-only dependency).
+
+    Args:
+        dry_run: If True, only print what would be done
+
+    Returns:
+        True on success, False on failure
+    """
+    print_header("Installing pysensors")
+
+    tool = find_python_tool()
+    if not tool:
+        print_error("No Python package manager found")
+        return False
+
+    print_info(f"Using {tool}...")
+
+    if dry_run:
+        if tool == "uv":
+            print("Would run: uv pip install pysensors>=0.0.4")
+        else:
+            print(f"Would run: {tool} install --user pysensors>=0.0.4")
+        return True
+
+    try:
+        if tool == "uv":
+            run_command(["uv", "pip", "install", "pysensors>=0.0.4"])
+        else:
+            run_command([tool, "install", "--user", "pysensors>=0.0.4"])
+
+        print_success("pysensors installed")
+        return True
+    except subprocess.CalledProcessError as e:
+        print_warning(f"Failed to install pysensors: {e}")
+        print_info("You may need to install it manually: pip install pysensors")
+        return False
+
+
 def install_pysysfan_package(dry_run: bool = False) -> bool:
     """Install pysysfan Python package.
 
@@ -327,16 +366,16 @@ def install_pysysfan_package(dry_run: bool = False) -> bool:
 
     if dry_run:
         if tool == "uv":
-            print("Would run: uv tool install pysysfan[linux]")
+            print("Would run: uv tool install pysysfan")
         else:
-            print(f"Would run: {tool} install --user pysysfan[linux]")
+            print(f"Would run: {tool} install --user pysysfan")
         return True
 
     try:
         if tool == "uv":
-            run_command(["uv", "tool", "install", "pysysfan[linux]"])
+            run_command(["uv", "tool", "install", "pysysfan"])
         else:
-            run_command([tool, "install", "--user", "pysysfan[linux]"])
+            run_command([tool, "install", "--user", "pysysfan"])
 
         print_success("pysysfan installed")
         return True
@@ -477,12 +516,13 @@ Examples:
         print("  1. Install system dependencies (lm-sensors)")
         print("  2. Detect and configure hardware sensors")
         print("  3. Install pysysfan Python package")
-        print("  4. Generate initial configuration")
+        print("  4. Install pysensors (Linux sensor library)")
+        print("  5. Generate initial configuration")
         if not args.no_service:
             if args.user:
-                print("  5. Install user systemd service")
+                print("  6. Install user systemd service")
             else:
-                print("  5. Install system-wide systemd service")
+                print("  6. Install system-wide systemd service")
         print("")
 
         response = input("Continue? [Y/n] ")
@@ -506,6 +546,9 @@ Examples:
     # Install pysysfan
     if not install_pysysfan_package(args.dry_run):
         success = False
+
+    # Install pysensors (Linux-only dependency)
+    install_pysensors(args.dry_run)
 
     # Generate config
     generate_config(args.dry_run)
