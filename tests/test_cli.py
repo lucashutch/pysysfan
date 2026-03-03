@@ -330,11 +330,14 @@ class TestServiceCommands:
     """Tests for service CLI subcommands."""
 
     @patch("pysysfan.cli.check_admin", return_value=True)
-    @patch("pysysfan.service.install_task")
-    def test_service_install_success(self, mock_install, mock_admin):
+    @patch("pysysfan.platforms.get_service_manager")
+    def test_service_install_success(self, mock_get_service, mock_admin):
         """Should install startup task."""
+        mock_service = MagicMock()
+        mock_get_service.return_value = mock_service
         runner = CliRunner()
-        result = runner.invoke(main, ["service", "install"])
+        with patch("sys.platform", "win32"):
+            result = runner.invoke(main, ["service", "install"])
         assert result.exit_code == 0
         assert "installed" in result.output.lower()
 
@@ -346,19 +349,26 @@ class TestServiceCommands:
         assert result.exit_code != 0
 
     @patch("pysysfan.cli.check_admin", return_value=True)
-    @patch("pysysfan.service.install_task", side_effect=RuntimeError("denied"))
-    def test_service_install_fails(self, mock_install, mock_admin):
+    @patch("pysysfan.platforms.get_service_manager")
+    def test_service_install_fails(self, mock_get_service, mock_admin):
         """Should handle install failure."""
+        mock_service = MagicMock()
+        mock_service.install_task.side_effect = RuntimeError("denied")
+        mock_get_service.return_value = mock_service
         runner = CliRunner()
-        result = runner.invoke(main, ["service", "install"])
+        with patch("sys.platform", "win32"):
+            result = runner.invoke(main, ["service", "install"])
         assert result.exit_code != 0
 
     @patch("pysysfan.cli.check_admin", return_value=True)
-    @patch("pysysfan.service.uninstall_task")
-    def test_service_uninstall_success(self, mock_uninstall, mock_admin):
+    @patch("pysysfan.platforms.get_service_manager")
+    def test_service_uninstall_success(self, mock_get_service, mock_admin):
         """Should uninstall startup task."""
+        mock_service = MagicMock()
+        mock_get_service.return_value = mock_service
         runner = CliRunner()
-        result = runner.invoke(main, ["service", "uninstall"])
+        with patch("sys.platform", "win32"):
+            result = runner.invoke(main, ["service", "uninstall"])
         assert result.exit_code == 0
 
     @patch("pysysfan.cli.check_admin", return_value=False)
@@ -369,26 +379,38 @@ class TestServiceCommands:
         assert result.exit_code != 0
 
     @patch("pysysfan.cli.check_admin", return_value=True)
-    @patch("pysysfan.service.uninstall_task", side_effect=RuntimeError("error"))
-    def test_service_uninstall_fails(self, mock_uninstall, mock_admin):
+    @patch("pysysfan.platforms.get_service_manager")
+    def test_service_uninstall_fails(self, mock_get_service, mock_admin):
         """Should handle uninstall failure."""
+        mock_service = MagicMock()
+        mock_service.uninstall_task.side_effect = RuntimeError("error")
+        mock_get_service.return_value = mock_service
         runner = CliRunner()
-        result = runner.invoke(main, ["service", "uninstall"])
+        with patch("sys.platform", "win32"):
+            result = runner.invoke(main, ["service", "uninstall"])
         assert result.exit_code != 0
 
-    @patch("pysysfan.service.get_task_status", return_value="Running")
-    def test_service_status_installed(self, mock_status):
+    @patch("pysysfan.platforms.get_service_manager")
+    def test_service_status_installed(self, mock_get_service):
         """Should show task status when installed."""
+        mock_service = MagicMock()
+        mock_service.get_task_status.return_value = "Running"
+        mock_get_service.return_value = mock_service
         runner = CliRunner()
-        result = runner.invoke(main, ["service", "status"])
+        with patch("sys.platform", "win32"):
+            result = runner.invoke(main, ["service", "status"])
         assert result.exit_code == 0
         assert "Running" in result.output
 
-    @patch("pysysfan.service.get_task_status", return_value=None)
-    def test_service_status_not_installed(self, mock_status):
+    @patch("pysysfan.platforms.get_service_manager")
+    def test_service_status_not_installed(self, mock_get_service):
         """Should show not installed message."""
+        mock_service = MagicMock()
+        mock_service.get_task_status.return_value = None
+        mock_get_service.return_value = mock_service
         runner = CliRunner()
-        result = runner.invoke(main, ["service", "status"])
+        with patch("sys.platform", "win32"):
+            result = runner.invoke(main, ["service", "status"])
         assert result.exit_code == 0
         assert "not installed" in result.output.lower()
 

@@ -64,5 +64,57 @@ Each phase is an atomic, testable unit (feature branch / commit).
 
 ---
 
+### Phase 7: Linux Support 🚧
+
+#### Phase 7.1: Hardware Abstraction Layer (HAL) ✅
+- [x] Create `platforms/` package structure
+- [x] Abstract base class `BaseHardwareManager` (`platforms/base.py`)
+- [x] Move Windows implementation to `platforms/windows.py`
+- [x] Move Windows service to `platforms/windows_service.py`
+- [x] Create platform factory (`platforms/__init__.py`)
+- [x] Update `hardware.py` to use factory pattern
+- [x] Update CLI service commands for cross-platform
+- [x] All existing tests pass
+
+#### Phase 7.2: Linux Hardware Implementation ✅
+- [x] Create `LinuxHardwareManager` class (`platforms/linux.py`)
+- [x] Implement pysensors-based sensor discovery
+- [x] Implement sysfs PWM fan control
+- [x] Add ThinkPad-specific support (auto-enable fan_control)
+- [x] Support generic SuperIO chips (nct6775, it87, etc.)
+- [x] Add Linux dependencies to pyproject.toml (pysensors)
+- [x] Comprehensive tests with mocked hardware
+
+#### Phase 7.3: Systemd Service Integration ✅
+- [x] Create `platforms/linux_service.py`
+- [x] Implement systemd service install/uninstall/status
+- [x] Create systemd unit templates (system and user)
+- [x] Support both system-wide and user services
+- [x] Comprehensive tests with mocked systemctl
+
+#### Phase 7.4: Linux Installer Script ✅
+- [x] Create Python installer module (`install_linux.py`)
+- [x] Add CLI entry point `pysysfan-linux-install`
+- [x] Create minimal bash wrapper (`install-pysysfan.sh`)
+- [x] Auto-detect distro (apt/dnf/pacman/zypper)
+- [x] Install lm-sensors and dependencies
+- [x] Run sensors-detect automatically
+- [x] Auto-enable ThinkPad fan_control
+- [x] Optional systemd service installation
+- [x] Dry-run mode for testing
+- [x] Comprehensive Python tests
+
+#### Phase 7.5: Testing & Documentation ✅
+- [x] Add platform detection tests (Phase 1)
+- [x] Add Linux hardware tests (mock-based)
+- [x] Add Linux service tests
+- [x] Add Linux installer tests
+- [x] Update README with Linux instructions
+- [x] Create docs/linux.md
+- [x] Create docs/windows.md
+- [ ] Test on ThinkPad P14s Gen3 (requires hardware access)
+
+---
+
 ### Future Phases → see [TODO.md](TODO.md)
 

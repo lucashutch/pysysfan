@@ -367,6 +367,12 @@ wheels = [
 ]
 
 [[package]]
+name = "pysensors"
+version = "0.0.4"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/76/31/d3383a192f31ce1d79f27ec3d047cca23dd82a1bf0939e774386aba37cf5/PySensors-0.0.4.tar.gz", hash = "sha256:beb0def410d29ee46fe196a7811124772abf84cbe3a0d8b01d80b81fba31dae5", size = 10599, upload-time = "2019-09-29T11:59:23.134Z" }
+
+[[package]]
 name = "pysysfan"
 source = { editable = "." }
 dependencies = [
@@ -376,6 +382,11 @@ dependencies = [
     { name = "pyyaml" },
     { name = "requests" },
     { name = "rich" },
+]
+
+[package.optional-dependencies]
+linux = [
+    { name = "pysensors" },
 ]
 
 [package.dev-dependencies]
@@ -389,11 +400,13 @@ dev = [
 requires-dist = [
     { name = "click" },
     { name = "packaging" },
+    { name = "pysensors", marker = "extra == 'linux'", specifier = ">=0.0.4" },
     { name = "pythonnet" },
     { name = "pyyaml" },
     { name = "requests" },
     { name = "rich" },
 ]
+provides-extras = ["linux"]
 
 [package.metadata.requires-dev]
 dev = [

@@ -1,7 +1,7 @@
 [project]
 name = "pysysfan"
 dynamic = ["version"]
-description = "Python fan control daemon for Windows."
+description = "Python fan control daemon for Windows and Linux."
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -17,6 +17,12 @@ dependencies = [
 pysysfan = "pysysfan.cli:main"
 pysysfan-install-lhm = "pysysfan.install:install_lhm"
 pysysfan-install-pawnio = "pysysfan.install:install_pawnio"
+pysysfan-linux-install = "pysysfan.install_linux:main"
+
+[project.optional-dependencies]
+linux = [
+    "pysensors>=0.0.4",
+]
 
 [build-system]
 requires = ["hatchling", "hatch-vcs"]

@@ -552,7 +552,11 @@ def run(once: bool, config_path: str | None):
 
 @main.group()
 def service():
-    """Manage pysysfan as a Windows startup service (Task Scheduler)."""
+    """Manage pysysfan as a system service.
+
+    On Windows: Task Scheduler
+    On Linux: systemd
+    """
     pass
 
 
@@ -565,61 +569,118 @@ def service():
     default=None,
     help="Config file path to pass to the daemon. Default: ~/.pysysfan/config.yaml",
 )
-def service_install(config_path: str | None):
-    """Install pysysfan as a Windows startup task.
+@click.option(
+    "--user",
+    "is_user",
+    is_flag=True,
+    help="Install as user service (Linux only). Windows always installs system-wide.",
+)
+def service_install(config_path: str | None, is_user: bool):
+    """Install pysysfan as a startup service.
 
-    Creates a Task Scheduler task that runs 'pysysfan run' at system startup
-    with the highest privileges. Requires administrator access.
+    On Windows: Creates a Task Scheduler task that runs at system startup.
+    On Linux: Creates a systemd service (system-wide by default).
     """
-    from pysysfan.service import install_task
+    from pysysfan.platforms import detect_platform, get_service_manager
 
     if not check_admin():
         console.print(
-            "[red]Error:[/] Installing a startup task requires Administrator privileges."
+            "[red]Error:[/] Installing a startup service requires Administrator/root privileges."
         )
         raise SystemExit(1)
 
+    platform = detect_platform()
+    service_mgr = get_service_manager()
+
     try:
-        install_task(config_path=config_path)
-        console.print("[bold green]✓ Startup task installed.[/]")
-        console.print("  pysysfan will now start automatically at boot.")
+        if platform == "windows":
+            service_mgr.install_task(config_path=config_path)
+            console.print("[bold green]✓ Startup task installed.[/]")
+            console.print("  pysysfan will now start automatically at boot.")
+        else:  # linux
+            from pathlib import Path
+
+            cfg_path = Path(config_path) if config_path else None
+            service_mgr.install_systemd_service(
+                config_path=cfg_path, system_wide=not is_user
+            )
+            console.print("[bold green]✓ Systemd service installed.[/]")
+            console.print("  pysysfan will now start automatically at boot.")
+            console.print(
+                f"  Use [bold]sudo systemctl {'--user ' if is_user else ''}start pysysfan[/] to start now."
+            )
+
         console.print("  Use [bold]pysysfan service status[/] to check.")
     except Exception as e:
-        console.print(f"[red]Failed to install task:[/] {e}")
+        console.print(f"[red]Failed to install service:[/] {e}")
         raise SystemExit(1)
 
 
 @service.command("uninstall")
-def service_uninstall():
-    """Remove the pysysfan startup task."""
-    from pysysfan.service import uninstall_task
+@click.option(
+    "--user",
+    "is_user",
+    is_flag=True,
+    help="Uninstall user service (Linux only).",
+)
+def service_uninstall(is_user: bool):
+    """Remove the pysysfan startup service."""
+    from pysysfan.platforms import detect_platform, get_service_manager
 
     if not check_admin():
         console.print(
-            "[red]Error:[/] Removing a startup task requires Administrator privileges."
+            "[red]Error:[/] Removing a startup service requires Administrator/root privileges."
         )
         raise SystemExit(1)
 
+    platform = detect_platform()
+    service_mgr = get_service_manager()
+
     try:
-        uninstall_task()
-        console.print("[bold green]✓ Startup task removed.[/]")
+        if platform == "windows":
+            service_mgr.uninstall_task()
+        else:  # linux
+            service_mgr.uninstall_systemd_service(system_wide=not is_user)
+
+        console.print("[bold green]✓ Startup service removed.[/]")
     except Exception as e:
-        console.print(f"[red]Failed to remove task:[/] {e}")
+        console.print(f"[red]Failed to remove service:[/] {e}")
         raise SystemExit(1)
 
 
 @service.command("status")
-def service_status():
-    """Check whether the pysysfan startup task is installed and running."""
-    from pysysfan.service import get_task_status
+@click.option(
+    "--user",
+    "is_user",
+    is_flag=True,
+    help="Check user service status (Linux only).",
+)
+def service_status(is_user: bool):
+    """Check whether the pysysfan service is installed and running."""
+    from pysysfan.platforms import detect_platform, get_service_manager
 
-    status = get_task_status()
-    if status is None:
-        console.print(
-            "[yellow]Task not installed.[/] Run [bold]pysysfan service install[/]."
-        )
-    else:
-        console.print(f"[bold]Task status:[/] {status}")
+    platform = detect_platform()
+    service_mgr = get_service_manager()
+
+    if platform == "windows":
+        status = service_mgr.get_task_status()
+        if status is None:
+            console.print(
+                "[yellow]Task not installed.[/] Run [bold]pysysfan service install[/]."
+            )
+        else:
+            console.print(f"[bold]Task status:[/] {status}")
+    else:  # linux
+        status = service_mgr.get_systemd_service_status(system_wide=not is_user)
+        if not status.get("installed"):
+            console.print(
+                "[yellow]Service not installed.[/] Run [bold]pysysfan service install[/]."
+            )
+        else:
+            console.print(f"[bold]Service status:[/] {status.get('state', 'Unknown')}")
+            console.print(
+                f"[bold]Enabled:[/] {'Yes' if status.get('enabled') else 'No'}"
+            )
 
 
 # ── Update subcommand group ──────────────────────────────────────────

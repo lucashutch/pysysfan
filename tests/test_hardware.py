@@ -1,5 +1,7 @@
 """Tests for pysysfan.hardware — Data classes, enums, and manager validation."""
 
+from unittest.mock import patch
+
 import pytest
 
 from pysysfan.hardware import (
@@ -7,8 +9,10 @@ from pysysfan.hardware import (
     SensorInfo,
     ControlInfo,
     HardwareScanResult,
-    HardwareManager,
 )
+
+# Import WindowsHardwareManager for Windows-specific tests
+from pysysfan.platforms.windows import WindowsHardwareManager
 
 
 # ── SensorKind enum ──────────────────────────────────────────────────
@@ -117,33 +121,37 @@ class TestHardwareScanResult:
 
 
 class TestHardwareManager:
-    """Tests for HardwareManager (non-LHM methods)."""
+    """Tests for HardwareManager (Windows-specific methods)."""
 
     def test_ensure_open_raises(self):
         """Should raise RuntimeError when hardware is not opened."""
-        hw = HardwareManager()
-        with pytest.raises(RuntimeError, match="not open"):
-            hw._ensure_open()
+        with patch("sys.platform", "win32"):
+            hw = WindowsHardwareManager()
+            with pytest.raises(RuntimeError, match="not open"):
+                hw._ensure_open()
 
     def test_context_manager_enter_exit(self):
         """Should support context manager protocol (open/close mocked)."""
-        hw = HardwareManager()
-        # Mock open/close to avoid LHM dependency
-        hw.open = lambda: None
-        hw.close = lambda: None
-        hw._computer = True  # Prevent _ensure_open from raising
-        with hw:
-            pass  # Should not raise
+        with patch("sys.platform", "win32"):
+            hw = WindowsHardwareManager()
+            # Mock open/close to avoid LHM dependency
+            hw.open = lambda: None
+            hw.close = lambda: None
+            hw._computer = True  # Prevent _ensure_open from raising
+            with hw:
+                pass  # Should not raise
 
     def test_sensor_type_name(self):
         """Should map enum values to human-readable names."""
-        hw = HardwareManager()
-        assert hw._sensor_type_name(SensorKind.TEMPERATURE) == "Temperature"
-        assert hw._sensor_type_name(SensorKind.FAN) == "Fan"
-        assert hw._sensor_type_name(SensorKind.CONTROL) == "Control"
+        with patch("sys.platform", "win32"):
+            hw = WindowsHardwareManager()
+            assert hw._sensor_type_name(SensorKind.TEMPERATURE) == "Temperature"
+            assert hw._sensor_type_name(SensorKind.FAN) == "Fan"
+            assert hw._sensor_type_name(SensorKind.CONTROL) == "Control"
 
     def test_sensor_type_name_unknown(self):
         """Should return 'Unknown(N)' for unmapped values."""
-        hw = HardwareManager()
-        result = hw._sensor_type_name(999)
-        assert "999" in result or "Unknown" in result
+        with patch("sys.platform", "win32"):
+            hw = WindowsHardwareManager()
+            result = hw._sensor_type_name(999)
+            assert "999" in result or "Unknown" in result
