@@ -55,59 +55,6 @@ def main(verbose: bool):
     )
 
 
-# ── LHM subcommand group ──────────────────────────────────────────────
-
-
-@main.group()
-def lhm():
-    """Manage the LibreHardwareMonitor library."""
-    pass
-
-
-@lhm.command("download")
-@click.option(
-    "--target",
-    "-t",
-    type=click.Path(),
-    default=None,
-    help="Directory to download LHM into. Default: ~/.pysysfan/lib/",
-)
-def lhm_download(target):
-    """Download the latest LibreHardwareMonitor release from GitHub."""
-    from pathlib import Path
-    from pysysfan.lhm.download import download_latest
-
-    target_dir = Path(target) if target else None
-
-    try:
-        download_latest(target_dir)
-    except Exception as e:
-        console.print(f"[bold red]Error:[/] {e}")
-        raise SystemExit(1)
-
-
-@lhm.command("info")
-def lhm_info():
-    """Show information about the installed LHM library."""
-    from pysysfan.lhm import get_lhm_dll_path, LHM_DIR
-
-    try:
-        dll_path = get_lhm_dll_path()
-        console.print(f"[bold green]✓[/] DLL found: {dll_path}")
-    except FileNotFoundError as e:
-        console.print(f"[bold red]✗[/] {e}")
-        raise SystemExit(1)
-
-    # Check for version marker file
-    version_file = LHM_DIR / ".lhm_version"
-    if version_file.is_file():
-        lines = version_file.read_text().strip().split("\n")
-        if lines:
-            console.print(f"  Release: {lines[0]}")
-        if len(lines) > 1:
-            console.print(f"  Asset: {lines[1]}")
-
-
 # ── Scan command ──────────────────────────────────────────────────────
 
 
