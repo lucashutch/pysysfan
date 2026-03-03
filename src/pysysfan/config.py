@@ -25,10 +25,19 @@ class CurveConfig:
 
 
 @dataclass
+class UpdateConfig:
+    """Settings for automatic update checks."""
+
+    auto_check: bool = True
+    notify_only: bool = True
+
+
+@dataclass
 class Config:
     poll_interval: float = 2.0
     fans: dict[str, FanConfig] = field(default_factory=dict)
     curves: dict[str, CurveConfig] = field(default_factory=dict)
+    update: UpdateConfig = field(default_factory=UpdateConfig)
 
     @classmethod
     def load(cls, path: Path | str) -> Config:
@@ -65,7 +74,16 @@ class Config:
         if "performance" not in curves:
             curves["performance"] = CurveConfig([(30, 50), (50, 80), (75, 100)])
 
-        return cls(poll_interval=poll_interval, fans=fans, curves=curves)
+        # Update settings
+        update_data = data.get("update", {})
+        update_cfg = UpdateConfig(
+            auto_check=update_data.get("auto_check", True),
+            notify_only=update_data.get("notify_only", True),
+        )
+
+        return cls(
+            poll_interval=poll_interval, fans=fans, curves=curves, update=update_cfg
+        )
 
     def save(self, path: Path | str):
         """Save configuration to a YAML file."""
@@ -91,6 +109,10 @@ class Config:
                     "hysteresis": c.hysteresis,
                 }
                 for name, c in self.curves.items()
+            },
+            "update": {
+                "auto_check": self.update.auto_check,
+                "notify_only": self.update.notify_only,
             },
         }
 

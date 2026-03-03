@@ -622,6 +622,97 @@ def service_status():
         console.print(f"[bold]Task status:[/] {status}")
 
 
+# ── Update subcommand group ──────────────────────────────────────────
+
+
+@main.group()
+def update():
+    """Check for and apply pysysfan updates."""
+    pass
+
+
+@update.command("check")
+def update_check():
+    """Check if a newer version of pysysfan is available."""
+    from pysysfan.updater import check_for_update
+
+    try:
+        info = check_for_update()
+    except Exception as e:
+        console.print(f"[red]Error checking for updates:[/] {e}")
+        raise SystemExit(1)
+
+    console.print(f"  Installed version : [bold]{info.current_version}[/]")
+    console.print(f"  Latest version    : [bold]{info.latest_version}[/]")
+
+    if info.available:
+        console.print(
+            "\n[bold green]✓ Update available![/]  Run [bold]pysysfan update apply[/] to upgrade."
+        )
+        if info.release_url:
+            console.print(f"  Release: {info.release_url}")
+    else:
+        console.print("\n[dim]You are running the latest version.[/]")
+
+
+@update.command("apply")
+@click.option("--yes", "-y", is_flag=True, help="Skip confirmation prompt.")
+def update_apply(yes: bool):
+    """Download and install the latest version of pysysfan."""
+    from pysysfan.updater import check_for_update, perform_update
+
+    try:
+        info = check_for_update()
+    except Exception as e:
+        console.print(f"[red]Error checking for updates:[/] {e}")
+        raise SystemExit(1)
+
+    if not info.available:
+        console.print(f"[dim]Already up-to-date ({info.current_version}).[/]")
+        return
+
+    console.print(
+        f"  Upgrade: [bold]{info.current_version}[/] → [bold green]{info.latest_version}[/]"
+    )
+    if not yes:
+        click.confirm("  Proceed with update?", abort=True)
+
+    try:
+        console.print(f"\n  Installing {info.latest_version}...")
+        perform_update(info.latest_version)
+        console.print(
+            f"[bold green]✓ pysysfan updated to {info.latest_version}.[/]\n"
+            "  Restart the daemon/service for the new version to take effect."
+        )
+    except Exception as e:
+        console.print(f"[red]Update failed:[/] {e}")
+        raise SystemExit(1)
+
+
+@update.command("auto")
+@click.argument("state", type=click.Choice(["on", "off"], case_sensitive=False))
+def update_auto(state: str):
+    """Enable or disable automatic update checks on daemon startup.
+
+    STATE must be 'on' or 'off'.
+    """
+    from pysysfan.config import Config, DEFAULT_CONFIG_PATH
+
+    config_path = DEFAULT_CONFIG_PATH
+    if not config_path.is_file():
+        console.print(
+            f"[red]Config not found:[/] {config_path}. Run 'pysysfan config init' first."
+        )
+        raise SystemExit(1)
+
+    cfg = Config.load(config_path)
+    cfg.update.auto_check = state.lower() == "on"
+    cfg.save(config_path)
+
+    label = "[green]enabled[/]" if cfg.update.auto_check else "[yellow]disabled[/]"
+    console.print(f"  Automatic update checks: {label}")
+
+
 # ── Status / Monitor commands ─────────────────────────────────────────
 
 

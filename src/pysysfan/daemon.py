@@ -75,6 +75,39 @@ class FanDaemon:
             except Exception as e:
                 logger.warning(f"Could not restore fan defaults: {e}")
 
+    # ── Update check ────────────────────────────────────────────────
+
+    def _check_for_updates(self, cfg) -> None:
+        """Optionally check for a newer pysysfan release at startup."""
+        if not cfg.update.auto_check:
+            return
+
+        try:
+            from pysysfan.updater import check_for_update, perform_update
+
+            info = check_for_update()
+            if not info.available:
+                logger.debug("pysysfan is up-to-date (%s).", info.current_version)
+                return
+
+            if cfg.update.notify_only:
+                logger.info(
+                    "A new pysysfan version is available: %s → %s. "
+                    "Run 'pysysfan update apply' to upgrade.",
+                    info.current_version,
+                    info.latest_version,
+                )
+            else:
+                logger.info(
+                    "Auto-updating pysysfan %s → %s...",
+                    info.current_version,
+                    info.latest_version,
+                )
+                perform_update(info.latest_version)
+                logger.info("Update installed. Restart the daemon for the new version.")
+        except Exception as exc:
+            logger.warning("Update check failed (non-fatal): %s", exc)
+
     # ── Control logic ─────────────────────────────────────────────────
 
     def _get_temperature(self, source_id: str, temperatures: list) -> float | None:
@@ -155,6 +188,7 @@ class FanDaemon:
 
         cfg = self._load_config()
         self._curves = self._build_curves(cfg)
+        self._check_for_updates(cfg)
         self._register_safety_handlers()
 
         self._hw = self._open_hardware()

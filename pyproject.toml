@@ -9,7 +9,8 @@ dependencies = [
     "pythonnet",
     "pyyaml",
     "requests",
-    "rich"
+    "rich",
+    "packaging"
 ]
 
 [project.scripts]
