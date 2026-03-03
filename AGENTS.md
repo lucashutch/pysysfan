@@ -20,12 +20,14 @@ When working in this repository:
 - `src/pysysfan/service.py` — Windows Task Scheduler integration
 - `src/pysysfan/lhm/` — LHM DLL management and GitHub release download
 - `src/pysysfan/pawnio/` — PawnIO driver detection and installer download
+- `src/pysysfan/updater.py` — Self-update logic (GitHub release check, `uv tool install`)
 - `src/pysysfan/install.py` — Independent entry points for `pysysfan-install-lhm` and `pysysfan-install-pawnio`
 - `install-pysysfan.bat` — One-click Windows batch installer
 
 ## Entry Points
 
 - `pysysfan` — Main CLI (`pysysfan.cli:main`)
+  - Subcommands: `lhm`, `config`, `run`, `service`, `update`, `scan`, `status`, `monitor`
 - `pysysfan-install-lhm` — Standalone LHM download (`pysysfan.install:install_lhm`)
 - `pysysfan-install-pawnio` — Standalone PawnIO install (`pysysfan.install:install_pawnio`)
 
