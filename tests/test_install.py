@@ -11,21 +11,43 @@ class TestInstallLhm:
     """Tests for the install_lhm CLI entry point."""
 
     @patch("pysysfan.install.download_latest")
-    def test_success(self, mock_download):
+    def test_download_success(self, mock_download):
         """Should exit cleanly when download_latest succeeds."""
         mock_download.return_value = MagicMock()
         runner = CliRunner()
-        result = runner.invoke(install_lhm)
+        result = runner.invoke(install_lhm, ["download"])
         assert result.exit_code == 0
         mock_download.assert_called_once()
 
     @patch("pysysfan.install.download_latest", side_effect=RuntimeError("API error"))
-    def test_failure_prints_error(self, mock_download):
+    def test_download_failure_prints_error(self, mock_download):
         """Should exit with code 1 and print error on failure."""
         runner = CliRunner()
-        result = runner.invoke(install_lhm)
+        result = runner.invoke(install_lhm, ["download"])
         assert result.exit_code == 1
         assert "API error" in result.output
+
+    @patch("pysysfan.install.get_lhm_dll_path")
+    @patch("pysysfan.install.LHM_DIR", MagicMock())
+    def test_info_success(self, mock_get_path):
+        """Should display info when LHM is installed."""
+        mock_get_path.return_value = "/fake/path/LibreHardwareMonitorLib.dll"
+        runner = CliRunner()
+        result = runner.invoke(install_lhm, ["info"])
+        assert result.exit_code == 0
+        assert "DLL found" in result.output
+
+    @patch(
+        "pysysfan.install.get_lhm_dll_path",
+        side_effect=FileNotFoundError("DLL not found"),
+    )
+    @patch("pysysfan.install.LHM_DIR", MagicMock())
+    def test_info_not_installed(self, mock_get_path):
+        """Should exit with error when LHM is not installed."""
+        runner = CliRunner()
+        result = runner.invoke(install_lhm, ["info"])
+        assert result.exit_code == 1
+        assert "DLL not found" in result.output
 
 
 class TestInstallPawnio:

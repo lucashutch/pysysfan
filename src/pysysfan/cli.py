@@ -239,46 +239,10 @@ def _output_scan_tables(result, sensor_type: str):
 # ── Config subcommand group ───────────────────────────────────────────
 
 
-@main.group()
-@click.option(
-    "--path",
-    "-p",
-    type=click.Path(),
-    default=None,
-    envvar="PYSYSFAN_CONFIG",
-    help="Path to config file. Default: ~/.pysysfan/config.yaml",
-)
-@click.pass_context
-def config(ctx, path):
-    """Manage pysysfan configuration."""
-    from pysysfan.config import DEFAULT_CONFIG_PATH
-    from pathlib import Path
+def _generate_example_config(config_path):
+    """Generate example config with placeholder sensor IDs."""
 
-    ctx.ensure_object(dict)
-    ctx.obj["config_path"] = Path(path) if path else DEFAULT_CONFIG_PATH
-
-
-@config.command("init")
-@click.option("--force", is_flag=True, help="Overwrite existing config file.")
-@click.pass_context
-def config_init(ctx, force: bool):
-    """Generate a starter config file.
-
-    Runs 'pysysfan scan' first so the example includes real sensor identifiers
-    from your hardware.
-    """
-    from pathlib import Path
-
-    config_path: Path = ctx.obj["config_path"]
-
-    if config_path.is_file() and not force:
-        console.print(
-            f"[yellow]Config already exists:[/] {config_path}\n"
-            "Use --force to overwrite."
-        )
-        raise SystemExit(0)
-
-    # Try to scan for real sensor IDs
+    # Try to scan for real sensor IDs to use as examples
     temp_ids: dict[str, str] = {}
     control_ids: dict[str, str] = {}
 
@@ -301,7 +265,6 @@ def config_init(ctx, force: bool):
     first_temp = next(iter(temp_ids.values()), "/amdcpu/0/temperature/0")
     first_ctrl = next(iter(control_ids.values()), "/motherboard/control/0")
 
-    config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(f"""\
 # pysysfan Configuration
 # Run 'pysysfan scan' to discover sensor identifiers for your hardware.
@@ -352,6 +315,201 @@ curves:
             "[yellow]Tip:[/] Run as Administrator then [bold]pysysfan scan[/] to find "
             "your actual sensor identifiers."
         )
+
+
+def _generate_auto_config(config_path):
+    """Auto-detect hardware and generate config."""
+
+    console.print("[bold]Scanning hardware...[/]")
+
+    try:
+        from pysysfan.hardware import HardwareManager
+        from pysysfan.config import auto_populate_config
+
+        with HardwareManager() as hw:
+            result = hw.scan()
+    except FileNotFoundError as e:
+        console.print(f"[bold red]Error:[/] {e}")
+        console.print(
+            "\n[dim]Run [bold]pysysfan lhm download[/] to install LibreHardwareMonitor."
+        )
+        raise SystemExit(1)
+    except Exception as e:
+        console.print(f"[bold red]Error accessing hardware:[/] {e}")
+        console.print(
+            "\n[dim]Common causes:[/]\n"
+            "  • Not running as Administrator\n"
+            "  • PawnIO driver not installed (winget install PawnIO)\n"
+            "  • LibreHardwareMonitorLib.dll not found (pysysfan lhm download)\n"
+        )
+        console.print(
+            "[yellow]Falling back to example config with placeholder IDs...[/]"
+        )
+        _generate_example_config(config_path)
+        return
+
+    # Check if we found any fans
+    if not result.controls:
+        console.print(
+            "[yellow]Warning:[/] No fan sensors detected.\n"
+            "  Generating example config instead."
+        )
+        _generate_example_config(config_path)
+        return
+
+    # Check if we found temperature sensors
+    if not result.temperatures:
+        console.print(
+            "[red]Error:[/] No temperature sensors found.\n"
+            "  Cannot create config without temperature sources."
+        )
+        raise SystemExit(1)
+
+    # Generate config
+    try:
+        config = auto_populate_config(result)
+    except ValueError as e:
+        console.print(f"[red]Error:[/] {e}")
+        raise SystemExit(1)
+
+    # Count controllable vs read-only fans
+    controllable = sum(1 for c in result.controls if c.has_control)
+    total_fans = len(result.controls)
+
+    # Generate YAML with comments
+    from datetime import datetime
+
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    yaml_content = f"""# pysysfan Configuration (Auto-generated)
+# Generated on: {timestamp}
+# Detected {total_fans} fans ({controllable} controllable, {total_fans - controllable} read-only)
+# All fans mapped to CPU temperature sensor
+
+general:
+  poll_interval: 2
+
+fans:
+"""
+
+    for name, fan in config.fans.items():
+        control_info = next(
+            (c for c in result.controls if c.identifier == fan.fan_id), None
+        )
+        is_controllable = control_info.has_control if control_info else False
+        status = (
+            "Controllable" if is_controllable else "Read Only (no control available)"
+        )
+
+        yaml_content += f"""  # {fan.header_name} - {status}
+  {name}:
+    fan_id: "{fan.fan_id}"
+    curve: {fan.curve}
+    temp_id: "{fan.temp_id}"
+    header_name: "{fan.header_name}"
+
+"""
+
+    yaml_content += """curves:
+  # Preset curves - customize as needed
+  silent:
+    hysteresis: 3
+    points:
+      - [30, 20]  # 30°C -> 20%
+      - [50, 40]
+      - [70, 70]
+      - [85, 100]
+
+  balanced:  # Default curve
+    hysteresis: 3
+    points:
+      - [30, 30]
+      - [60, 60]
+      - [75, 85]
+      - [85, 100]
+
+  performance:
+    hysteresis: 2
+    points:
+      - [30, 50]
+      - [50, 70]
+      - [65, 90]
+      - [75, 100]
+
+# Tips:
+# - Edit temp_id fields to use different temperature sensors
+# - Change curve to 'silent' or 'performance' for individual fans
+# - Read-only fans will be monitored but cannot be controlled
+# - Run 'pysysfan scan' to see all available sensors
+"""
+
+    config_path.write_text(yaml_content)
+    console.print(f"[bold green]Config written:[/] {config_path}")
+    console.print(
+        f"  [cyan]Fans detected:[/] {total_fans} ({controllable} controllable)"
+    )
+
+    if total_fans - controllable > 0:
+        console.print(
+            f"  [yellow]⚠[/]  {total_fans - controllable} fans are read-only (monitoring only)"
+        )
+
+    console.print(
+        "\n[dim]💡 Tip: Edit the config file to customize curves and temperature sources[/]"
+    )
+
+
+@main.group()
+@click.option(
+    "--path",
+    "-p",
+    type=click.Path(),
+    default=None,
+    envvar="PYSYSFAN_CONFIG",
+    help="Path to config file. Default: ~/.pysysfan/config.yaml",
+)
+@click.pass_context
+def config(ctx, path):
+    """Manage pysysfan configuration."""
+    from pysysfan.config import DEFAULT_CONFIG_PATH
+    from pathlib import Path
+
+    ctx.ensure_object(dict)
+    ctx.obj["config_path"] = Path(path) if path else DEFAULT_CONFIG_PATH
+
+
+@config.command("init")
+@click.option("--force", is_flag=True, help="Overwrite existing config file.")
+@click.option(
+    "--example", is_flag=True, help="Generate example config with placeholder IDs."
+)
+@click.pass_context
+def config_init(ctx, force: bool, example: bool):
+    """Generate a configuration file.
+
+    By default, auto-detects all fans and maps them to CPU temperature.
+    Use --example to generate a starter config with placeholder IDs instead.
+    """
+    from pathlib import Path
+
+    config_path: Path = ctx.obj["config_path"]
+
+    if config_path.is_file() and not force:
+        console.print(
+            f"[yellow]Config already exists:[/] {config_path}\n"
+            "Use --force to overwrite."
+        )
+        raise SystemExit(0)
+
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Example mode: generate placeholder config
+    if example:
+        _generate_example_config(config_path)
+        return
+
+    # Auto mode: detect hardware and generate config
+    _generate_auto_config(config_path)
 
 
 @config.command("validate")

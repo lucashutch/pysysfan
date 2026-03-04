@@ -2,7 +2,20 @@
 
 import pytest
 
-from pysysfan.config import Config, FanConfig, CurveConfig, DEFAULT_CONFIG_DIR
+from pysysfan.config import (
+    Config,
+    FanConfig,
+    CurveConfig,
+    DEFAULT_CONFIG_DIR,
+    _sanitize_config_name,
+    _generate_unique_name,
+    auto_populate_config,
+)
+from pysysfan.platforms.base import (
+    HardwareScanResult,
+    SensorInfo,
+    ControlInfo,
+)
 
 
 # ── Load / save roundtrip ─────────────────────────────────────────────
@@ -242,3 +255,265 @@ def test_init_default_config_skips_existing(tmp_path):
     cfg_file.write_text("original content")
     init_default_config(cfg_file)
     assert cfg_file.read_text() == "original content"
+
+
+# ── Name sanitization ────────────────────────────────────────────────
+
+
+def test_sanitize_config_name_simple():
+    """Simple sensor names should be lowercased and spaces replaced with underscores."""
+    assert _sanitize_config_name("CPU Fan") == "cpu_fan"
+    assert _sanitize_config_name("System Fan") == "system_fan"
+
+
+def test_sanitize_config_name_with_hash():
+    """Hash symbols should be converted to underscores."""
+    assert _sanitize_config_name("Fan #1") == "fan_1"
+    assert _sanitize_config_name("System Fan #2") == "system_fan_2"
+
+
+def test_sanitize_config_name_special_chars():
+    """Special characters should be removed."""
+    assert _sanitize_config_name("CPU Fan (PWM)") == "cpu_fan_pwm"
+    assert _sanitize_config_name("GPU@Fan") == "gpufan"
+
+
+def test_sanitize_config_name_multiple_spaces():
+    """Multiple spaces should be collapsed to single underscore."""
+    assert _sanitize_config_name("CPU  Fan") == "cpu_fan"
+    assert _sanitize_config_name("System   Fan  #1") == "system_fan_1"
+
+
+def test_generate_unique_name_no_conflict():
+    """When name doesn't exist, it should be returned unchanged."""
+    assert _generate_unique_name("cpu_fan", set()) == "cpu_fan"
+    assert _generate_unique_name("gpu_fan", {"cpu_fan", "case_fan"}) == "gpu_fan"
+
+
+def test_generate_unique_name_with_conflict():
+    """When name exists, should append counter."""
+    assert _generate_unique_name("cpu_fan", {"cpu_fan"}) == "cpu_fan_2"
+    assert _generate_unique_name("cpu_fan", {"cpu_fan", "cpu_fan_2"}) == "cpu_fan_3"
+
+
+# ── Auto-populate config ───────────────────────────────────────────────
+
+
+def test_auto_populate_basic():
+    """Auto-populate should generate config from hardware scan."""
+    scan = HardwareScanResult(
+        temperatures=[
+            SensorInfo(
+                hardware_name="AMD CPU",
+                hardware_type="cpu",
+                sensor_name="CPU Package",
+                sensor_type="temperature",
+                identifier="/amdcpu/0/temperature/0",
+                value=45.0,
+            )
+        ],
+        controls=[
+            ControlInfo(
+                hardware_name="Motherboard",
+                sensor_name="CPU Fan",
+                identifier="/motherboard/control/0",
+                current_value=50.0,
+                has_control=True,
+            ),
+            ControlInfo(
+                hardware_name="Motherboard",
+                sensor_name="System Fan #1",
+                identifier="/motherboard/control/1",
+                current_value=40.0,
+                has_control=True,
+            ),
+        ],
+    )
+
+    config = auto_populate_config(scan)
+
+    # Should have 2 fans
+    assert len(config.fans) == 2
+
+    # Both should use CPU temperature
+    for fan in config.fans.values():
+        assert fan.temp_id == "/amdcpu/0/temperature/0"
+        assert fan.curve == "balanced"
+
+    # Should have default curves
+    assert "silent" in config.curves
+    assert "balanced" in config.curves
+    assert "performance" in config.curves
+
+
+def test_auto_populate_no_cpu_temp():
+    """When no CPU temp found, should use first available temperature."""
+    scan = HardwareScanResult(
+        temperatures=[
+            SensorInfo(
+                hardware_name="GPU",
+                hardware_type="gpu",
+                sensor_name="GPU Core",
+                sensor_type="temperature",
+                identifier="/gpu/0/temperature/0",
+                value=60.0,
+            )
+        ],
+        controls=[
+            ControlInfo(
+                hardware_name="GPU",
+                sensor_name="GPU Fan",
+                identifier="/gpu/control/0",
+                current_value=45.0,
+                has_control=True,
+            )
+        ],
+    )
+
+    config = auto_populate_config(scan)
+    assert len(config.fans) == 1
+    assert list(config.fans.values())[0].temp_id == "/gpu/0/temperature/0"
+
+
+def test_auto_populate_no_temperatures():
+    """Auto-populate should raise error when no temperatures found."""
+    scan = HardwareScanResult(
+        temperatures=[],
+        controls=[
+            ControlInfo(
+                hardware_name="Motherboard",
+                sensor_name="CPU Fan",
+                identifier="/motherboard/control/0",
+                current_value=50.0,
+                has_control=True,
+            )
+        ],
+    )
+
+    with pytest.raises(ValueError, match="No temperature sensors found"):
+        auto_populate_config(scan)
+
+
+def test_auto_populate_no_controls():
+    """Auto-populate should create config with no fans when no controls found."""
+    scan = HardwareScanResult(
+        temperatures=[
+            SensorInfo(
+                hardware_name="CPU",
+                hardware_type="cpu",
+                sensor_name="CPU Package",
+                sensor_type="temperature",
+                identifier="/cpu/0/temperature/0",
+                value=45.0,
+            )
+        ],
+        controls=[],
+    )
+
+    config = auto_populate_config(scan)
+    assert len(config.fans) == 0
+    # Should still have default curves
+    assert "balanced" in config.curves
+
+
+def test_auto_populate_custom_curve():
+    """Auto-populate should use specified default curve."""
+    scan = HardwareScanResult(
+        temperatures=[
+            SensorInfo(
+                hardware_name="CPU",
+                hardware_type="cpu",
+                sensor_name="CPU Package",
+                sensor_type="temperature",
+                identifier="/cpu/0/temperature/0",
+                value=45.0,
+            )
+        ],
+        controls=[
+            ControlInfo(
+                hardware_name="Motherboard",
+                sensor_name="CPU Fan",
+                identifier="/motherboard/control/0",
+                current_value=50.0,
+                has_control=True,
+            )
+        ],
+    )
+
+    config = auto_populate_config(scan, default_curve="silent")
+    assert list(config.fans.values())[0].curve == "silent"
+
+
+def test_auto_populate_duplicate_names():
+    """Auto-populate should handle duplicate sensor names."""
+    scan = HardwareScanResult(
+        temperatures=[
+            SensorInfo(
+                hardware_name="CPU",
+                hardware_type="cpu",
+                sensor_name="CPU Package",
+                sensor_type="temperature",
+                identifier="/cpu/0/temperature/0",
+                value=45.0,
+            )
+        ],
+        controls=[
+            ControlInfo(
+                hardware_name="Motherboard",
+                sensor_name="Fan",
+                identifier="/motherboard/control/0",
+                current_value=50.0,
+                has_control=True,
+            ),
+            ControlInfo(
+                hardware_name="Motherboard",
+                sensor_name="Fan",
+                identifier="/motherboard/control/1",
+                current_value=40.0,
+                has_control=True,
+            ),
+        ],
+    )
+
+    config = auto_populate_config(scan)
+    # Should have unique names
+    fan_names = list(config.fans.keys())
+    assert len(fan_names) == 2
+    assert fan_names[0] == "fan"
+    assert fan_names[1] == "fan_2"
+
+
+def test_auto_populate_readonly_controls():
+    """Auto-populate should include read-only controls (has_control=False)."""
+    scan = HardwareScanResult(
+        temperatures=[
+            SensorInfo(
+                hardware_name="CPU",
+                hardware_type="cpu",
+                sensor_name="CPU Package",
+                sensor_type="temperature",
+                identifier="/cpu/0/temperature/0",
+                value=45.0,
+            )
+        ],
+        controls=[
+            ControlInfo(
+                hardware_name="Motherboard",
+                sensor_name="CPU Fan",
+                identifier="/motherboard/control/0",
+                current_value=50.0,
+                has_control=True,
+            ),
+            ControlInfo(
+                hardware_name="Motherboard",
+                sensor_name="Case Fan",
+                identifier="/motherboard/fan/1",
+                current_value=None,
+                has_control=False,
+            ),
+        ],
+    )
+
+    config = auto_populate_config(scan)
+    # Should include both controllable and read-only fans
+    assert len(config.fans) == 2

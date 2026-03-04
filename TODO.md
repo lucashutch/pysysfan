@@ -14,6 +14,12 @@
 - Improve code structure
 - Ensure no files are larger than 500 lines
 
-## Auto Populate Config
-- Implement hardware auto-detection
-- Automatically populate config with detected sensors and fans using the 
+## Live config updating support
+- Implement file watcher to detect changes to `config.yaml`
+- Apply new settings without restarting the daemon or when manually triggered via CLI
+- Provide feedback on successful updates or errors in the config
+
+
+## bugs
+- Flickering cli updates in monitor mode
+- setting 0% fan speed doesn't turn off the fan, it just sets it to minimum speed. Need to implement an "off" mode that fully disables the fan.

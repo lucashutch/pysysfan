@@ -96,7 +96,6 @@ class TestCheckForUpdate:
         with pytest.raises(ConnectionError, match="No internet"):
             check_for_update()
 
-    @patch("pysysfan.updater.__version__", "0.1.0")
     @patch("pysysfan.updater.get_latest_release_info")
     def test_release_notes_included(self, mock_api):
         mock_api.return_value = _fake_release("v0.2.0")

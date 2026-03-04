@@ -182,6 +182,24 @@ class TestCheckForUpdates:
         cfg.update.notify_only = True
         daemon._check_for_updates(cfg)
 
+    @patch("pysysfan.updater.perform_update")
+    @patch("pysysfan.updater.check_for_update")
+    def test_auto_update_when_apply_enabled(self, mock_check, mock_update, tmp_path):
+        """Should perform update when notify_only is False."""
+        mock_info = MagicMock()
+        mock_info.available = True
+        mock_info.current_version = "0.1.0"
+        mock_info.latest_version = "0.2.0"
+        mock_check.return_value = mock_info
+
+        daemon = FanDaemon(config_path=tmp_path / "c.yaml")
+        cfg = _sample_config()
+        cfg.update.auto_check = True
+        cfg.update.notify_only = False
+        daemon._check_for_updates(cfg)
+
+        mock_update.assert_called_once_with("0.2.0")
+
     @patch("pysysfan.updater.check_for_update")
     def test_no_update_available(self, mock_check, tmp_path):
         """Should return silently when already up-to-date."""
@@ -288,3 +306,53 @@ class TestRunOnce:
 
         speeds = daemon._run_once(cfg)
         assert speeds == {}  # Failed, so not in applied
+
+
+# ── _open_hardware ──────────────────────────────────────────────────
+
+
+class TestOpenHardware:
+    """Tests for _open_hardware()."""
+
+    @patch("pysysfan.hardware.HardwareManager")
+    def test_opens_hardware(self, mock_manager_class, tmp_path):
+        """Should create and open HardwareManager."""
+        mock_manager = MagicMock()
+        mock_manager_class.return_value = mock_manager
+
+        daemon = FanDaemon(config_path=tmp_path / "c.yaml")
+        hw = daemon._open_hardware()
+
+        mock_manager_class.assert_called_once()
+        mock_manager.open.assert_called_once()
+        assert hw is mock_manager
+
+
+class TestPublicRunOnce:
+    """Tests for the public run_once() method."""
+
+    @patch("pysysfan.daemon.FanDaemon._load_config")
+    @patch("pysysfan.daemon.FanDaemon._open_hardware")
+    def test_run_once_opens_hw_and_runs(self, mock_open, mock_load_cfg, tmp_path):
+        """Should open hardware, run once, and close."""
+        daemon = FanDaemon(config_path=tmp_path / "c.yaml")
+        mock_load_cfg.return_value = _sample_config()
+
+        mock_hw = MagicMock()
+        temp_sensor = MagicMock()
+        temp_sensor.identifier = "/cpu/temp/0"
+        temp_sensor.value = 45.0
+        mock_hw.scan.return_value = MagicMock(
+            temperatures=[temp_sensor], fans=[], controls=[]
+        )
+        mock_hw.get_temperatures.return_value = [temp_sensor]
+        mock_hw.set_fan_speed = MagicMock()
+        mock_open.return_value = mock_hw
+
+        result = daemon.run_once()
+
+        mock_hw.scan.assert_called_once()
+        mock_hw.restore_defaults.assert_called()
+        mock_hw.close.assert_called()
+        assert daemon._hw is None  # _hw should be cleared
+        assert isinstance(result, dict)
