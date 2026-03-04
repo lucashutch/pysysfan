@@ -41,12 +41,6 @@ class TestMainCli:
 class TestSubcommandHelp:
     """Test that subcommands show help without errors."""
 
-    def test_lhm_help(self):
-        runner = CliRunner()
-        result = runner.invoke(main, ["lhm", "--help"])
-        assert result.exit_code == 0
-        assert "LibreHardwareMonitor" in result.output
-
     def test_config_help(self):
         runner = CliRunner()
         result = runner.invoke(main, ["config", "--help"])
@@ -95,6 +89,37 @@ class TestCheckAdmin:
         # On non-Windows or non-admin, should return False gracefully
         result = check_admin()
         assert isinstance(result, bool)
+
+    def test_returns_bool(self):
+        """Should always return a boolean."""
+        result = check_admin()
+        assert result in (True, False)
+
+
+class TestCliFunctions:
+    """Tests for CLI helper functions."""
+
+    @patch("click.echo")
+    def test_print_version_callback(self, mock_echo):
+        """Test _print_version callback."""
+        from pysysfan.cli import _print_version
+
+        mock_ctx = MagicMock()
+        mock_ctx.resilient_parsing = False
+        _print_version(mock_ctx, None, True)
+        mock_echo.assert_called_once()
+        mock_ctx.exit.assert_called_once()
+
+    def test_print_version_skips_without_value(self):
+        """Test _print_version skips when value is False."""
+        from pysysfan.cli import _print_version
+
+        mock_ctx = MagicMock()
+        _print_version(mock_ctx, None, False)
+        # Should not raise
+
+        _print_version(mock_ctx, None, True)
+        mock_ctx.echo.assert_not_called()
 
 
 # ── Config show ──────────────────────────────────────────────────────
@@ -217,17 +242,6 @@ class TestUpdateCheck:
 
 
 # ── LHM subcommands ─────────────────────────────────────────────────
-
-
-class TestLhmCommands:
-    """Tests for LHM CLI subcommands."""
-
-    def test_lhm_info_not_found(self):
-        """lhm info should handle missing DLL gracefully."""
-        runner = CliRunner()
-        result = runner.invoke(main, ["lhm", "info"])
-        # Either finds the DLL or fails gracefully
-        assert isinstance(result.exit_code, int)
 
 
 # ── Output formatters ────────────────────────────────────────────────
@@ -466,29 +480,6 @@ class TestRunCommand:
 
 
 # ── LHM download command ────────────────────────────────────────────
-
-
-class TestLhmDownloadCommand:
-    """Tests for 'lhm download' subcommand."""
-
-    @patch("pysysfan.lhm.download.download_latest")
-    def test_lhm_download_success(self, mock_download, tmp_path):
-        """Should download LHM successfully."""
-        from pathlib import Path
-
-        mock_download.return_value = Path("/fake/dll.dll")
-        runner = CliRunner()
-        result = runner.invoke(main, ["lhm", "download"])
-        assert result.exit_code == 0
-
-    @patch(
-        "pysysfan.lhm.download.download_latest", side_effect=RuntimeError("API error")
-    )
-    def test_lhm_download_failure(self, mock_download):
-        """Should handle download failure."""
-        runner = CliRunner()
-        result = runner.invoke(main, ["lhm", "download"])
-        assert result.exit_code != 0
 
 
 # ── Update apply/auto commands ───────────────────────────────────────

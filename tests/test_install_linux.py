@@ -76,6 +76,32 @@ class TestDetectDistro:
             assert distro == "arch"
             assert family == "arch"
 
+    def test_detects_suse(self, tmp_path):
+        """Should detect SUSE from os-release."""
+        os_release = tmp_path / "os-release"
+        os_release.write_text('ID=opensuse\nNAME="openSUSE"\n')
+
+        with patch("pysysfan.install_linux.Path") as mock_path:
+            mock_path.return_value = Mock(
+                exists=lambda: True, read_text=os_release.read_text
+            )
+            distro, family = detect_distro()
+            assert distro == "opensuse"
+            assert family == "suse"
+
+    def test_unknown_distro(self, tmp_path):
+        """Should return unknown when distro not recognized."""
+        os_release = tmp_path / "os-release"
+        os_release.write_text('ID=unknown\nNAME="Unknown"\n')
+
+        with patch("pysysfan.install_linux.Path") as mock_path:
+            mock_path.return_value = Mock(
+                exists=lambda: True, read_text=os_release.read_text
+            )
+            distro, family = detect_distro()
+            assert distro == "unknown"
+            assert family == "unknown"
+
 
 class TestFindPythonTool:
     """Tests for Python tool detection."""
@@ -201,8 +227,93 @@ class TestInstallSystemdService:
             assert result is True
 
     def test_skips_when_pysysfan_not_in_path(self):
-        """Should skip when pysysfan not available."""
+        """Should skip when pysysfan not available (in non-dry-run mode)."""
         with patch("pysysfan.install_linux.shutil.which") as mock_which:
             mock_which.return_value = None
-            result = install_systemd_service(dry_run=False)
+            result = install_systemd_service(user_service=True, dry_run=False)
             assert result is False
+
+
+class TestRunCommand:
+    """Tests for run_command function."""
+
+    def test_runs_command(self):
+        """Should execute command successfully."""
+        with patch("pysysfan.install_linux.subprocess.run") as mock_run:
+            mock_run.return_value = Mock(returncode=0)
+            from pysysfan.install_linux import run_command
+
+            result = run_command(["echo", "test"], check=False)
+            assert result.returncode == 0
+
+    def test_raises_on_nonzero_with_check(self):
+        """Should raise CalledProcessError when check=True and exit is non-zero."""
+        with patch("pysysfan.install_linux.subprocess.run") as mock_run:
+            mock_run.return_value = Mock(returncode=1, stdout="", stderr="error")
+            from pysysfan.install_linux import run_command
+            import subprocess
+
+            try:
+                run_command(["false"], check=True)
+            except subprocess.CalledProcessError:
+                pass
+            else:
+                raise AssertionError("Expected CalledProcessError")
+
+    def test_captures_output_when_requested(self):
+        """Should capture output when capture=True."""
+        with patch("pysysfan.install_linux.subprocess.run") as mock_run:
+            mock_run.return_value = Mock(returncode=0, stdout="output", stderr="")
+            from pysysfan.install_linux import run_command
+
+            result = run_command(["echo", "test"], capture=True, check=False)
+            assert result.stdout == "output"
+
+
+class TestSetupSensors:
+    """Tests for setup_sensors function."""
+
+    def test_dry_run_does_not_execute(self):
+        """Should not execute commands in dry run mode."""
+        with patch("pysysfan.install_linux.run_command") as mock_run:
+            from pysysfan.install_linux import setup_sensors
+
+            setup_sensors(dry_run=True)
+            mock_run.assert_not_called()
+
+
+class TestSetupThinkPadFanControl:
+    """Tests for setup_thinkpad_fan_control function."""
+
+    def test_dry_run(self):
+        """Should not execute commands in dry run mode."""
+        with patch("pysysfan.install_linux.run_command") as mock_run:
+            from pysysfan.install_linux import setup_thinkpad_fan_control
+
+            setup_thinkpad_fan_control(dry_run=True)
+            mock_run.assert_not_called()
+
+
+class TestInstallPysensors:
+    """Tests for install_pysensors function."""
+
+    def test_installs_with_uv(self):
+        """Should install pysensors with uv."""
+        with patch("pysysfan.install_linux.find_python_tool") as mock_tool:
+            mock_tool.return_value = "uv"
+            with patch("pysysfan.install_linux.run_command"):
+                from pysysfan.install_linux import install_pysensors
+
+                result = install_pysensors(dry_run=True)
+                assert result is True
+
+
+class TestGenerateConfig:
+    """Tests for generate_config function."""
+
+    def test_dry_run(self):
+        """Should not write files in dry run mode."""
+        from pysysfan.install_linux import generate_config
+
+        result = generate_config(dry_run=True)
+        assert result is True

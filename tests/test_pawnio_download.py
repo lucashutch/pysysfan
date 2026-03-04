@@ -1,5 +1,6 @@
 """Tests for pysysfan.pawnio.download — PawnIO download and install logic."""
 
+import subprocess
 from unittest.mock import patch, MagicMock
 
 import pytest
@@ -267,3 +268,34 @@ class TestInstallPawnio:
 
         install_pawnio()  # Should not raise, just print warning
         mock_download.assert_not_called()
+
+    @patch("pysysfan.pawnio.download.subprocess.run")
+    @patch("pysysfan.pawnio.download.download_setup")
+    @patch("pysysfan.pawnio.download.get_installed_version", return_value=None)
+    @patch("pysysfan.pawnio.download.is_pawnio_installed", return_value=False)
+    @patch("pysysfan.pawnio.download.get_latest_release_info")
+    def test_installer_timeout(
+        self, mock_api, mock_installed, mock_version, mock_download, mock_run, tmp_path
+    ):
+        """Should handle installer timeout gracefully."""
+        mock_api.return_value = MOCK_RELEASE
+        mock_download.return_value = tmp_path / "PawnIO_setup.exe"
+        mock_run.side_effect = subprocess.TimeoutExpired("cmd", 300)
+
+        install_pawnio()  # Should not raise
+
+    @patch("pysysfan.pawnio.download.subprocess.run")
+    @patch("pysysfan.pawnio.download.download_setup")
+    @patch("pysysfan.pawnio.download.get_installed_version", return_value=None)
+    @patch("pysysfan.pawnio.download.is_pawnio_installed", return_value=False)
+    @patch("pysysfan.pawnio.download.get_latest_release_info")
+    def test_installer_other_exception(
+        self, mock_api, mock_installed, mock_version, mock_download, mock_run, tmp_path
+    ):
+        """Should raise exception for unexpected errors during install."""
+        mock_api.return_value = MOCK_RELEASE
+        mock_download.return_value = tmp_path / "PawnIO_setup.exe"
+        mock_run.side_effect = RuntimeError("Unknown error")
+
+        with pytest.raises(RuntimeError, match="Unknown error"):
+            install_pawnio()
