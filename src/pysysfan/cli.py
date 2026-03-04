@@ -540,10 +540,20 @@ def config_validate(ctx):
     console.print(f"  Poll interval  : {cfg.poll_interval}s")
 
     # Validate curve references
+    from pysysfan.curves import parse_curve, InvalidCurveError
+
     errors = []
     for fan_name, fan in cfg.fans.items():
-        if fan.curve not in cfg.curves:
-            errors.append(f"Fan '{fan_name}' references unknown curve '{fan.curve}'")
+        # Check if it's a special curve first
+        try:
+            special = parse_curve(fan.curve)
+            if special is None and fan.curve not in cfg.curves:
+                # Not a special curve and not in config
+                errors.append(
+                    f"Fan '{fan_name}' references unknown curve '{fan.curve}'"
+                )
+        except InvalidCurveError as e:
+            errors.append(f"Fan '{fan_name}' has invalid curve '{fan.curve}': {e}")
 
     if errors:
         for e in errors:

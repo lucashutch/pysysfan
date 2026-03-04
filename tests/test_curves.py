@@ -1,7 +1,7 @@
 """Tests for pysysfan.curves — FanCurve interpolation, clamping, and hysteresis."""
 
 import pytest
-from pysysfan.curves import FanCurve
+from pysysfan.curves import FanCurve, StaticCurve, parse_curve, InvalidCurveError
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────
@@ -154,3 +154,129 @@ def test_points_property(balanced):
     """The points property returns the curve data as tuples."""
     pts = balanced.points
     assert pts == BALANCED_POINTS
+
+
+# ── StaticCurve tests ─────────────────────────────────────────────────
+
+
+def test_static_curve_evaluate():
+    """StaticCurve should always return the fixed speed, ignoring temperature."""
+    curve = StaticCurve(50.0, name="static")
+    assert curve.evaluate(0.0) == 50.0
+    assert curve.evaluate(100.0) == 50.0
+    assert curve.evaluate(-50.0) == 50.0
+    assert curve.evaluate(200.0) == 50.0
+
+
+def test_static_curve_zero_speed():
+    """StaticCurve with 0 speed should work correctly."""
+    curve = StaticCurve(0.0, name="off")
+    assert curve.evaluate(50.0) == 0.0
+
+
+def test_static_curve_full_speed():
+    """StaticCurve with 100 speed should work correctly."""
+    curve = StaticCurve(100.0, name="on")
+    assert curve.evaluate(50.0) == 100.0
+
+
+# ── parse_curve tests ──────────────────────────────────────────────────
+
+
+def test_parse_curve_off():
+    """Should parse 'off' case-insensitively to 0%."""
+    for variant in ["off", "OFF", "Off", "  off  "]:
+        result = parse_curve(variant)
+        assert isinstance(result, StaticCurve)
+        assert result.speed == 0.0
+
+
+def test_parse_curve_on():
+    """Should parse 'on' case-insensitively to 100%."""
+    for variant in ["on", "ON", "On", "  on  "]:
+        result = parse_curve(variant)
+        assert isinstance(result, StaticCurve)
+        assert result.speed == 100.0
+
+
+def test_parse_curve_numeric_without_percent():
+    """Should parse numeric values without % suffix."""
+    result = parse_curve("50")
+    assert isinstance(result, StaticCurve)
+    assert result.speed == 50.0
+
+    result = parse_curve("0")
+    assert result.speed == 0.0
+
+    result = parse_curve("100")
+    assert result.speed == 100.0
+
+
+def test_parse_curve_numeric_with_percent():
+    """Should parse numeric values with % suffix."""
+    result = parse_curve("75%")
+    assert isinstance(result, StaticCurve)
+    assert result.speed == 75.0
+
+    result = parse_curve("0%")
+    assert result.speed == 0.0
+
+    result = parse_curve("100%")
+    assert result.speed == 100.0
+
+
+def test_parse_curve_case_insensitive_percent():
+    """Should accept both '%' and '%' (though % is standard)."""
+    result = parse_curve("60%")
+    assert result.speed == 60.0
+
+
+def test_parse_curve_decimal_values():
+    """Should handle decimal values."""
+    result = parse_curve("50.5")
+    assert result.speed == 50.5
+
+    result = parse_curve("33.33%")
+    assert result.speed == 33.33
+
+
+def test_parse_curve_out_of_range_above():
+    """Should raise InvalidCurveError for values above 100."""
+    with pytest.raises(InvalidCurveError, match="between 0 and 100"):
+        parse_curve("150")
+
+    with pytest.raises(InvalidCurveError, match="between 0 and 100"):
+        parse_curve("101%")
+
+
+def test_parse_curve_out_of_range_below():
+    """Should raise InvalidCurveError for values below 0."""
+    with pytest.raises(InvalidCurveError, match="between 0 and 100"):
+        parse_curve("-10")
+
+    with pytest.raises(InvalidCurveError, match="between 0 and 100"):
+        parse_curve("-1%")
+
+
+def test_parse_curve_regular_name():
+    """Should return None for regular curve names."""
+    assert parse_curve("balanced") is None
+    assert parse_curve("silent") is None
+    assert parse_curve("performance") is None
+    assert parse_curve("custom_curve") is None
+
+
+def test_parse_curve_invalid_format():
+    """Should return None for non-numeric, non-special strings."""
+    assert parse_curve("abc") is None
+    assert parse_curve("50abc") is None
+    assert parse_curve("abc50") is None
+    assert parse_curve("50.5.5") is None
+
+
+def test_parse_curve_empty_and_whitespace():
+    """Should handle empty/whitespace-only strings appropriately."""
+    # Empty string is not a valid curve name
+    assert parse_curve("") is None
+    # Pure whitespace is also not valid
+    assert parse_curve("   ") is None

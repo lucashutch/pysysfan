@@ -9,7 +9,7 @@ import time
 from pathlib import Path
 
 from pysysfan.config import Config, DEFAULT_CONFIG_PATH
-from pysysfan.curves import FanCurve
+from pysysfan.curves import FanCurve, StaticCurve, parse_curve, InvalidCurveError
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +117,30 @@ class FanDaemon:
                 return sensor.value
         return None
 
+    def _get_curve(self, curve_name: str) -> FanCurve | StaticCurve | None:
+        """Get a curve by name, handling special curves dynamically.
+
+        Special curves ("off", "on", numeric percentages) are resolved
+        on-the-fly without requiring config entries.
+
+        Args:
+            curve_name: The name of the curve to look up.
+
+        Returns:
+            FanCurve or StaticCurve instance, or None if not found.
+        """
+        # Check if it's a special curve first
+        try:
+            special = parse_curve(curve_name)
+            if special is not None:
+                return special
+        except InvalidCurveError as e:
+            logger.error(f"Invalid curve '{curve_name}': {e}")
+            return None
+
+        # Fall back to config curves
+        return self._curves.get(curve_name)
+
     def _run_once(self, cfg: Config) -> dict[str, float]:
         """Perform a single control pass. Returns {fan_name: speed_percent}."""
         applied: dict[str, float] = {}
@@ -124,7 +148,7 @@ class FanDaemon:
         temps = self._hw.get_temperatures()
 
         for fan_name, fan_cfg in cfg.fans.items():
-            curve = self._curves.get(fan_cfg.curve)
+            curve = self._get_curve(fan_cfg.curve)
             if curve is None:
                 logger.warning(
                     f"Fan '{fan_name}': curve '{fan_cfg.curve}' not found, skipping."

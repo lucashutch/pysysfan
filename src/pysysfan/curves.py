@@ -5,10 +5,36 @@ from dataclasses import dataclass
 import bisect
 
 
+class InvalidCurveError(ValueError):
+    """Raised when a curve name is invalid or out of range."""
+
+    pass
+
+
 @dataclass
 class CurvePoint:
     temperature: float
     speed: float
+
+
+class StaticCurve:
+    """A curve that always returns a fixed percentage (no temperature dependency).
+
+    Used for special curves like "off" (0%), "on" (100%), or custom static percentages.
+    """
+
+    def __init__(self, speed: float, name: str = "static"):
+        """
+        Args:
+            speed: Fixed fan speed percentage (0-100).
+            name: Human-readable name for the curve.
+        """
+        self.speed = speed
+        self.name = name
+
+    def evaluate(self, current_temp: float) -> float:
+        """Always returns the fixed speed, ignoring temperature."""
+        return self.speed
 
 
 class FanCurve:
@@ -92,3 +118,49 @@ class FanCurve:
     @property
     def points(self) -> list[tuple[float, float]]:
         return [(p.temperature, p.speed) for p in self._points]
+
+
+def parse_curve(name: str) -> StaticCurve | None:
+    """Parse a curve name and return StaticCurve for special values.
+
+    Special names (case-insensitive):
+    - "off" → StaticCurve(0%)
+    - "on" → StaticCurve(100%)
+    - numeric (e.g., "50", "75%", "0", "100") → StaticCurve(%) with that value
+
+    For numeric values, raises InvalidCurveError if:
+    - Value is outside 0-100 range
+    - Value is not a valid number
+
+    Returns None if not a special curve (use regular config lookup).
+
+    Args:
+        name: The curve name to parse.
+
+    Returns:
+        StaticCurve instance for special curves, or None for regular curve names.
+
+    Raises:
+        InvalidCurveError: If a numeric value is outside the 0-100 range.
+    """
+    name_stripped = name.strip()
+    name_lower = name_stripped.lower()
+
+    # Handle special keywords (case-insensitive)
+    if name_lower == "off":
+        return StaticCurve(0.0, name="off")
+    if name_lower == "on":
+        return StaticCurve(100.0, name="on")
+
+    # Handle numeric values (with optional % suffix)
+    numeric_name = name_lower.rstrip("%")
+    try:
+        value = float(numeric_name)
+    except ValueError:
+        # Not a number, not a special curve
+        return None
+
+    # Validate range
+    if value < 0 or value > 100:
+        raise InvalidCurveError(f"Fan speed must be between 0 and 100, got {value}")
+    return StaticCurve(value, name=f"{value}%")
