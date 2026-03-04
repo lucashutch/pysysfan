@@ -241,7 +241,6 @@ def _output_scan_tables(result, sensor_type: str):
 
 def _generate_example_config(config_path):
     """Generate example config with placeholder sensor IDs."""
-    from pathlib import Path
 
     # Try to scan for real sensor IDs to use as examples
     temp_ids: dict[str, str] = {}
@@ -320,7 +319,6 @@ curves:
 
 def _generate_auto_config(config_path):
     """Auto-detect hardware and generate config."""
-    from pathlib import Path
 
     console.print("[bold]Scanning hardware...[/]")
 
@@ -380,7 +378,6 @@ def _generate_auto_config(config_path):
 
     # Generate YAML with comments
     from datetime import datetime
-    from pysysfan.config import Config
 
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
