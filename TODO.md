@@ -13,7 +13,3 @@
 - Split into smaller modules
 - Improve code structure
 - Ensure no files are larger than 500 lines
-
-## Auto Populate Config
-- Implement hardware auto-detection
-- Automatically populate config with detected sensors and fans using the 
