@@ -28,6 +28,6 @@ Thumbs.db
 *.dll
 *.pdb
 
-uv.lock
+
 
 .coverage
