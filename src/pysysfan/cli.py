@@ -912,9 +912,9 @@ def _is_valid_temperature_sensor(sensor) -> bool:
     """Filter out non-useful temperature sensors.
 
     Excludes sensors that are metadata rather than actual temperature readings,
-    such as resolution, limits, or critical thresholds.
+    such as resolution, limits, critical thresholds, or warning temperatures.
     """
-    invalid_keywords = ["resolution", "limit", "critical"]
+    invalid_keywords = ["resolution", "limit", "critical", "warning"]
     sensor_name_lower = sensor.sensor_name.lower()
     return not any(kw in sensor_name_lower for kw in invalid_keywords)
 

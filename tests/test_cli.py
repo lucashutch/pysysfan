@@ -384,6 +384,20 @@ class TestIsValidTemperatureSensor:
         )
         assert _is_valid_temperature_sensor(sensor) is False
 
+    def test_filter_warning_temperature(self):
+        """Should filter out warning temperature sensors."""
+        from pysysfan.cli import _is_valid_temperature_sensor
+
+        sensor = SensorInfo(
+            "Samsung SSD",
+            "SSD",
+            "Warning Temperature",
+            "Temp",
+            "/storage/ssd/0/t/1",
+            84.0,
+        )
+        assert _is_valid_temperature_sensor(sensor) is False
+
 
 class TestMatchFansWithControls:
     """Tests for _match_fans_with_controls."""
