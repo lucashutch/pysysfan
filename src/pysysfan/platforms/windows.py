@@ -42,9 +42,18 @@ class WindowsHardwareManager(BaseHardwareManager):
 
     def open(self) -> None:
         """Initialize and open the LHM computer instance."""
+        import time as time_module
+
+        t0 = time_module.perf_counter()
         from pysysfan.lhm import load_lhm
 
+        t1 = time_module.perf_counter()
+        logger.debug(f"[TIMING] load_lhm(): {t1 - t0:.3f}s")
+
         self._lhm = load_lhm()
+
+        t2 = time_module.perf_counter()
+        logger.debug(f"[TIMING] After load_lhm: {t2 - t0:.3f}s")
 
         self._computer = self._lhm.Computer()
         self._computer.IsMotherboardEnabled = True
@@ -57,7 +66,13 @@ class WindowsHardwareManager(BaseHardwareManager):
         self._computer.IsBatteryEnabled = False
         self._computer.IsControllerEnabled = True
 
+        t3 = time_module.perf_counter()
+        logger.debug(f"[TIMING] Computer config set: {t3 - t0:.3f}s")
+
         self._computer.Open()
+
+        t4 = time_module.perf_counter()
+        logger.debug(f"[TIMING] Computer.Open(): {t4 - t0:.3f}s")
 
         # Register cleanup
         atexit.register(self._emergency_cleanup)
@@ -118,10 +133,19 @@ class WindowsHardwareManager(BaseHardwareManager):
 
         Updates all hardware readings before scanning.
         """
+        import time as time_module
+
+        t0 = time_module.perf_counter()
+
         self._update_all()
+        t1 = time_module.perf_counter()
+        logger.debug(f"[TIMING] _update_all(): {t1 - t0:.3f}s")
 
         result = HardwareScanResult()
         self._controls.clear()
+
+        t2 = time_module.perf_counter()
+        logger.debug(f"[TIMING] scan() init: {t2 - t0:.3f}s")
 
         for hw, sensor in self._iter_sensors():
             sensor_type_val = int(sensor.SensorType)
