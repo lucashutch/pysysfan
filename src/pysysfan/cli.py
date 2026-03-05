@@ -1153,7 +1153,12 @@ def monitor(interval: float):
         raise SystemExit(1)
 
     try:
-        with Live(console=console, refresh_per_second=4, screen=False) as live:
+        with Live(
+            console=console,
+            refresh_per_second=1,
+            screen=True,
+            vertical_overflow="visible",
+        ) as live:
             while True:
                 try:
                     result = hw.scan()

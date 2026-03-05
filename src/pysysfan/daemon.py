@@ -311,11 +311,19 @@ class FanDaemon:
 
             target_pct = curve.evaluate(agg_temp)
 
+            # Handle allow_fan_off setting
+            if target_pct <= 0 and not fan_cfg.allow_fan_off:
+                # When fan off is disabled, use minimum speed instead
+                target_pct = 1.0  # Minimum non-zero speed
+
             try:
                 self._hw.set_fan_speed(fan_cfg.fan_id, target_pct)
                 applied[fan_name] = target_pct
-                # Log aggregation info for multi-sensor fans
-                if len(fan_cfg.temp_ids) > 1:
+
+                # Log fan state change with special handling for off mode
+                if target_pct <= 0:
+                    logger.debug(f"Fan '{fan_name}': turned OFF (0% target)")
+                elif len(fan_cfg.temp_ids) > 1:
                     logger.debug(
                         f"Fan '{fan_name}': {len(fan_cfg.temp_ids)} sensors "
                         f"({fan_cfg.aggregation}) = {agg_temp:.1f}°C → {target_pct:.1f}%"

@@ -22,6 +22,7 @@ class FanConfig:
     temp_ids: list[str]
     aggregation: str = "max"
     header_name: str | None = None
+    allow_fan_off: bool = True  # When False, 0% = minimum speed, not off
 
     @property
     def temp_id(self) -> str:
@@ -76,12 +77,20 @@ class Config:
             else:
                 temp_ids = []
 
+            # Handle YAML boolean parsing: "off" and "on" are parsed as booleans
+            curve_value = fan_data["curve"]
+            if isinstance(curve_value, bool):
+                curve_value = "on" if curve_value else "off"
+            else:
+                curve_value = str(curve_value)
+
             fans[name] = FanConfig(
                 fan_id=fan_data.get("fan_id", fan_data.get("sensor")),
-                curve=fan_data["curve"],
+                curve=curve_value,
                 temp_ids=temp_ids,
                 aggregation=fan_data.get("aggregation", "max"),
                 header_name=fan_data.get("header"),
+                allow_fan_off=fan_data.get("allow_fan_off", True),
             )
 
         curves = {}
@@ -124,6 +133,11 @@ class Config:
                     "temp_ids": f.temp_ids,
                     "aggregation": f.aggregation,
                     **({"header": f.header_name} if f.header_name else {}),
+                    **(
+                        {"allow_fan_off": f.allow_fan_off}
+                        if not f.allow_fan_off
+                        else {}
+                    ),
                 }
                 for name, f in self.fans.items()
             },

@@ -104,6 +104,10 @@ class BaseHardwareManager(ABC):
                 print(f"{temp.sensor_name}: {temp.value}°C")
     """
 
+    def __init__(self):
+        """Initialize the hardware manager."""
+        self._off_mode_fans: set[str] = set()  # Track fans currently off
+
     @abstractmethod
     def open(self) -> None:
         """Initialize and open the hardware connection.
@@ -173,12 +177,15 @@ class BaseHardwareManager(ABC):
         pass
 
     @abstractmethod
-    def set_fan_speed(self, control_identifier: str, percent: float) -> None:
+    def set_fan_speed(
+        self, control_identifier: str, percent: float, force_zero: bool = True
+    ) -> None:
         """Set a fan speed by its control identifier.
 
         Args:
             control_identifier: The platform-specific identifier for the control
             percent: Speed percentage (0-100). Values should be clamped.
+            force_zero: If True, actively set 0% duty cycle. If False, release to BIOS.
 
         Raises:
             ValueError: If the control_identifier is invalid

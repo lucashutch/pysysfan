@@ -15,5 +15,5 @@
 - Ensure no files are larger than 500 lines
 
 ## bugs
-- Flickering cli updates in monitor mode
-- setting 0% fan speed doesn't turn off the fan, it just sets it to minimum speed. Need to implement an "off" mode that fully disables the fan.
+- speed up program startup time by caching LHM sensor list and only refreshing if the system configuration changes (e.g. new hardware detected)
+- Set all unconfigured fans to off (0%) by default to prevent unintended behavior
