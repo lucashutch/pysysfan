@@ -314,6 +314,167 @@ class TestOutputFormatters:
 # ── _build_status_table ──────────────────────────────────────────────
 
 
+class TestIsValidTemperatureSensor:
+    """Tests for _is_valid_temperature_sensor."""
+
+    def test_valid_temp_sensor(self):
+        """Should accept normal temperature sensors."""
+        from pysysfan.cli import _is_valid_temperature_sensor
+
+        sensor = SensorInfo("CPU", "Proc", "Core (Tctl/Tdie)", "Temp", "/cpu/t/0", 55.0)
+        assert _is_valid_temperature_sensor(sensor) is True
+
+    def test_valid_cpu_temp(self):
+        """Should accept CPU temperature sensors."""
+        from pysysfan.cli import _is_valid_temperature_sensor
+
+        sensor = SensorInfo(
+            "AMD Ryzen", "CPU", "CCD1 (Tdie)", "Temp", "/amdcpu/0/t/3", 41.0
+        )
+        assert _is_valid_temperature_sensor(sensor) is True
+
+    def test_filter_resolution(self):
+        """Should filter out temperature sensor resolution."""
+        from pysysfan.cli import _is_valid_temperature_sensor
+
+        sensor = SensorInfo(
+            "Memory",
+            "DIMM",
+            "Temperature Sensor Resolution",
+            "Temp",
+            "/mem/dimm/1/t/1",
+            0.25,
+        )
+        assert _is_valid_temperature_sensor(sensor) is False
+
+    def test_filter_low_limit(self):
+        """Should filter out thermal sensor low limit."""
+        from pysysfan.cli import _is_valid_temperature_sensor
+
+        sensor = SensorInfo(
+            "Memory", "DIMM", "Thermal Sensor Low Limit", "Temp", "/mem/dimm/1/t/2", 0.0
+        )
+        assert _is_valid_temperature_sensor(sensor) is False
+
+    def test_filter_high_limit(self):
+        """Should filter out thermal sensor high limit."""
+        from pysysfan.cli import _is_valid_temperature_sensor
+
+        sensor = SensorInfo(
+            "Memory",
+            "DIMM",
+            "Thermal Sensor High Limit",
+            "Temp",
+            "/mem/dimm/1/t/3",
+            55.0,
+        )
+        assert _is_valid_temperature_sensor(sensor) is False
+
+    def test_filter_critical_limit(self):
+        """Should filter out critical temperature limits."""
+        from pysysfan.cli import _is_valid_temperature_sensor
+
+        sensor = SensorInfo(
+            "Memory",
+            "DIMM",
+            "Thermal Sensor Critical High Limit",
+            "Temp",
+            "/mem/dimm/1/t/5",
+            85.0,
+        )
+        assert _is_valid_temperature_sensor(sensor) is False
+
+    def test_filter_warning_temperature(self):
+        """Should filter out warning temperature sensors."""
+        from pysysfan.cli import _is_valid_temperature_sensor
+
+        sensor = SensorInfo(
+            "Samsung SSD",
+            "SSD",
+            "Warning Temperature",
+            "Temp",
+            "/storage/ssd/0/t/1",
+            84.0,
+        )
+        assert _is_valid_temperature_sensor(sensor) is False
+
+
+class TestMatchFansWithControls:
+    """Tests for _match_fans_with_controls."""
+
+    def test_match_fans_with_controls(self):
+        """Should match fan RPM sensors with their PWM controls."""
+        from pysysfan.cli import _match_fans_with_controls
+
+        fans = [
+            SensorInfo(
+                "Nuvoton", "LPC", "Fan #1", "Fan", "/lpc/nct6799d/0/fan/0", 1200.0
+            ),
+            SensorInfo(
+                "Nuvoton", "LPC", "Fan #2", "Fan", "/lpc/nct6799d/0/fan/1", 800.0
+            ),
+        ]
+        controls = [
+            ControlInfo(
+                "Nuvoton", "Fan #1", "/lpc/nct6799d/0/control/0", 75.0, has_control=True
+            ),
+            ControlInfo(
+                "Nuvoton", "Fan #2", "/lpc/nct6799d/0/control/1", 50.0, has_control=True
+            ),
+        ]
+
+        matched = _match_fans_with_controls(fans, controls)
+        assert len(matched) == 2
+        assert matched[0][0].sensor_name == "Fan #1"
+        assert matched[0][1].current_value == 75.0
+        assert matched[1][0].sensor_name == "Fan #2"
+        assert matched[1][1].current_value == 50.0
+
+    def test_no_matching_control(self):
+        """Should return None control when no match found."""
+        from pysysfan.cli import _match_fans_with_controls
+
+        fans = [
+            SensorInfo(
+                "Nuvoton", "LPC", "Fan #1", "Fan", "/lpc/nct6799d/0/fan/0", 1200.0
+            ),
+        ]
+        controls = [
+            ControlInfo(
+                "Nuvoton", "Fan #2", "/lpc/nct6799d/0/control/1", 50.0, has_control=True
+            ),
+        ]
+
+        matched = _match_fans_with_controls(fans, controls)
+        assert len(matched) == 1
+        assert matched[0][1] is None
+
+    def test_empty_fans(self):
+        """Should handle empty fan list."""
+        from pysysfan.cli import _match_fans_with_controls
+
+        controls = [
+            ControlInfo(
+                "Nuvoton", "Fan #1", "/lpc/nct6799d/0/control/0", 75.0, has_control=True
+            ),
+        ]
+        matched = _match_fans_with_controls([], controls)
+        assert matched == []
+
+    def test_empty_controls(self):
+        """Should handle empty control list."""
+        from pysysfan.cli import _match_fans_with_controls
+
+        fans = [
+            SensorInfo(
+                "Nuvoton", "LPC", "Fan #1", "Fan", "/lpc/nct6799d/0/fan/0", 1200.0
+            ),
+        ]
+        matched = _match_fans_with_controls(fans, [])
+        assert len(matched) == 1
+        assert matched[0][1] is None
+
+
 class TestBuildStatusTable:
     """Tests for _build_status_table."""
 
@@ -342,6 +503,79 @@ class TestBuildStatusTable:
         )
         table = _build_status_table(result)
         assert table is not None
+
+    def test_filters_invalid_temps(self):
+        """Should filter out invalid temperature sensors."""
+        from io import StringIO
+        from rich.console import Console
+
+        from pysysfan.cli import _build_status_table
+
+        result = HardwareScanResult(
+            temperatures=[
+                SensorInfo("CPU", "Proc", "Core", "Temp", "/cpu/t/0", 55.0),
+                SensorInfo(
+                    "Memory",
+                    "DIMM",
+                    "Temperature Sensor Resolution",
+                    "Temp",
+                    "/mem/t/1",
+                    0.25,
+                ),
+                SensorInfo(
+                    "Memory",
+                    "DIMM",
+                    "Thermal Sensor High Limit",
+                    "Temp",
+                    "/mem/t/2",
+                    55.0,
+                ),
+            ],
+            fans=[],
+            controls=[],
+        )
+        table = _build_status_table(result)
+        assert table is not None
+        string_buffer = StringIO()
+        console = Console(file=string_buffer, width=120)
+        console.print(table)
+        table_str = string_buffer.getvalue()
+        assert "Core" in table_str
+        assert "Resolution" not in table_str
+        assert "Limit" not in table_str
+
+    def test_groups_fan_with_control(self):
+        """Should show fan RPM and PWM% in same row."""
+        from io import StringIO
+        from rich.console import Console
+
+        from pysysfan.cli import _build_status_table
+
+        result = HardwareScanResult(
+            temperatures=[],
+            fans=[
+                SensorInfo(
+                    "Nuvoton", "LPC", "Fan #1", "Fan", "/lpc/nct6799d/0/fan/0", 1200.0
+                ),
+            ],
+            controls=[
+                ControlInfo(
+                    "Nuvoton",
+                    "Fan #1",
+                    "/lpc/nct6799d/0/control/0",
+                    75.5,
+                    has_control=True,
+                ),
+            ],
+        )
+        table = _build_status_table(result)
+        assert table is not None
+        string_buffer = StringIO()
+        console = Console(file=string_buffer, width=120)
+        console.print(table)
+        table_str = string_buffer.getvalue()
+        assert "1200" in table_str
+        assert "75.5%" in table_str
 
 
 # ── Service commands ─────────────────────────────────────────────────
