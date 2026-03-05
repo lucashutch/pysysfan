@@ -205,6 +205,17 @@ class BaseHardwareManager(ABC):
         """
         pass
 
+    @abstractmethod
+    def get_hardware_fingerprint(self) -> str:
+        """Get a fingerprint of the current hardware configuration.
+
+        Used to detect hardware changes and invalidate caches.
+
+        Returns:
+            A string fingerprint that changes when hardware changes
+        """
+        pass
+
 
 class PlatformNotSupportedError(Exception):
     """Raised when the current platform is not supported."""
