@@ -19,7 +19,8 @@ def _sample_config() -> Config:
             "cpu_fan": FanConfig(
                 fan_id="/mb/control/0",
                 curve="balanced",
-                temp_id="/cpu/temp/0",
+                temp_ids=["/cpu/temp/0"],
+                aggregation="max",
             ),
         },
         curves={

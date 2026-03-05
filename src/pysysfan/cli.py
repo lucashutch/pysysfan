@@ -273,14 +273,19 @@ general:
   poll_interval: 2  # seconds between control updates
 
 fans:
-  # Example: map a fan header to a temperature source and curve
+  # Example: map a fan header to temperature sources and curve
   cpu_fan:
     # Sensor identifier from 'pysysfan scan --type control'
     fan_id: "{first_ctrl}"
     # Which temperature curve to use (see 'curves' below)
     curve: balanced
-    # Temperature sensor identifier from 'pysysfan scan --type temp'
-    temp_id: "{first_temp}"
+    # Temperature sensor identifiers from 'pysysfan scan --type temp'
+    # You can specify multiple sensors - they will be aggregated
+    temp_ids:
+      - "{first_temp}"
+    # How to aggregate multiple temperature sensors
+    # Options: max (hottest), min (coolest), average, median
+    aggregation: max
 
 curves:
   silent:
@@ -384,7 +389,7 @@ def _generate_auto_config(config_path):
     yaml_content = f"""# pysysfan Configuration (Auto-generated)
 # Generated on: {timestamp}
 # Detected {total_fans} fans ({controllable} controllable, {total_fans - controllable} read-only)
-# All fans mapped to CPU temperature sensor
+# All fans mapped to CPU temperature sensor(s)
 
 general:
   poll_interval: 2
@@ -401,11 +406,19 @@ fans:
             "Controllable" if is_controllable else "Read Only (no control available)"
         )
 
-        yaml_content += f"""  # {fan.header_name} - {status}
+        # Build temp_ids list for YAML
+        temp_ids_yaml = "\n".join(f'      - "{tid}"' for tid in fan.temp_ids)
+        multi_sensor_note = ""
+        if len(fan.temp_ids) > 1:
+            multi_sensor_note = f"\n    # Using {len(fan.temp_ids)} temperature sensors with '{fan.aggregation}' aggregation"
+
+        yaml_content += f"""  # {fan.header_name} - {status}{multi_sensor_note}
   {name}:
     fan_id: "{fan.fan_id}"
     curve: {fan.curve}
-    temp_id: "{fan.temp_id}"
+    temp_ids:
+{temp_ids_yaml}
+    aggregation: {fan.aggregation}
     header_name: "{fan.header_name}"
 
 """
@@ -437,7 +450,9 @@ fans:
       - [75, 100]
 
 # Tips:
-# - Edit temp_id fields to use different temperature sensors
+# - Edit temp_ids to use multiple temperature sensors (e.g., all CPU cores)
+# - Change aggregation to 'average' for smoother fan curves
+# - Use 'max' aggregation to respond to the hottest sensor (recommended for CPU)
 # - Change curve to 'silent' or 'performance' for individual fans
 # - Read-only fans will be monitored but cannot be controlled
 # - Run 'pysysfan scan' to see all available sensors
@@ -539,10 +554,12 @@ def config_validate(ctx):
     console.print(f"  Curves defined : {len(cfg.curves)}")
     console.print(f"  Poll interval  : {cfg.poll_interval}s")
 
-    # Validate curve references
+    # Validate curve references and aggregation methods
     from pysysfan.curves import parse_curve, InvalidCurveError
+    from pysysfan.temperature import get_valid_aggregation_methods
 
     errors = []
+    valid_aggregations = get_valid_aggregation_methods()
     for fan_name, fan in cfg.fans.items():
         # Check if it's a special curve first
         try:
@@ -554,6 +571,17 @@ def config_validate(ctx):
                 )
         except InvalidCurveError as e:
             errors.append(f"Fan '{fan_name}' has invalid curve '{fan.curve}': {e}")
+
+        # Validate aggregation method
+        if fan.aggregation not in valid_aggregations:
+            errors.append(
+                f"Fan '{fan_name}' has invalid aggregation '{fan.aggregation}'. "
+                f"Valid options: {valid_aggregations}"
+            )
+
+        # Validate temp_ids list
+        if not fan.temp_ids:
+            errors.append(f"Fan '{fan_name}' has no temperature sensors configured")
 
     if errors:
         for e in errors:
@@ -570,10 +598,18 @@ def config_validate(ctx):
         all_ids |= {c.identifier for c in result.controls}
 
         for fan_name, fan in cfg.fans.items():
-            if fan.temp_id not in all_ids:
-                console.print(
-                    f"  [yellow]⚠[/]  Fan '{fan_name}': temp_id '{fan.temp_id}' not found in current hardware scan"
-                )
+            # Check all temperature sensors
+            missing_temps = [tid for tid in fan.temp_ids if tid not in all_ids]
+            if missing_temps:
+                if len(missing_temps) == len(fan.temp_ids):
+                    console.print(
+                        f"  [yellow]⚠[/]  Fan '{fan_name}': none of the temperature sensors found"
+                    )
+                else:
+                    console.print(
+                        f"  [yellow]⚠[/]  Fan '{fan_name}': {len(missing_temps)}/{len(fan.temp_ids)} "
+                        f"temperature sensors not found (aggregation: {fan.aggregation})"
+                    )
             if fan.fan_id not in all_ids:
                 console.print(
                     f"  [yellow]⚠[/]  Fan '{fan_name}': fan_id '{fan.fan_id}' not found in current hardware scan"
@@ -639,8 +675,11 @@ def config_reload(ctx):
     console.print(f"  Curves defined : {len(cfg.curves)}")
     console.print(f"  Poll interval  : {cfg.poll_interval}s")
 
-    # Validate curve references
+    # Validate curve references and aggregation methods
+    from pysysfan.temperature import get_valid_aggregation_methods
+
     errors = []
+    valid_aggregations = get_valid_aggregation_methods()
     for fan_name, fan in cfg.fans.items():
         try:
             special = parse_curve(fan.curve)
@@ -650,6 +689,17 @@ def config_reload(ctx):
                 )
         except InvalidCurveError as e:
             errors.append(f"Fan '{fan_name}' has invalid curve '{fan.curve}': {e}")
+
+        # Validate aggregation method
+        if fan.aggregation not in valid_aggregations:
+            errors.append(
+                f"Fan '{fan_name}' has invalid aggregation '{fan.aggregation}'. "
+                f"Valid options: {valid_aggregations}"
+            )
+
+        # Validate temp_ids list
+        if not fan.temp_ids:
+            errors.append(f"Fan '{fan_name}' has no temperature sensors configured")
 
     if errors:
         console.print("\n[red]Validation errors found:[/]")
