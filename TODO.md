@@ -23,3 +23,4 @@
 ## bugs
 - Flickering cli updates in monitor mode
 - setting 0% fan speed doesn't turn off the fan, it just sets it to minimum speed. Need to implement an "off" mode that fully disables the fan.
+- DONE: monitor command shows all sensors, including sensor like temp sensor resolution or low limit or high limit. Need to filter out non-relevant sensors.
