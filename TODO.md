@@ -13,7 +13,3 @@
 - Split into smaller modules
 - Improve code structure
 - Ensure no files are larger than 500 lines
-
-## bugs
-- speed up program startup time by caching LHM sensor list and only refreshing if the system configuration changes (e.g. new hardware detected)
-- Set all unconfigured fans to off (0%) by default to prevent unintended behavior
