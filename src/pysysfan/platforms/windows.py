@@ -35,6 +35,7 @@ class WindowsHardwareManager(BaseHardwareManager):
     """
 
     def __init__(self):
+        super().__init__()  # Initialize base class (sets up _off_mode_fans)
         self._computer = None
         self._lhm = None
         self._controls: dict[str, object] = {}  # identifier -> ISensor with IControl
@@ -196,12 +197,20 @@ class WindowsHardwareManager(BaseHardwareManager):
                 )
         return fans
 
-    def set_fan_speed(self, control_identifier: str, percent: float) -> None:
+    def set_fan_speed(
+        self, control_identifier: str, percent: float, force_zero: bool = True
+    ) -> None:
         """Set a fan speed by its control sensor identifier.
 
         Args:
             control_identifier: The LHM identifier string for the control sensor.
             percent: Speed percentage (0-100). Values are clamped.
+            force_zero: If True, use SetSoftware(0) to force 0% duty cycle.
+                       If False, use SetDefault() to let BIOS control (may apply minimum).
+
+        When percent is 0 and force_zero is True, actively sets 0% duty cycle
+        while keeping software control. Note: motherboard may still enforce
+        minimum PWM duty cycle (typically 20-30%).
         """
         self._ensure_open()
 
@@ -215,15 +224,36 @@ class WindowsHardwareManager(BaseHardwareManager):
                 f"Available controls: {list(self._controls.keys())}"
             )
 
-        percent = max(0.0, min(100.0, percent))
         sensor = self._controls[control_identifier]
 
-        try:
-            sensor.Control.SetSoftware(percent)
-            logger.debug(f"Set {control_identifier} to {percent:.1f}%")
-        except Exception as e:
-            logger.error(f"Failed to set {control_identifier} to {percent}%: {e}")
-            raise
+        if percent <= 0:
+            # Turn fan off - use SetSoftware(0) to maintain control at 0%
+            # rather than SetDefault() which lets BIOS take over
+            try:
+                if force_zero:
+                    # Actively control at 0% (motherboard may still enforce minimum)
+                    sensor.Control.SetSoftware(0.0)
+                    logger.debug(
+                        f"Set {control_identifier} to 0% (SetSoftware, force_zero=True)"
+                    )
+                else:
+                    # Release to BIOS control
+                    sensor.Control.SetDefault()
+                    logger.debug(f"Released {control_identifier} to BIOS (SetDefault)")
+                self._off_mode_fans.add(control_identifier)
+            except Exception as e:
+                logger.error(f"Failed to turn off {control_identifier}: {e}")
+                raise
+        else:
+            # Set normal speed (clamp to valid range)
+            percent = min(100.0, percent)
+            try:
+                sensor.Control.SetSoftware(percent)
+                self._off_mode_fans.discard(control_identifier)
+                logger.debug(f"Set {control_identifier} to {percent:.1f}%")
+            except Exception as e:
+                logger.error(f"Failed to set {control_identifier} to {percent}%: {e}")
+                raise
 
     def restore_defaults(self) -> None:
         """Restore all fan controls to BIOS/default mode.

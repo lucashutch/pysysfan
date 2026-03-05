@@ -426,6 +426,45 @@ class TestRunOnce:
         speeds = daemon._run_once(cfg)
         assert speeds == {}  # Failed, so not in applied
 
+    def test_fan_off_mode_logs_info(self, tmp_path):
+        """Should log info when turning fan off (0% target)."""
+        daemon = FanDaemon(config_path=tmp_path / "c.yaml")
+        cfg = _sample_config()
+        # Use "off" curve which always returns 0
+        cfg.fans["cpu_fan"].curve = "off"
+        daemon._curves = daemon._build_curves(cfg)
+
+        mock_hw = MagicMock()
+        temp_sensor = MagicMock()
+        temp_sensor.identifier = "/cpu/temp/0"
+        temp_sensor.value = 30.0
+        mock_hw.get_temperatures.return_value = [temp_sensor]
+        daemon._hw = mock_hw
+
+        speeds = daemon._run_once(cfg)
+        assert "cpu_fan" in speeds
+        assert speeds["cpu_fan"] == 0.0
+
+    def test_fan_off_disabled_uses_minimum_speed(self, tmp_path):
+        """When allow_fan_off is False, 0% should become minimum speed (1%)."""
+        daemon = FanDaemon(config_path=tmp_path / "c.yaml")
+        cfg = _sample_config()
+        cfg.fans["cpu_fan"].curve = "off"
+        cfg.fans["cpu_fan"].allow_fan_off = False
+        daemon._curves = daemon._build_curves(cfg)
+
+        mock_hw = MagicMock()
+        temp_sensor = MagicMock()
+        temp_sensor.identifier = "/cpu/temp/0"
+        temp_sensor.value = 30.0
+        mock_hw.get_temperatures.return_value = [temp_sensor]
+        daemon._hw = mock_hw
+
+        speeds = daemon._run_once(cfg)
+        assert "cpu_fan" in speeds
+        # Should be set to minimum speed (1%) instead of 0%
+        assert speeds["cpu_fan"] == 1.0
+
 
 # ── _open_hardware ──────────────────────────────────────────────────
 

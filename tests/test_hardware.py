@@ -155,3 +155,11 @@ class TestHardwareManager:
             hw = WindowsHardwareManager()
             result = hw._sensor_type_name(999)
             assert "999" in result or "Unknown" in result
+
+    def test_off_mode_fans_tracking(self):
+        """Should initialize _off_mode_fans set."""
+        with patch("sys.platform", "win32"):
+            hw = WindowsHardwareManager()
+            assert hasattr(hw, "_off_mode_fans")
+            assert isinstance(hw._off_mode_fans, set)
+            assert len(hw._off_mode_fans) == 0

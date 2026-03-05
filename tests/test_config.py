@@ -602,3 +602,137 @@ def test_auto_populate_readonly_controls():
     config = auto_populate_config(scan)
     # Should include both controllable and read-only fans
     assert len(config.fans) == 2
+
+
+# ── allow_fan_off config option ──────────────────────────────────────────
+
+
+def test_load_config_with_allow_fan_off(tmp_path):
+    """Loading config with allow_fan_off should parse the value."""
+    cfg_file = tmp_path / "allow_off.yaml"
+    cfg_file.write_text("""\
+general:
+  poll_interval: 2
+
+fans:
+  cpu_fan:
+    fan_id: "/mb/control/0"
+    curve: balanced
+    temp_ids:
+      - "/cpu/temp/0"
+    allow_fan_off: false
+
+curves: {}
+""")
+    cfg = Config.load(cfg_file)
+    assert cfg.fans["cpu_fan"].allow_fan_off is False
+
+
+def test_load_config_default_allow_fan_off(tmp_path):
+    """Loading config without allow_fan_off should default to True."""
+    cfg_file = tmp_path / "default_off.yaml"
+    cfg_file.write_text("""\
+general:
+  poll_interval: 2
+
+fans:
+  cpu_fan:
+    fan_id: "/mb/control/0"
+    curve: balanced
+    temp_ids:
+      - "/cpu/temp/0"
+
+curves: {}
+""")
+    cfg = Config.load(cfg_file)
+    assert cfg.fans["cpu_fan"].allow_fan_off is True
+
+
+def test_save_includes_allow_fan_off_when_false(tmp_path):
+    """Config.save should include allow_fan_off when set to False."""
+    cfg = Config(
+        fans={
+            "fan1": FanConfig(
+                fan_id="/mb/control/0",
+                curve="balanced",
+                temp_ids=["/cpu/temp/0"],
+                allow_fan_off=False,
+            ),
+        },
+    )
+    cfg_file = tmp_path / "allow_off_false.yaml"
+    cfg.save(cfg_file)
+
+    import yaml
+
+    with open(cfg_file) as f:
+        data = yaml.safe_load(f)
+    assert data["fans"]["fan1"]["allow_fan_off"] is False
+
+
+def test_save_omits_allow_fan_off_when_true(tmp_path):
+    """Config.save should omit allow_fan_off when True (default)."""
+    cfg = Config(
+        fans={
+            "fan1": FanConfig(
+                fan_id="/mb/control/0",
+                curve="balanced",
+                temp_ids=["/cpu/temp/0"],
+                allow_fan_off=True,
+            ),
+        },
+    )
+    cfg_file = tmp_path / "allow_off_true.yaml"
+    cfg.save(cfg_file)
+
+    import yaml
+
+    with open(cfg_file) as f:
+        data = yaml.safe_load(f)
+    assert "allow_fan_off" not in data["fans"]["fan1"]
+
+
+def test_load_config_with_off_as_boolean(tmp_path):
+    """Loading config with 'off' as YAML boolean should convert to string."""
+    cfg_file = tmp_path / "off_bool.yaml"
+    # YAML parses 'off' as boolean False
+    cfg_file.write_text("""\
+general:
+  poll_interval: 2
+
+fans:
+  top_fan:
+    fan_id: "/mb/control/0"
+    curve: off
+    temp_ids:
+      - "/cpu/temp/0"
+
+curves: {}
+""")
+    cfg = Config.load(cfg_file)
+    # Should be converted to string "off", not boolean False
+    assert cfg.fans["top_fan"].curve == "off"
+    assert isinstance(cfg.fans["top_fan"].curve, str)
+
+
+def test_load_config_with_on_as_boolean(tmp_path):
+    """Loading config with 'on' as YAML boolean should convert to string."""
+    cfg_file = tmp_path / "on_bool.yaml"
+    # YAML parses 'on' as boolean True
+    cfg_file.write_text("""\
+general:
+  poll_interval: 2
+
+fans:
+  top_fan:
+    fan_id: "/mb/control/0"
+    curve: on
+    temp_ids:
+      - "/cpu/temp/0"
+
+curves: {}
+""")
+    cfg = Config.load(cfg_file)
+    # Should be converted to string "on", not boolean True
+    assert cfg.fans["top_fan"].curve == "on"
+    assert isinstance(cfg.fans["top_fan"].curve, str)

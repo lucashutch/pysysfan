@@ -50,6 +50,7 @@ class LinuxHardwareManager(BaseHardwareManager):
     """
 
     def __init__(self):
+        super().__init__()  # Initialize base class (sets up _off_mode_fans)
         self._sensors = None
         self._chips: dict[str, dict] = {}  # chip_name -> chip_info
         self._controls: dict[str, dict] = {}  # identifier -> control_info
@@ -375,12 +376,15 @@ class LinuxHardwareManager(BaseHardwareManager):
         result = self.scan()
         return result.fans
 
-    def set_fan_speed(self, control_identifier: str, percent: float) -> None:
+    def set_fan_speed(
+        self, control_identifier: str, percent: float, force_zero: bool = True
+    ) -> None:
         """Set a fan speed by its control identifier.
 
         Args:
             control_identifier: The identifier for the control (e.g., "hwmon0/pwm1" or "thinkpad/fan")
             percent: Speed percentage (0-100). Values are clamped.
+            force_zero: If True, actively set 0% duty cycle. If False, release to automatic.
         """
         if control_identifier not in self._controls:
             raise ValueError(
