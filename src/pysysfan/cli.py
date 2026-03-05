@@ -908,6 +908,50 @@ def update_auto(state: str):
 # ── Status / Monitor commands ─────────────────────────────────────────
 
 
+def _is_valid_temperature_sensor(sensor) -> bool:
+    """Filter out non-useful temperature sensors.
+
+    Excludes sensors that are metadata rather than actual temperature readings,
+    such as resolution, limits, or critical thresholds.
+    """
+    invalid_keywords = ["resolution", "limit", "critical"]
+    sensor_name_lower = sensor.sensor_name.lower()
+    return not any(kw in sensor_name_lower for kw in invalid_keywords)
+
+
+def _match_fans_with_controls(fans, controls) -> list[tuple]:
+    """Match fan RPM sensors with their corresponding PWM controls.
+
+    Returns a list of (fan_sensor, control_info) tuples, where control_info
+    may be None if no matching control is found.
+    """
+    control_map: dict[str, object] = {}
+
+    for ctrl in controls:
+        parts = ctrl.identifier.split("/")
+        try:
+            ctrl_idx = parts.index("control")
+            if ctrl_idx + 1 < len(parts):
+                control_map[parts[ctrl_idx + 1]] = ctrl
+        except ValueError:
+            continue
+
+    matched = []
+    for fan in fans:
+        parts = fan.identifier.split("/")
+        try:
+            fan_idx = parts.index("fan")
+            if fan_idx + 1 < len(parts):
+                fan_key = parts[fan_idx + 1]
+                matched.append((fan, control_map.get(fan_key)))
+            else:
+                matched.append((fan, None))
+        except ValueError:
+            matched.append((fan, None))
+
+    return matched
+
+
 def _build_status_table(result) -> Table:
     """Build a rich Table from a hardware scan result."""
     from rich.table import Table
@@ -921,21 +965,30 @@ def _build_status_table(result) -> Table:
     table.add_column("Type", style="dim", width=8)
     table.add_column("Hardware")
     table.add_column("Sensor")
-    table.add_column("Value", justify="right")
+    table.add_column("RPM", justify="right")
+    table.add_column("PWM %", justify="right")
 
-    for s in result.temperatures:
+    valid_temps = [s for s in result.temperatures if _is_valid_temperature_sensor(s)]
+    for s in valid_temps:
         val = f"{s.value:.1f} °C" if s.value is not None else "N/A"
-        table.add_row("Temp", s.hardware_name, s.sensor_name, f"[yellow]{val}[/]")
+        table.add_row("Temp", s.hardware_name, s.sensor_name, val, "")
 
-    for s in result.fans:
-        val = f"{s.value:.0f} RPM" if s.value is not None else "N/A"
-        table.add_row("Fan", s.hardware_name, s.sensor_name, f"[cyan]{val}[/]")
-
-    for c in result.controls:
-        val = f"{c.current_value:.1f} %" if c.current_value is not None else "N/A"
-        ctrl = "[green]ctrl[/]" if c.has_control else "[dim]read[/]"
+    matched_fans = _match_fans_with_controls(result.fans, result.controls)
+    for fan, ctrl in matched_fans:
+        rpm_val = f"{fan.value:.0f}" if fan.value is not None else "N/A"
+        pwm_val = (
+            f"{ctrl.current_value:.1f}%"
+            if ctrl and ctrl.current_value is not None
+            else "N/A"
+        )
+        ctrl_indicator = "[green]✓[/]" if ctrl and ctrl.has_control else "[dim]✗[/]"
+        sensor_name = f"{fan.sensor_name} {ctrl_indicator}"
         table.add_row(
-            "Control", c.hardware_name, f"{c.sensor_name} {ctrl}", f"[green]{val}[/]"
+            "Fan",
+            fan.hardware_name,
+            sensor_name,
+            f"[cyan]{rpm_val}[/]",
+            f"[green]{pwm_val}[/]",
         )
 
     return table
