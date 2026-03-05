@@ -607,6 +607,63 @@ def config_show(ctx):
     console.print(Syntax(raw, "yaml", theme="monokai", line_numbers=True))
 
 
+@config.command("reload")
+@click.pass_context
+def config_reload(ctx):
+    """Validate and reload the configuration file.
+
+    Checks for syntax errors and validates all fan references.
+    Reports any configuration issues without applying changes.
+    """
+    from pathlib import Path
+    from pysysfan.config import Config
+    from pysysfan.curves import parse_curve, InvalidCurveError
+
+    config_path: Path = ctx.obj["config_path"]
+
+    if not config_path.is_file():
+        console.print(
+            f"[red]Config not found:[/] {config_path}. Run 'pysysfan config init' first."
+        )
+        raise SystemExit(1)
+
+    # Load and parse config
+    try:
+        cfg = Config.load(config_path)
+    except Exception as e:
+        console.print(f"[red]Config parse error:[/] {e}")
+        raise SystemExit(1)
+
+    console.print(f"[bold green]Config reloaded successfully:[/] {config_path}")
+    console.print(f"  Fans defined   : {len(cfg.fans)}")
+    console.print(f"  Curves defined : {len(cfg.curves)}")
+    console.print(f"  Poll interval  : {cfg.poll_interval}s")
+
+    # Validate curve references
+    errors = []
+    for fan_name, fan in cfg.fans.items():
+        try:
+            special = parse_curve(fan.curve)
+            if special is None and fan.curve not in cfg.curves:
+                errors.append(
+                    f"Fan '{fan_name}' references unknown curve '{fan.curve}'"
+                )
+        except InvalidCurveError as e:
+            errors.append(f"Fan '{fan_name}' has invalid curve '{fan.curve}': {e}")
+
+    if errors:
+        console.print("\n[red]Validation errors found:[/]")
+        for error in errors:
+            console.print(f"  [red]-[/] {error}")
+        raise SystemExit(1)
+
+    console.print("\n[green]All fan references are valid.[/]")
+    console.print(
+        "[dim]Note: If the daemon is running, the new configuration "
+        "will be applied on the next poll cycle.[/]"
+    )
+
+
 # ── Run command ───────────────────────────────────────────────────────
 
 

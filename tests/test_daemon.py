@@ -67,6 +67,124 @@ class TestLoadConfig:
         assert cfg.poll_interval == 5.0
 
 
+# ── Config Reload ─────────────────────────────────────────────────────
+
+
+class TestConfigReload:
+    """Tests for config reload functionality."""
+
+    def test_reload_config_success(self, tmp_path):
+        """Should reload config successfully when valid."""
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text("""\
+general:
+  poll_interval: 3
+fans:
+  cpu:
+    fan_id: "/test/fan/0"
+    curve: "balanced"
+    temp_id: "/test/temp/0"
+curves:
+  balanced:
+    hysteresis: 2
+    points:
+      - [30, 30]
+      - [60, 60]
+""")
+        daemon = FanDaemon(config_path=cfg_file, auto_reload=False)
+        result = daemon.reload_config()
+        assert result is True
+        assert daemon._cfg is not None
+        assert daemon._cfg.poll_interval == 3.0
+        assert "cpu" in daemon._cfg.fans
+        assert "balanced" in daemon._curves
+
+    def test_reload_config_invalid_yaml(self, tmp_path):
+        """Should return False when config has invalid YAML."""
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text("invalid: [yaml: syntax")
+        daemon = FanDaemon(config_path=cfg_file, auto_reload=False)
+        result = daemon.reload_config()
+        assert result is False
+        assert daemon._cfg is None
+        assert daemon._config_error is not None
+
+    def test_reload_config_missing_curve(self, tmp_path):
+        """Should return False when fan references missing curve."""
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text("""\
+general:
+  poll_interval: 2
+fans:
+  cpu:
+    fan_id: "/test/fan/0"
+    curve: "nonexistent"
+    temp_id: "/test/temp/0"
+curves:
+  balanced:
+    hysteresis: 2
+    points:
+      - [30, 30]
+""")
+        daemon = FanDaemon(config_path=cfg_file, auto_reload=False)
+        result = daemon.reload_config()
+        assert result is False
+        assert daemon._config_error is not None
+
+    def test_reload_config_invalid_poll_interval(self, tmp_path):
+        """Should return False when poll_interval is invalid."""
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text("""\
+general:
+  poll_interval: 0
+fans: {}
+curves: {}
+""")
+        daemon = FanDaemon(config_path=cfg_file, auto_reload=False)
+        result = daemon.reload_config()
+        assert result is False
+        assert daemon._config_error is not None
+
+    def test_reload_preserves_old_config_on_failure(self, tmp_path):
+        """Should keep old config when new config fails validation."""
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text("""\
+general:
+  poll_interval: 2
+fans:
+  cpu:
+    fan_id: "/test/fan/0"
+    curve: "balanced"
+    temp_id: "/test/temp/0"
+curves:
+  balanced:
+    hysteresis: 2
+    points:
+      - [30, 30]
+""")
+        daemon = FanDaemon(config_path=cfg_file, auto_reload=False)
+        daemon.reload_config()
+
+        # Now write invalid config
+        cfg_file.write_text("""\
+general:
+  poll_interval: 2
+fans:
+  cpu:
+    fan_id: "/test/fan/0"
+    curve: "nonexistent"
+    temp_id: "/test/temp/0"
+curves: {}
+""")
+
+        # Reload should fail but keep old config
+        result = daemon.reload_config()
+        assert result is False
+        assert daemon._cfg is not None
+        assert "cpu" in daemon._cfg.fans
+        assert daemon._cfg.fans["cpu"].curve == "balanced"
+
+
 # ── _build_curves ─────────────────────────────────────────────────────
 
 

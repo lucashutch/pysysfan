@@ -10,7 +10,8 @@ dependencies = [
     "pyyaml",
     "requests",
     "rich",
-    "packaging"
+    "packaging",
+    "watchdog>=3.0"
 ]
 
 [project.scripts]

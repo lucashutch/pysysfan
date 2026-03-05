@@ -10,6 +10,7 @@ from pathlib import Path
 
 from pysysfan.config import Config, DEFAULT_CONFIG_PATH
 from pysysfan.curves import FanCurve, StaticCurve, parse_curve, InvalidCurveError
+from pysysfan.watcher import ConfigWatcher
 
 logger = logging.getLogger(__name__)
 
@@ -22,19 +23,140 @@ class FanDaemon:
 
     Safety guarantee: on any exit (normal, exception, or signal), all fan
     controls are restored to BIOS/automatic mode via atexit and signal handlers.
+
+    Supports live config reloading via file watching or manual trigger.
     """
 
-    def __init__(self, config_path: Path = DEFAULT_CONFIG_PATH):
-        self.config_path = config_path
+    def __init__(
+        self,
+        config_path: Path = DEFAULT_CONFIG_PATH,
+        auto_reload: bool = True,
+    ):
+        self.config_path = Path(config_path)
         self._running = False
         self._hw = None
         self._curves: dict[str, FanCurve] = {}
+        self._cfg: Config | None = None
+        self._auto_reload = auto_reload
+        self._watcher: ConfigWatcher | None = None
+        self._config_error: Exception | None = None
 
     # ── Setup / teardown ──────────────────────────────────────────────
 
     def _load_config(self) -> Config:
         logger.info(f"Loading config from {self.config_path}")
         return Config.load(self.config_path)
+
+    def _validate_config(self, cfg: Config) -> list[str]:
+        """Validate a config and return a list of error messages.
+
+        Args:
+            cfg: Config to validate
+
+        Returns:
+            List of error messages (empty if config is valid)
+        """
+        errors = []
+
+        # Validate fan curve references
+        for fan_name, fan in cfg.fans.items():
+            try:
+                special = parse_curve(fan.curve)
+                if special is None and fan.curve not in cfg.curves:
+                    errors.append(
+                        f"Fan '{fan_name}' references unknown curve '{fan.curve}'"
+                    )
+            except InvalidCurveError as e:
+                errors.append(f"Fan '{fan_name}' has invalid curve '{fan.curve}': {e}")
+
+        # Validate poll interval
+        if cfg.poll_interval <= 0:
+            errors.append(f"poll_interval must be positive (got {cfg.poll_interval})")
+        if cfg.poll_interval < 0.1:
+            errors.append(
+                f"poll_interval {cfg.poll_interval}s is too short (minimum 0.1s)"
+            )
+
+        return errors
+
+    def reload_config(self) -> bool:
+        """Reload and apply new configuration.
+
+        Validates the new config before applying. If validation fails,
+        the current configuration is kept and an error is logged.
+
+        Returns:
+            True if config was reloaded successfully, False otherwise
+        """
+        logger.info("Reloading configuration...")
+
+        try:
+            new_cfg = self._load_config()
+        except Exception as e:
+            logger.error(f"Failed to load config: {e}")
+            self._config_error = e
+            return False
+
+        # Validate the new config
+        errors = self._validate_config(new_cfg)
+        if errors:
+            logger.error("Config validation failed:")
+            for error in errors:
+                logger.error(f"  - {error}")
+            self._config_error = ValueError("; ".join(errors))
+            return False
+
+        # Apply the new config
+        try:
+            self._cfg = new_cfg
+            self._curves = self._build_curves(new_cfg)
+            self._config_error = None
+            logger.info("Configuration reloaded successfully")
+            logger.info(
+                f"  Fans: {len(new_cfg.fans)}, "
+                f"Curves: {len(new_cfg.curves)}, "
+                f"Poll interval: {new_cfg.poll_interval}s"
+            )
+            return True
+        except Exception as e:
+            logger.error(f"Failed to apply config: {e}")
+            self._config_error = e
+            return False
+
+    def _start_watcher(self):
+        """Start the config file watcher if auto-reload is enabled."""
+        if not self._auto_reload:
+            logger.debug("Auto-reload disabled, not starting config watcher")
+            return
+
+        if not ConfigWatcher.is_available():
+            logger.warning(
+                "Live config reloading not available. "
+                "Install watchdog: uv pip install watchdog"
+            )
+            return
+
+        def _on_reload() -> None:
+            self.reload_config()
+            return None
+
+        self._watcher = ConfigWatcher(
+            config_path=self.config_path,
+            on_reload=_on_reload,
+            on_error=lambda e: logger.error(f"Config watcher error: {e}"),
+        )
+
+        if self._watcher.start():
+            logger.info("Config auto-reload enabled (edit config.yaml to trigger)")
+        else:
+            logger.warning("Failed to start config watcher")
+            self._watcher = None
+
+    def _stop_watcher(self):
+        """Stop the config file watcher."""
+        if self._watcher:
+            self._watcher.stop()
+            self._watcher = None
 
     def _build_curves(self, cfg: Config) -> dict[str, FanCurve]:
         curves: dict[str, FanCurve] = {}
@@ -189,14 +311,17 @@ class FanDaemon:
         Opens hardware, runs one control pass, then closes hardware.
         Useful for testing configuration without starting the daemon loop.
         """
-        cfg = self._load_config()
-        self._curves = self._build_curves(cfg)
+        if self._cfg is None:
+            if not self.reload_config():
+                raise RuntimeError("Failed to load configuration")
+
+        assert self._cfg is not None, "Config should be loaded after reload_config"
 
         self._hw = self._open_hardware()
         try:
             # Do an initial scan to populate the control map
             self._hw.scan()
-            result = self._run_once(cfg)
+            result = self._run_once(self._cfg)
         finally:
             self._hw.restore_defaults()
             self._hw.close()
@@ -207,13 +332,19 @@ class FanDaemon:
         """Start the main fan control loop. Blocks until stopped.
 
         Restores BIOS fan control on exit in all cases.
+        Supports live config reloading via file watcher.
         """
         logger.info("pysysfan daemon starting...")
 
-        cfg = self._load_config()
-        self._curves = self._build_curves(cfg)
+        # Initial config load
+        if not self.reload_config():
+            logger.error("Failed to load initial configuration, aborting")
+            return
+
+        cfg = self._cfg
         self._check_for_updates(cfg)
         self._register_safety_handlers()
+        self._start_watcher()
 
         self._hw = self._open_hardware()
         try:
@@ -229,15 +360,18 @@ class FanDaemon:
             logger.info(f"Control loop started (poll interval: {cfg.poll_interval}s)")
 
             while self._running:
+                # Get current config (may have been reloaded)
+                current_cfg = self._cfg if self._cfg is not None else cfg
+
                 try:
-                    applied = self._run_once(cfg)
+                    applied = self._run_once(current_cfg)
                     if applied:
                         status = ", ".join(f"{k}={v:.0f}%" for k, v in applied.items())
                         logger.info(f"Applied: {status}")
                 except Exception as e:
                     logger.error(f"Control loop error: {e}", exc_info=True)
 
-                time.sleep(cfg.poll_interval)
+                time.sleep(current_cfg.poll_interval)
 
         finally:
             logger.info("Restoring BIOS fan control and shutting down...")
