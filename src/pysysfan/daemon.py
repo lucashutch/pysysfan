@@ -5,9 +5,11 @@ from __future__ import annotations
 import atexit
 import logging
 import signal
+import threading
 import time
 from pathlib import Path
 
+from pysysfan.cache import HardwareCacheManager, get_default_cache_manager
 from pysysfan.config import Config, DEFAULT_CONFIG_PATH
 from pysysfan.curves import FanCurve, StaticCurve, parse_curve, InvalidCurveError
 from pysysfan.temperature import lookup_and_aggregate, get_valid_aggregation_methods
@@ -32,6 +34,7 @@ class FanDaemon:
         self,
         config_path: Path = DEFAULT_CONFIG_PATH,
         auto_reload: bool = True,
+        cache_manager: HardwareCacheManager | None = None,
     ):
         self.config_path = Path(config_path)
         self._running = False
@@ -41,6 +44,9 @@ class FanDaemon:
         self._auto_reload = auto_reload
         self._watcher: ConfigWatcher | None = None
         self._config_error: Exception | None = None
+        self._cache_manager = cache_manager or get_default_cache_manager()
+        self._unconfigured_fans: set[str] = set()
+        self._update_thread: threading.Thread | None = None
 
     # ── Setup / teardown ──────────────────────────────────────────────
 
@@ -181,11 +187,87 @@ class FanDaemon:
         return curves
 
     def _open_hardware(self):
+        import time as time_module
+
+        t0 = time_module.perf_counter()
         from pysysfan.hardware import HardwareManager
+
+        t1 = time_module.perf_counter()
+        logger.debug(f"[TIMING] Import HardwareManager: {t1 - t0:.3f}s")
 
         hw = HardwareManager()
         hw.open()
+        t2 = time_module.perf_counter()
+        logger.debug(f"[TIMING] hw.open(): {t2 - t0:.3f}s")
+
         return hw
+
+    def _use_cached_scan(self):
+        """Use cached scan results if available, otherwise perform a new scan."""
+        import time as time_module
+
+        t0 = time_module.perf_counter()
+
+        self._cache_manager.load()
+        fingerprint = self._hw.get_hardware_fingerprint()
+        t1 = time_module.perf_counter()
+        logger.debug(f"[TIMING] get_hardware_fingerprint(): {t1 - t0:.3f}s")
+        logger.debug(f"Hardware fingerprint: {fingerprint[:16]}...")
+
+        if self._cache_manager.is_valid(fingerprint):
+            cached_result = self._cache_manager.get_cached_scan_result()
+            if cached_result:
+                t2 = time_module.perf_counter()
+                logger.debug(f"[TIMING] Cache hit: {t2 - t0:.3f}s")
+                logger.info("Using cached hardware scan results")
+                return cached_result
+
+        t2 = time_module.perf_counter()
+        logger.debug(f"[TIMING] Cache miss check: {t2 - t0:.3f}s")
+        logger.info("Performing full hardware scan...")
+        scan_result = self._hw.scan()
+        t3 = time_module.perf_counter()
+        logger.debug(f"[TIMING] hw.scan(): {t3 - t0:.3f}s")
+
+        from pysysfan.cache import HardwareCache
+
+        cache = HardwareCache.from_scan_result(fingerprint, scan_result)
+        self._cache_manager.save(cache)
+        logger.info("Hardware scan results cached")
+
+        return scan_result
+
+    def _initialize_unconfigured_fans(self, scan_result) -> None:
+        """Set all unconfigured fans to 0% to prevent unintended behavior.
+
+        Fans that are controllable but not configured in the config file
+        are set to 0% (off) by default. This ensures no unexpected fan
+        behavior from hardware left in BIOS-controlled mode.
+        """
+        if self._cfg is None:
+            return
+
+        configured_fan_ids = {fan.fan_id for fan in self._cfg.fans.values()}
+
+        unconfigured = [
+            ctrl.identifier
+            for ctrl in scan_result.controls
+            if ctrl.has_control and ctrl.identifier not in configured_fan_ids
+        ]
+
+        if not unconfigured:
+            return
+
+        logger.info(f"Setting {len(unconfigured)} unconfigured fan(s) to 0%")
+        self._unconfigured_fans.clear()
+
+        for fan_id in unconfigured:
+            try:
+                self._hw.set_fan_speed(fan_id, 0.0)
+                self._unconfigured_fans.add(fan_id)
+                logger.debug(f"Unconfigured fan '{fan_id}' set to 0%")
+            except Exception as e:
+                logger.warning(f"Failed to set unconfigured fan '{fan_id}' to 0%: {e}")
 
     def _register_safety_handlers(self):
         """Register atexit and signal handlers to restore fan control on exit."""
@@ -213,35 +295,30 @@ class FanDaemon:
     # ── Update check ────────────────────────────────────────────────
 
     def _check_for_updates(self, cfg) -> None:
-        """Optionally check for a newer pysysfan release at startup."""
+        """Check for a newer pysysfan release (runs in background thread).
+
+        This method is designed to run in a background thread during startup
+        to avoid blocking hardware initialization.
+        """
         if not cfg.update.auto_check:
             return
 
         try:
-            from pysysfan.updater import check_for_update, perform_update
+            from pysysfan.updater import check_for_update
 
             info = check_for_update()
             if not info.available:
                 logger.debug("pysysfan is up-to-date (%s).", info.current_version)
                 return
 
-            if cfg.update.notify_only:
-                logger.info(
-                    "A new pysysfan version is available: %s → %s. "
-                    "Run 'pysysfan update apply' to upgrade.",
-                    info.current_version,
-                    info.latest_version,
-                )
-            else:
-                logger.info(
-                    "Auto-updating pysysfan %s → %s...",
-                    info.current_version,
-                    info.latest_version,
-                )
-                perform_update(info.latest_version)
-                logger.info("Update installed. Restart the daemon for the new version.")
+            logger.info(
+                "A new pysysfan version is available: %s → %s. "
+                "Run 'pysysfan update apply' to upgrade.",
+                info.current_version,
+                info.latest_version,
+            )
         except Exception as exc:
-            logger.warning("Update check failed (non-fatal): %s", exc)
+            logger.debug("Update check failed (non-fatal): %s", exc)
 
     # ── Control logic ─────────────────────────────────────────────────
 
@@ -353,8 +430,8 @@ class FanDaemon:
 
         self._hw = self._open_hardware()
         try:
-            # Do an initial scan to populate the control map
-            self._hw.scan()
+            scan_result = self._use_cached_scan()
+            self._initialize_unconfigured_fans(scan_result)
             result = self._run_once(self._cfg)
         finally:
             self._hw.restore_defaults()
@@ -370,27 +447,54 @@ class FanDaemon:
         """
         logger.info("pysysfan daemon starting...")
 
+        startup_t0 = time.perf_counter()
+
         # Initial config load
         if not self.reload_config():
             logger.error("Failed to load initial configuration, aborting")
             return
 
         cfg = self._cfg
-        self._check_for_updates(cfg)
-        self._register_safety_handlers()
-        self._start_watcher()
 
+        # Start update check in background thread (non-blocking)
+        if cfg and cfg.update.auto_check:
+            self._update_thread = threading.Thread(
+                target=self._check_for_updates,
+                args=(cfg,),
+                name="UpdateChecker",
+                daemon=True,
+            )
+            self._update_thread.start()
+            logger.debug("Started update check in background thread")
+
+        self._register_safety_handlers()
+
+        # Initialize hardware (runs in parallel with update check)
         self._hw = self._open_hardware()
+
         try:
-            # Initial scan to populate the controllable fan map
-            scan_result = self._hw.scan()
+            scan_result = self._use_cached_scan()
             logger.info(
                 f"Hardware scan found: {len(scan_result.temperatures)} temps, "
                 f"{len(scan_result.fans)} fans, "
                 f"{sum(1 for c in scan_result.controls if c.has_control)} controllable outputs"
             )
 
+            self._initialize_unconfigured_fans(scan_result)
+
+            # Start config watcher after hardware is ready
+            self._start_watcher()
+
+            # Wait for update check to complete (with timeout)
+            if self._update_thread and self._update_thread.is_alive():
+                logger.debug("Waiting for update check to complete...")
+                self._update_thread.join(timeout=5.0)
+                if self._update_thread.is_alive():
+                    logger.debug("Update check still running, continuing anyway")
+
             self._running = True
+            startup_duration = time.perf_counter() - startup_t0
+            logger.info(f"Startup completed in {startup_duration:.1f}s")
             logger.info(f"Control loop started (poll interval: {cfg.poll_interval}s)")
 
             while self._running:

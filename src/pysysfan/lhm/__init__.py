@@ -84,10 +84,22 @@ def load_lhm():
     Returns the LibreHardwareMonitor.Hardware namespace for use.
     Must be called before any LHM classes are used.
     """
+    import time as time_module
+
+    t0 = time_module.perf_counter()
     _ensure_clr()
+
+    t1 = time_module.perf_counter()
+    import logging
+
+    logger = logging.getLogger(__name__)
+    logger.debug(f"[TIMING] _ensure_clr(): {t1 - t0:.3f}s")
 
     dll_path = get_lhm_dll_path()
     dll_dir = str(dll_path.parent)
+
+    t2 = time_module.perf_counter()
+    logger.debug(f"[TIMING] get_lhm_dll_path(): {t2 - t1:.3f}s")
 
     # Add DLL directory to sys.path so CLR can resolve the assembly by name
     if dll_dir not in sys.path:
@@ -95,11 +107,21 @@ def load_lhm():
 
     import clr  # type: ignore[import-untyped]
 
+    t3 = time_module.perf_counter()
+    logger.debug(f"[TIMING] import clr: {t3 - t2:.3f}s")
+
     # Add reference by assembly name (resolved via sys.path)
     clr.AddReference("LibreHardwareMonitorLib")
 
+    t4 = time_module.perf_counter()
+    logger.debug(f"[TIMING] clr.AddReference: {t4 - t3:.3f}s")
+
     # Import the namespace
     from LibreHardwareMonitor import Hardware  # type: ignore[import-untyped]
+
+    t5 = time_module.perf_counter()
+    logger.debug(f"[TIMING] import Hardware: {t5 - t4:.3f}s")
+    logger.debug(f"[TIMING] TOTAL load_lhm(): {t5 - t0:.3f}s")
 
     return Hardware
 

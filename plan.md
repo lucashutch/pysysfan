@@ -1,4 +1,40 @@
-# Bug Fix Plan
+# pysysfan Development Plan
+
+## Recent: Performance Optimization (March 2026)
+
+**Status:** ✅ Completed
+
+### Problem
+Startup time was slow (~4 seconds) due to:
+1. Synchronous update check blocking startup (~1 second)
+2. Hardware initialization with LHM/.NET runtime (~3 seconds)
+
+### Solution Implemented
+1. **Parallel Initialization**
+   - Update check now runs in background thread immediately
+   - Hardware initialization runs in main thread simultaneously
+   - Wait for update check thread before entering control loop (5s timeout)
+
+2. **Always-On Update Checks**
+   - Removed `--no-check` CLI option since checks are now non-blocking
+   - Update checks always run on startup (when `auto_check: true` in config)
+
+3. **Timing Instrumentation**
+   - Added startup timing logs for debugging
+   - Log total startup duration
+
+### Files Modified
+- ✅ `src/pysysfan/daemon.py` - Parallel initialization, background update check
+- ✅ `src/pysysfan/cli.py` - Removed `--no-check` option
+
+### Results
+- **Startup improvement:** 4s → 3s (25% faster)
+- Update checks no longer impact startup speed
+- Maintained all safety guarantees (atexit handlers, signal handlers)
+
+---
+
+## Previous: Bug Fix Plan (March 2026)
 
 ## Overview
 Fix two bugs identified in TODO.md:

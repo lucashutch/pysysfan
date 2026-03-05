@@ -42,9 +42,18 @@ class WindowsHardwareManager(BaseHardwareManager):
 
     def open(self) -> None:
         """Initialize and open the LHM computer instance."""
+        import time as time_module
+
+        t0 = time_module.perf_counter()
         from pysysfan.lhm import load_lhm
 
+        t1 = time_module.perf_counter()
+        logger.debug(f"[TIMING] load_lhm(): {t1 - t0:.3f}s")
+
         self._lhm = load_lhm()
+
+        t2 = time_module.perf_counter()
+        logger.debug(f"[TIMING] After load_lhm: {t2 - t0:.3f}s")
 
         self._computer = self._lhm.Computer()
         self._computer.IsMotherboardEnabled = True
@@ -57,7 +66,13 @@ class WindowsHardwareManager(BaseHardwareManager):
         self._computer.IsBatteryEnabled = False
         self._computer.IsControllerEnabled = True
 
+        t3 = time_module.perf_counter()
+        logger.debug(f"[TIMING] Computer config set: {t3 - t0:.3f}s")
+
         self._computer.Open()
+
+        t4 = time_module.perf_counter()
+        logger.debug(f"[TIMING] Computer.Open(): {t4 - t0:.3f}s")
 
         # Register cleanup
         atexit.register(self._emergency_cleanup)
@@ -118,10 +133,19 @@ class WindowsHardwareManager(BaseHardwareManager):
 
         Updates all hardware readings before scanning.
         """
+        import time as time_module
+
+        t0 = time_module.perf_counter()
+
         self._update_all()
+        t1 = time_module.perf_counter()
+        logger.debug(f"[TIMING] _update_all(): {t1 - t0:.3f}s")
 
         result = HardwareScanResult()
         self._controls.clear()
+
+        t2 = time_module.perf_counter()
+        logger.debug(f"[TIMING] scan() init: {t2 - t0:.3f}s")
 
         for hw, sensor in self._iter_sensors():
             sensor_type_val = int(sensor.SensorType)
@@ -267,6 +291,39 @@ class WindowsHardwareManager(BaseHardwareManager):
                 logger.debug(f"Restored default control for {identifier}")
             except Exception as e:
                 logger.warning(f"Failed to restore default for {identifier}: {e}")
+
+    def get_hardware_fingerprint(self) -> str:
+        """Get a fingerprint of the current hardware configuration.
+
+        Uses hardware identifiers and control sensor identifiers to detect changes.
+        Sensor values are ignored to ensure stable fingerprints.
+        """
+        import hashlib
+        import logging
+
+        logger = logging.getLogger(__name__)
+        self._ensure_open()
+
+        hw_ids: set[str] = set()
+        control_ids: set[str] = set()
+
+        for hw in self._computer.Hardware:
+            hw_ids.add(f"{hw.HardwareType}|{hw.Name}")
+            for sub in hw.SubHardware:
+                hw_ids.add(f"{sub.HardwareType}|{sub.Name}")
+
+        for hw, sensor in self._iter_sensors():
+            sensor_type_val = int(sensor.SensorType)
+            if sensor_type_val == SensorKind.CONTROL:
+                control_ids.add(str(sensor.Identifier))
+
+        fingerprint_parts = sorted(hw_ids) + sorted(control_ids)
+        fingerprint_data = ";".join(fingerprint_parts)
+
+        logger.debug(
+            f"Fingerprint: {hashlib.sha256(fingerprint_data.encode()).hexdigest()[:16]}... ({len(hw_ids)} hw, {len(control_ids)} controls)"
+        )
+        return hashlib.sha256(fingerprint_data.encode()).hexdigest()
 
     def _emergency_cleanup(self) -> None:
         """atexit handler to restore fan defaults on unexpected exit."""
