@@ -10,6 +10,7 @@ from pathlib import Path
 
 from pysysfan.config import Config, DEFAULT_CONFIG_PATH
 from pysysfan.curves import FanCurve, StaticCurve, parse_curve, InvalidCurveError
+from pysysfan.temperature import lookup_and_aggregate, get_valid_aggregation_methods
 from pysysfan.watcher import ConfigWatcher
 
 logger = logging.getLogger(__name__)
@@ -68,6 +69,18 @@ class FanDaemon:
                     )
             except InvalidCurveError as e:
                 errors.append(f"Fan '{fan_name}' has invalid curve '{fan.curve}': {e}")
+
+            # Validate aggregation method
+            valid_methods = get_valid_aggregation_methods()
+            if fan.aggregation not in valid_methods:
+                errors.append(
+                    f"Fan '{fan_name}' has invalid aggregation '{fan.aggregation}'. "
+                    f"Valid options: {valid_methods}"
+                )
+
+            # Validate temperature sensors list
+            if not fan.temp_ids:
+                errors.append(f"Fan '{fan_name}' has no temperature sensors configured")
 
         # Validate poll interval
         if cfg.poll_interval <= 0:
@@ -277,27 +290,40 @@ class FanDaemon:
                 )
                 continue
 
-            temp = self._get_temperature(fan_cfg.temp_id, temps)
-            if temp is None:
+            # Aggregate temperatures from multiple sensors
+            agg_temp = lookup_and_aggregate(
+                fan_cfg.temp_ids, temps, fan_cfg.aggregation
+            )
+
+            if agg_temp is None:
                 logger.warning(
-                    f"Fan '{fan_name}': temperature source '{fan_cfg.temp_id}' not found. "
+                    f"Fan '{fan_name}': no temperature readings from sensors {fan_cfg.temp_ids}. "
                     "Is the daemon running as Administrator?"
                 )
                 continue
 
-            if temp == 0.0:
+            if agg_temp == 0.0:
                 # LHM sometimes returns 0.0 for unavailable sensors (not None)
                 logger.debug(
-                    f"Fan '{fan_name}': source returned 0.0°C — skipping this pass."
+                    f"Fan '{fan_name}': aggregated temperature is 0.0°C — skipping this pass."
                 )
                 continue
 
-            target_pct = curve.evaluate(temp)
+            target_pct = curve.evaluate(agg_temp)
 
             try:
                 self._hw.set_fan_speed(fan_cfg.fan_id, target_pct)
                 applied[fan_name] = target_pct
-                logger.debug(f"Fan '{fan_name}': {temp:.1f}°C → {target_pct:.1f}%")
+                # Log aggregation info for multi-sensor fans
+                if len(fan_cfg.temp_ids) > 1:
+                    logger.debug(
+                        f"Fan '{fan_name}': {len(fan_cfg.temp_ids)} sensors "
+                        f"({fan_cfg.aggregation}) = {agg_temp:.1f}°C → {target_pct:.1f}%"
+                    )
+                else:
+                    logger.debug(
+                        f"Fan '{fan_name}': {agg_temp:.1f}°C → {target_pct:.1f}%"
+                    )
             except Exception as e:
                 logger.error(f"Fan '{fan_name}': failed to set speed: {e}")
 

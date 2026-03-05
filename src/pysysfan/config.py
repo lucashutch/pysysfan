@@ -19,8 +19,14 @@ DEFAULT_CONFIG_PATH = DEFAULT_CONFIG_DIR / "config.yaml"
 class FanConfig:
     fan_id: str
     curve: str
-    temp_id: str
+    temp_ids: list[str]
+    aggregation: str = "max"
     header_name: str | None = None
+
+    @property
+    def temp_id(self) -> str:
+        """Backward compatibility: returns first temp_id or empty string."""
+        return self.temp_ids[0] if self.temp_ids else ""
 
 
 @dataclass
@@ -57,12 +63,24 @@ class Config:
 
         fans = {}
         for name, fan_data in data.get("fans", {}).items():
-            # Support backwards compatibility for old config keys for a smooth transition if needed,
-            # but default to the new ones
+            # Support backwards compatibility: temp_id (str) -> temp_ids (list)
+            if "temp_ids" in fan_data:
+                temp_ids = fan_data["temp_ids"]
+                if isinstance(temp_ids, str):
+                    temp_ids = [temp_ids]
+            elif "temp_id" in fan_data:
+                temp_ids = [fan_data["temp_id"]]
+            elif "source" in fan_data:
+                # Legacy key
+                temp_ids = [fan_data["source"]]
+            else:
+                temp_ids = []
+
             fans[name] = FanConfig(
                 fan_id=fan_data.get("fan_id", fan_data.get("sensor")),
                 curve=fan_data["curve"],
-                temp_id=fan_data.get("temp_id", fan_data.get("source")),
+                temp_ids=temp_ids,
+                aggregation=fan_data.get("aggregation", "max"),
                 header_name=fan_data.get("header"),
             )
 
@@ -103,7 +121,8 @@ class Config:
                 name: {
                     "fan_id": f.fan_id,
                     "curve": f.curve,
-                    "temp_id": f.temp_id,
+                    "temp_ids": f.temp_ids,
+                    "aggregation": f.aggregation,
                     **({"header": f.header_name} if f.header_name else {}),
                 }
                 for name, f in self.fans.items()
@@ -145,7 +164,7 @@ def init_default_config(path: Path | str = DEFAULT_CONFIG_PATH):
     config.fans["example_cpu_fan"] = FanConfig(
         fan_id="/motherboard/nct6791d/control/0",
         curve="balanced",
-        temp_id="/amdcpu/0/temperature/0",
+        temp_ids=["/amdcpu/0/temperature/0"],
         header_name="CPU Fan 1",
     )
     config.save(path)
@@ -201,21 +220,58 @@ def auto_populate_config(
     """
     config = Config()
 
-    # Find primary temperature sensor (prefer CPU)
-    primary_temp = None
-    for temp in scan_result.temperatures:
-        if "cpu" in temp.hardware_type.lower() or "cpu" in temp.identifier.lower():
-            primary_temp = temp
-            break
+    if not scan_result.temperatures:
+        raise ValueError(
+            "No temperature sensors found. Cannot create config without temperature sources."
+        )
 
-    # Fallback to first available temperature sensor
-    if primary_temp is None:
-        if scan_result.temperatures:
-            primary_temp = scan_result.temperatures[0]
-        else:
-            raise ValueError(
-                "No temperature sensors found. Cannot create config without temperature sources."
-            )
+    # Find all CPU temperature sensors
+    cpu_temps = [
+        temp
+        for temp in scan_result.temperatures
+        if "cpu" in temp.hardware_type.lower() or "cpu" in temp.identifier.lower()
+    ]
+
+    # Group CPU sensors by hardware identifier
+    cpu_sensors_by_hardware: dict[str, list] = {}
+    for temp in cpu_temps:
+        # Extract hardware path (everything up to the last /temperature/)
+        parts = temp.identifier.split("/")
+        try:
+            temp_idx = parts.index("temperature")
+            hw_path = "/".join(parts[:temp_idx])
+        except ValueError:
+            hw_path = temp.hardware_name
+
+        if hw_path not in cpu_sensors_by_hardware:
+            cpu_sensors_by_hardware[hw_path] = []
+        cpu_sensors_by_hardware[hw_path].append(temp)
+
+    # Determine best temperature source for each CPU
+    cpu_temp_sources: dict[str, tuple[list[str], str]] = {}
+    for hw_path, temps in cpu_sensors_by_hardware.items():
+        # Sort by sensor name to try to identify core sensors
+        # Core sensors typically have names like "Core #1", "Core #2", etc.
+        core_temps = [
+            t for t in temps if "core" in t.sensor_name.lower() and "#" in t.sensor_name
+        ]
+
+        if len(core_temps) >= 2:
+            # Use all core sensors with max aggregation
+            temp_ids = [t.identifier for t in core_temps]
+            cpu_temp_sources[hw_path] = (temp_ids, "max")
+        elif temps:
+            # Use all available CPU temps with max aggregation
+            temp_ids = [t.identifier for t in temps]
+            cpu_temp_sources[hw_path] = (temp_ids, "max")
+
+    # Find primary CPU (first one in the dict, or use first available temp)
+    primary_source = None
+    if cpu_temp_sources:
+        primary_source = list(cpu_temp_sources.values())[0]
+    else:
+        # Fallback: use first available temperature sensor
+        primary_source = ([scan_result.temperatures[0].identifier], "max")
 
     # Generate fan configurations
     used_names: set[str] = set()
@@ -228,7 +284,8 @@ def auto_populate_config(
         config.fans[unique_name] = FanConfig(
             fan_id=control.identifier,
             curve=default_curve,
-            temp_id=primary_temp.identifier,
+            temp_ids=primary_source[0],
+            aggregation=primary_source[1],
             header_name=control.sensor_name,
         )
 
