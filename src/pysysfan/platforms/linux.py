@@ -493,3 +493,18 @@ class LinuxHardwareManager(BaseHardwareManager):
             logger.warning("Permission denied restoring ThinkPad fan control")
         except Exception as e:
             logger.warning(f"Error restoring ThinkPad fan: {e}")
+
+    def get_hardware_fingerprint(self) -> str:
+        """Get a fingerprint of the current hardware configuration.
+
+        Uses chip names and control identifiers to detect changes.
+        """
+        import hashlib
+
+        chip_names = sorted(self._chips.keys())
+        control_ids = sorted(self._controls.keys())
+
+        fingerprint_parts = chip_names + control_ids
+        fingerprint_data = ";".join(fingerprint_parts)
+
+        return hashlib.sha256(fingerprint_data.encode()).hexdigest()

@@ -268,6 +268,39 @@ class WindowsHardwareManager(BaseHardwareManager):
             except Exception as e:
                 logger.warning(f"Failed to restore default for {identifier}: {e}")
 
+    def get_hardware_fingerprint(self) -> str:
+        """Get a fingerprint of the current hardware configuration.
+
+        Uses hardware identifiers and control sensor identifiers to detect changes.
+        Sensor values are ignored to ensure stable fingerprints.
+        """
+        import hashlib
+        import logging
+
+        logger = logging.getLogger(__name__)
+        self._ensure_open()
+
+        hw_ids: set[str] = set()
+        control_ids: set[str] = set()
+
+        for hw in self._computer.Hardware:
+            hw_ids.add(f"{hw.HardwareType}|{hw.Name}")
+            for sub in hw.SubHardware:
+                hw_ids.add(f"{sub.HardwareType}|{sub.Name}")
+
+        for hw, sensor in self._iter_sensors():
+            sensor_type_val = int(sensor.SensorType)
+            if sensor_type_val == SensorKind.CONTROL:
+                control_ids.add(str(sensor.Identifier))
+
+        fingerprint_parts = sorted(hw_ids) + sorted(control_ids)
+        fingerprint_data = ";".join(fingerprint_parts)
+
+        logger.debug(
+            f"Fingerprint: {hashlib.sha256(fingerprint_data.encode()).hexdigest()[:16]}... ({len(hw_ids)} hw, {len(control_ids)} controls)"
+        )
+        return hashlib.sha256(fingerprint_data.encode()).hexdigest()
+
     def _emergency_cleanup(self) -> None:
         """atexit handler to restore fan defaults on unexpected exit."""
         try:
