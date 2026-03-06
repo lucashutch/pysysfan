@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import atexit
 import logging
+import os
 import signal
 import threading
 import time
 from pathlib import Path
 
+from pysysfan.api.auth import get_or_create_token
+from pysysfan.api.state import StateManager
 from pysysfan.cache import HardwareCacheManager, get_default_cache_manager
 from pysysfan.config import Config, DEFAULT_CONFIG_PATH
 from pysysfan.curves import FanCurve, StaticCurve, parse_curve, InvalidCurveError
@@ -35,6 +38,9 @@ class FanDaemon:
         config_path: Path = DEFAULT_CONFIG_PATH,
         auto_reload: bool = True,
         cache_manager: HardwareCacheManager | None = None,
+        api_enabled: bool = True,
+        api_host: str = "127.0.0.1",
+        api_port: int = 8765,
     ):
         self.config_path = Path(config_path)
         self._running = False
@@ -47,6 +53,15 @@ class FanDaemon:
         self._cache_manager = cache_manager or get_default_cache_manager()
         self._unconfigured_fans: set[str] = set()
         self._update_thread: threading.Thread | None = None
+
+        # API server settings
+        self._api_enabled = api_enabled
+        self._api_host = api_host
+        self._api_port = api_port
+        self._api_server = None
+        self._api_thread: threading.Thread | None = None
+        self._state_manager = StateManager()
+        self._start_time: float = 0.0
 
     # ── Setup / teardown ──────────────────────────────────────────────
 
@@ -422,6 +437,72 @@ class FanDaemon:
 
         return applied
 
+    # ── API Server ────────────────────────────────────────────────────
+
+    def _start_api_server(self) -> None:
+        """Start FastAPI server in background thread."""
+        if not self._api_enabled:
+            return
+
+        # Initialize API token
+        token = get_or_create_token()
+        logger.info(f"API token: {token[:8]}...{token[-8:]}")
+
+        from pysysfan.api.server import create_app
+        import uvicorn
+
+        app = create_app(daemon=self, state=self._state_manager)
+
+        config = uvicorn.Config(
+            app,
+            host=self._api_host,
+            port=self._api_port,
+            log_level="warning",
+            access_log=False,
+        )
+
+        self._api_server = uvicorn.Server(config)
+        self._api_thread = threading.Thread(
+            target=self._api_server.run,
+            daemon=True,
+            name="APIServer",
+        )
+        self._api_thread.start()
+
+        logger.info(f"API server started on http://{self._api_host}:{self._api_port}")
+
+    def _stop_api_server(self) -> None:
+        """Stop the API server."""
+        if self._api_server is not None:
+            logger.info("Stopping API server...")
+            self._api_server.should_exit = True
+            if self._api_thread and self._api_thread.is_alive():
+                self._api_thread.join(timeout=5.0)
+            self._api_server = None
+            self._api_thread = None
+
+    def _update_state(self) -> None:
+        """Update state manager with current daemon state."""
+        self._state_manager.update_state(
+            pid=os.getpid(),
+            config_path=str(self.config_path),
+            started_at=self._start_time,
+            running=self._running,
+            uptime_seconds=time.time() - self._start_time,
+            last_poll_time=time.time(),
+            last_error=str(self._config_error) if self._config_error else None,
+            poll_interval=self._cfg.poll_interval if self._cfg else 2.0,
+            fans_configured=len(self._cfg.fans) if self._cfg else 0,
+            curves_configured=len(self._cfg.curves) if self._cfg else 0,
+            active_profile="default",  # TODO: Add profile support
+            current_temps={},  # Populated in _run_once
+            current_fan_speeds={},
+            current_targets={},
+            auto_reload_enabled=self._auto_reload,
+            api_enabled=self._api_enabled,
+            api_port=self._api_port,
+        )
+
     # ── Public API ────────────────────────────────────────────────────
 
     def run_once(self) -> dict[str, float]:
@@ -456,6 +537,7 @@ class FanDaemon:
         logger.info("pysysfan daemon starting...")
 
         startup_t0 = time.perf_counter()
+        self._start_time = time.time()
 
         # Initial config load
         if not self.reload_config():
@@ -479,6 +561,9 @@ class FanDaemon:
 
         # Initialize hardware (runs in parallel with update check)
         self._hw = self._open_hardware()
+
+        # Start API server
+        self._start_api_server()
 
         try:
             scan_result = self._use_cached_scan()
@@ -506,6 +591,8 @@ class FanDaemon:
             logger.info(f"Control loop started (poll interval: {cfg.poll_interval}s)")
 
             while self._running:
+                # Update daemon state for API
+                self._update_state()
                 # Get current config (may have been reloaded)
                 current_cfg = self._cfg if self._cfg is not None else cfg
 
@@ -524,4 +611,5 @@ class FanDaemon:
             self._hw.restore_defaults()
             self._hw.close()
             self._hw = None
+            self._stop_api_server()
             logger.info("Daemon stopped.")

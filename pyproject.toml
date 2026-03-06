@@ -11,7 +11,10 @@ dependencies = [
     "requests",
     "rich",
     "packaging",
-    "watchdog>=3.0"
+    "watchdog>=3.0",
+    "fastapi",
+    "uvicorn[standard]",
+    "sse-starlette",
 ]
 
 [project.scripts]
