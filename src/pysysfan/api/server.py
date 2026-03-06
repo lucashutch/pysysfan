@@ -347,7 +347,6 @@ def create_app(daemon, state: StateManager) -> FastAPI:
         name: str, curve_data: dict, token: str = Depends(verify_token)
     ) -> dict[str, Any]:
         """Create or update a fan curve."""
-        from pysysfan.config import Config
 
         if daemon._cfg is None:
             raise HTTPException(

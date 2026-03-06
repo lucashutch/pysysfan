@@ -1,7 +1,7 @@
 """Tests for pysysfan.api.client — Python API client."""
 
 import pytest
-from unittest.mock import MagicMock, patch, mock_open
+from unittest.mock import MagicMock, patch
 from pathlib import Path
 
 from pysysfan.api.client import PySysFanClient
@@ -107,7 +107,7 @@ class TestTokenVerification:
         mock_request.assert_called_once()
         call_args = mock_request.call_args
         assert call_args[0][0] == "POST"
-        assert "/api/auth/verify" in call_args[1]["url"]
+        assert "/api/auth/verify" in call_args[0][1]
         assert result["valid"] is True
 
 
@@ -129,7 +129,7 @@ class TestStatusEndpoints:
         mock_request.assert_called_once()
         call_args = mock_request.call_args
         assert call_args[0][0] == "GET"
-        assert "/api/status" in call_args[1]["url"]
+        assert "/api/status" in call_args[0][1]
         assert result["pid"] == 1234
 
     @patch("pysysfan.api.client.requests.get")
@@ -198,7 +198,7 @@ class TestSensorEndpoints:
         mock_request.assert_called_once()
         call_args = mock_request.call_args
         assert call_args[0][0] == "GET"
-        assert "/api/sensors" in call_args[1]["url"]
+        assert "/api/sensors" in call_args[0][1]
         assert "temperatures" in result
 
     @patch("pysysfan.api.client.requests.request")
@@ -211,12 +211,12 @@ class TestSensorEndpoints:
 
         with patch.object(Path, "home", return_value=mock_home_dir):
             client = PySysFanClient(base_url="http://localhost:8765")
-            result = client.get_temperatures()
+            client.get_temperatures()
 
         mock_request.assert_called_once()
         call_args = mock_request.call_args
         assert call_args[0][0] == "GET"
-        assert "/api/sensors/temperatures" in call_args[1]["url"]
+        assert "/api/sensors/temperatures" in call_args[0][1]
 
     @patch("pysysfan.api.client.requests.request")
     def test_get_fans_sends_get(self, mock_request, mock_home_dir):
@@ -228,12 +228,12 @@ class TestSensorEndpoints:
 
         with patch.object(Path, "home", return_value=mock_home_dir):
             client = PySysFanClient(base_url="http://localhost:8765")
-            result = client.get_fans()
+            client.get_fans()
 
         mock_request.assert_called_once()
         call_args = mock_request.call_args
         assert call_args[0][0] == "GET"
-        assert "/api/sensors/fans" in call_args[1]["url"]
+        assert "/api/sensors/fans" in call_args[0][1]
 
     @patch("pysysfan.api.client.requests.request")
     def test_get_controls_sends_get(self, mock_request, mock_home_dir):
@@ -245,12 +245,12 @@ class TestSensorEndpoints:
 
         with patch.object(Path, "home", return_value=mock_home_dir):
             client = PySysFanClient(base_url="http://localhost:8765")
-            result = client.get_controls()
+            client.get_controls()
 
         mock_request.assert_called_once()
         call_args = mock_request.call_args
         assert call_args[0][0] == "GET"
-        assert "/api/sensors/controls" in call_args[1]["url"]
+        assert "/api/sensors/controls" in call_args[0][1]
 
 
 class TestConfigEndpoints:
@@ -266,12 +266,12 @@ class TestConfigEndpoints:
 
         with patch.object(Path, "home", return_value=mock_home_dir):
             client = PySysFanClient(base_url="http://localhost:8765")
-            result = client.get_config()
+            client.get_config()
 
         mock_request.assert_called_once()
         call_args = mock_request.call_args
         assert call_args[0][0] == "GET"
-        assert "/api/config" in call_args[1]["url"]
+        assert "/api/config" in call_args[0][1]
 
     @patch("pysysfan.api.client.requests.request")
     def test_update_config_sends_put(self, mock_request, mock_home_dir):
@@ -284,12 +284,12 @@ class TestConfigEndpoints:
         with patch.object(Path, "home", return_value=mock_home_dir):
             client = PySysFanClient(base_url="http://localhost:8765")
             config = {"general": {"poll_interval": 2.0}}
-            result = client.update_config(config)
+            client.update_config(config)
 
         mock_request.assert_called_once()
         call_args = mock_request.call_args
         assert call_args[0][0] == "PUT"
-        assert "/api/config" in call_args[1]["url"]
+        assert "/api/config" in call_args[0][1]
         assert call_args[1]["json"] == config
 
     @patch("pysysfan.api.client.requests.request")
@@ -302,12 +302,12 @@ class TestConfigEndpoints:
 
         with patch.object(Path, "home", return_value=mock_home_dir):
             client = PySysFanClient(base_url="http://localhost:8765")
-            result = client.reload_config()
+            client.reload_config()
 
         mock_request.assert_called_once()
         call_args = mock_request.call_args
         assert call_args[0][0] == "POST"
-        assert "/api/config/reload" in call_args[1]["url"]
+        assert "/api/config/reload" in call_args[0][1]
 
     @patch("pysysfan.api.client.requests.request")
     def test_validate_config_sends_get(self, mock_request, mock_home_dir):
@@ -319,12 +319,12 @@ class TestConfigEndpoints:
 
         with patch.object(Path, "home", return_value=mock_home_dir):
             client = PySysFanClient(base_url="http://localhost:8765")
-            result = client.validate_config()
+            client.validate_config()
 
         mock_request.assert_called_once()
         call_args = mock_request.call_args
         assert call_args[0][0] == "GET"
-        assert "/api/config/validate" in call_args[1]["url"]
+        assert "/api/config/validate" in call_args[0][1]
 
 
 class TestCurvesEndpoints:
@@ -340,12 +340,12 @@ class TestCurvesEndpoints:
 
         with patch.object(Path, "home", return_value=mock_home_dir):
             client = PySysFanClient(base_url="http://localhost:8765")
-            result = client.list_curves()
+            client.list_curves()
 
         mock_request.assert_called_once()
         call_args = mock_request.call_args
         assert call_args[0][0] == "GET"
-        assert "/api/curves" in call_args[1]["url"]
+        assert "/api/curves" in call_args[0][1]
 
     @patch("pysysfan.api.client.requests.request")
     def test_get_curve_sends_get(self, mock_request, mock_home_dir):
@@ -357,12 +357,12 @@ class TestCurvesEndpoints:
 
         with patch.object(Path, "home", return_value=mock_home_dir):
             client = PySysFanClient(base_url="http://localhost:8765")
-            result = client.get_curve("balanced")
+            client.get_curve("balanced")
 
         mock_request.assert_called_once()
         call_args = mock_request.call_args
         assert call_args[0][0] == "GET"
-        assert "/api/curves/balanced" in call_args[1]["url"]
+        assert "/api/curves/balanced" in call_args[0][1]
 
     @patch("pysysfan.api.client.requests.request")
     def test_create_curve_sends_post(self, mock_request, mock_home_dir):
@@ -375,12 +375,12 @@ class TestCurvesEndpoints:
         with patch.object(Path, "home", return_value=mock_home_dir):
             client = PySysFanClient(base_url="http://localhost:8765")
             points = [[30, 30], [60, 60]]
-            result = client.create_curve("test", points, hysteresis=3.0)
+            client.create_curve("test", points, hysteresis=3.0)
 
         mock_request.assert_called_once()
         call_args = mock_request.call_args
         assert call_args[0][0] == "POST"
-        assert "/api/curves/test" in call_args[1]["url"]
+        assert "/api/curves/test" in call_args[0][1]
         assert call_args[1]["json"]["points"] == points
         assert call_args[1]["json"]["hysteresis"] == 3.0
 
@@ -394,12 +394,12 @@ class TestCurvesEndpoints:
 
         with patch.object(Path, "home", return_value=mock_home_dir):
             client = PySysFanClient(base_url="http://localhost:8765")
-            result = client.delete_curve("old_curve")
+            client.delete_curve("old_curve")
 
         mock_request.assert_called_once()
         call_args = mock_request.call_args
         assert call_args[0][0] == "DELETE"
-        assert "/api/curves/old_curve" in call_args[1]["url"]
+        assert "/api/curves/old_curve" in call_args[0][1]
 
     @patch("pysysfan.api.client.requests.request")
     def test_preview_curve_sends_post(self, mock_request, mock_home_dir):
@@ -412,12 +412,12 @@ class TestCurvesEndpoints:
         with patch.object(Path, "home", return_value=mock_home_dir):
             client = PySysFanClient(base_url="http://localhost:8765")
             points = [[30, 30], [60, 60]]
-            result = client.preview_curve(points, temperature=45.0)
+            client.preview_curve(points, temperature=45.0)
 
         mock_request.assert_called_once()
         call_args = mock_request.call_args
         assert call_args[0][0] == "POST"
-        assert "/api/curves/preview" in call_args[1]["url"]
+        assert "/api/curves/preview" in call_args[0][1]
 
 
 class TestFansEndpoints:
@@ -433,12 +433,12 @@ class TestFansEndpoints:
 
         with patch.object(Path, "home", return_value=mock_home_dir):
             client = PySysFanClient(base_url="http://localhost:8765")
-            result = client.list_fans()
+            client.list_fans()
 
         mock_request.assert_called_once()
         call_args = mock_request.call_args
         assert call_args[0][0] == "GET"
-        assert "/api/fans" in call_args[1]["url"]
+        assert "/api/fans" in call_args[0][1]
 
     @patch("pysysfan.api.client.requests.request")
     def test_get_fan_sends_get(self, mock_request, mock_home_dir):
@@ -450,12 +450,12 @@ class TestFansEndpoints:
 
         with patch.object(Path, "home", return_value=mock_home_dir):
             client = PySysFanClient(base_url="http://localhost:8765")
-            result = client.get_fan("cpu_fan")
+            client.get_fan("cpu_fan")
 
         mock_request.assert_called_once()
         call_args = mock_request.call_args
         assert call_args[0][0] == "GET"
-        assert "/api/fans/cpu_fan" in call_args[1]["url"]
+        assert "/api/fans/cpu_fan" in call_args[0][1]
 
     @patch("pysysfan.api.client.requests.request")
     def test_update_fan_sends_put(self, mock_request, mock_home_dir):
@@ -467,14 +467,14 @@ class TestFansEndpoints:
 
         with patch.object(Path, "home", return_value=mock_home_dir):
             client = PySysFanClient(base_url="http://localhost:8765")
-            result = client.update_fan(
+            client.update_fan(
                 "cpu_fan", curve="performance", aggregation="max"
             )
 
         mock_request.assert_called_once()
         call_args = mock_request.call_args
         assert call_args[0][0] == "PUT"
-        assert "/api/fans/cpu_fan" in call_args[1]["url"]
+        assert "/api/fans/cpu_fan" in call_args[0][1]
         assert call_args[1]["json"]["curve"] == "performance"
         assert call_args[1]["json"]["aggregation"] == "max"
 
@@ -488,14 +488,14 @@ class TestFansEndpoints:
 
         with patch.object(Path, "home", return_value=mock_home_dir):
             client = PySysFanClient(base_url="http://localhost:8765")
-            result = client.override_fan(
+            client.override_fan(
                 "cpu_fan", speed_percent=75.0, duration_seconds=30
             )
 
         mock_request.assert_called_once()
         call_args = mock_request.call_args
         assert call_args[0][0] == "POST"
-        assert "/api/fans/cpu_fan/override" in call_args[1]["url"]
+        assert "/api/fans/cpu_fan/override" in call_args[0][1]
         assert call_args[1]["json"]["speed_percent"] == 75.0
         assert call_args[1]["json"]["duration_seconds"] == 30
 
