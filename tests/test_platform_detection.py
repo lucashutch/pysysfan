@@ -32,15 +32,19 @@ class TestDetectPlatform:
         with patch("sys.platform", "win64"):
             assert detect_platform() == "windows"
 
-    def test_detects_linux(self):
-        """Should detect Linux platform."""
+    def test_raises_on_linux(self):
+        """Should raise PlatformNotSupportedError on Linux."""
         with patch("sys.platform", "linux"):
-            assert detect_platform() == "linux"
+            with pytest.raises(PlatformNotSupportedError) as exc_info:
+                detect_platform()
+            assert "linux" in str(exc_info.value).lower()
+            assert "windows" in str(exc_info.value).lower()
 
-    def test_detects_linux_with_suffix(self):
-        """Should detect Linux even with platform suffix."""
+    def test_raises_on_linux_with_suffix(self):
+        """Should raise on Linux even with platform suffix."""
         with patch("sys.platform", "linux2"):
-            assert detect_platform() == "linux"
+            with pytest.raises(PlatformNotSupportedError):
+                detect_platform()
 
     def test_raises_on_unsupported_platform(self):
         """Should raise on unsupported platforms like macOS."""
@@ -61,13 +65,11 @@ class TestGetHardwareManager:
 
             assert manager_class is WindowsHardwareManager
 
-    def test_returns_linux_manager_on_linux(self):
-        """Should return LinuxHardwareManager on Linux."""
+    def test_raises_on_linux(self):
+        """Should raise on Linux platform."""
         with patch("sys.platform", "linux"):
-            manager_class = get_hardware_manager()
-            from pysysfan.platforms.linux import LinuxHardwareManager
-
-            assert manager_class is LinuxHardwareManager
+            with pytest.raises(PlatformNotSupportedError):
+                get_hardware_manager()
 
     def test_raises_on_unsupported_platform(self):
         """Should raise on unsupported platforms."""
@@ -87,13 +89,11 @@ class TestGetServiceManager:
 
             assert service_module is windows_service
 
-    def test_returns_linux_service_on_linux(self):
-        """Should return Linux service module on Linux."""
+    def test_raises_on_linux(self):
+        """Should raise on Linux platform."""
         with patch("sys.platform", "linux"):
-            service_module = get_service_manager()
-            from pysysfan.platforms import linux_service
-
-            assert service_module is linux_service
+            with pytest.raises(PlatformNotSupportedError):
+                get_service_manager()
 
 
 class TestBaseHardwareManager:

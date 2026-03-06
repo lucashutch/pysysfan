@@ -1,6 +1,8 @@
 # pysysfan
 
-Cross-platform fan control for Windows and Linux. Set custom fan curves based on temperature sensors with automatic fallback for safety.
+Windows fan control daemon. Set custom fan curves based on temperature sensors with automatic fallback for safety.
+
+> **Note:** Linux support was previously experimental but has been removed due to limited hardware compatibility. Linux support may be revisited in the future for systems with proper fan control interfaces.
 
 ## Features
 
@@ -8,7 +10,7 @@ Cross-platform fan control for Windows and Linux. Set custom fan curves based on
 - **Built-in presets** - Silent, balanced, and performance curves included
 - **Static speeds** - Set fans to fixed speeds: `off`, `on`, or any percentage
 - **Safety first** - Automatic BIOS fallback on exit or crash
-- **Cross-platform** - Windows (LibreHardwareMonitor) and Linux (lm-sensors)
+- **Windows-native** - Uses LibreHardwareMonitor for broad hardware support
 
 ## Quick Start
 
@@ -22,22 +24,11 @@ uv tool install pysysfan
 # Download: install-pysysfan.bat
 ```
 
-### Linux
-
-```bash
-# Install
-curl -sSL https://raw.githubusercontent.com/anomalyco/pysysfan/main/install-pysysfan.sh | bash
-
-# Or manually
-pip install pysysfan[linux]
-pysysfan-linux-install
-```
-
 ## First Setup
 
-```bash
-# 1. Scan for hardware sensors
-sudo pysysfan scan
+```powershell
+# 1. Scan for hardware sensors (requires Administrator)
+pysysfan scan
 
 # 2. Generate initial config
 pysysfan config init
@@ -48,7 +39,7 @@ pysysfan config init
 pysysfan config validate
 
 # 5. Install as a service
-sudo pysysfan service install
+pysysfan service install
 ```
 
 ## Configuration Example
@@ -81,7 +72,7 @@ curves:
 
 ## CLI Commands
 
-```bash
+```powershell
 pysysfan scan              # Show all sensors
 pysysfan run --once        # Test config (single pass)
 pysysfan monitor           # Watch live sensor readings
@@ -90,10 +81,9 @@ pysysfan service install   # Install startup service
 
 ## Platform Support
 
-**Windows**: Windows 10/11 with Administrator privileges  
-**Linux**: Kernel 5.x+ with lm-sensors, tested on ThinkPads and desktops
+**Windows**: Windows 10/11 with Administrator privileges
 
-See [Windows Setup](docs/windows.md) | [Linux Setup](docs/linux.md)
+See [Windows Setup](docs/windows.md)
 
 ## Safety Features
 

@@ -39,19 +39,16 @@ def detect_platform() -> str:
 
     Returns:
         "windows" for Windows systems
-        "linux" for Linux systems
 
     Raises:
-        PlatformNotSupportedError: If the platform is not Windows or Linux
+        PlatformNotSupportedError: If the platform is not Windows
     """
     if sys.platform.startswith("win"):
         return "windows"
-    elif sys.platform.startswith("linux"):
-        return "linux"
     else:
         raise PlatformNotSupportedError(
             f"Platform '{sys.platform}' is not supported. "
-            "Only Windows and Linux are supported."
+            "pysysfan only supports Windows."
         )
 
 
@@ -78,10 +75,6 @@ def get_hardware_manager() -> Type[BaseHardwareManager]:
         from pysysfan.platforms.windows import WindowsHardwareManager
 
         return WindowsHardwareManager
-    elif platform == "linux":
-        from pysysfan.platforms.linux import LinuxHardwareManager
-
-        return LinuxHardwareManager
     else:
         # This should never happen due to detect_platform check
         raise PlatformNotSupportedError(f"Unexpected platform: {platform}")
@@ -92,8 +85,7 @@ def get_service_manager():
 
     Returns:
         Module with install_task, uninstall_task, get_task_status functions
-        (Windows) or install_systemd_service, uninstall_systemd_service,
-        get_systemd_service_status functions (Linux)
+        (Windows)
     """
     platform = detect_platform()
 
@@ -101,9 +93,5 @@ def get_service_manager():
         from pysysfan.platforms import windows_service
 
         return windows_service
-    elif platform == "linux":
-        from pysysfan.platforms import linux_service
-
-        return linux_service
     else:
         raise PlatformNotSupportedError(f"Unexpected platform: {platform}")

@@ -1,4 +1,4 @@
-"""pysysfan - Python fan control daemon for Windows."""
+"""pysysfan - Windows fan control daemon."""
 
 from importlib.metadata import version, PackageNotFoundError
 

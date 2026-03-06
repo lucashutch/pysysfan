@@ -1,6 +1,67 @@
 # pysysfan Development Plan
 
-## Recent: Performance Optimization (March 2026)
+## Recent: Remove Linux Support (March 2026)
+
+**Status:** ✅ Completed
+
+### Problem
+Linux support was experimental but had limited hardware compatibility:
+- Most modern ThinkPads (P14s Gen 3, T14s Gen 3, etc.) have firmware-locked fan control
+- PWM interface exists but is locked by embedded controller
+- /proc/acpi/ibm/fan interface accepts commands but returns "Invalid argument"
+- Only works on older ThinkPads or desktop systems with standard PWM
+
+### Solution Implemented
+1. **Removed Linux-specific modules:**
+   - `src/pysysfan/platforms/linux.py` - Linux hardware manager
+   - `src/pysysfan/platforms/linux_service.py` - Linux service manager
+   - `src/pysysfan/install_linux.py` - Linux installer
+   - `tests/test_linux_hardware.py` - Linux hardware tests
+   - `tests/test_linux_service.py` - Linux service tests
+
+2. **Updated platform detection:**
+   - `detect_platform()` now raises `PlatformNotSupportedError` on Linux
+   - Removed Linux platform detection from all factory functions
+
+3. **Updated CLI:**
+   - Removed Linux-specific error messages
+   - Simplified admin checks (Windows only)
+   - Removed `--user` option from service commands (was Linux-only)
+   - Updated service command docstrings
+
+4. **Updated documentation:**
+   - `README.md` - Now states Windows-only with note about future Linux support
+   - `docs/linux.md` - Removed
+   - `TODO.md` - Added note about potential future Linux support
+   - `pyproject.toml` - Removed Linux dependencies and entry points
+
+5. **Updated tests:**
+   - `tests/test_platform_detection.py` - Tests now expect Linux to raise errors
+   - `src/pysysfan/hardware.py` - Lazy load HardwareManager to avoid import errors on Linux
+
+### Files Modified
+- ✅ `src/pysysfan/platforms/__init__.py` - Removed Linux support
+- ✅ `src/pysysfan/platforms/linux.py` - Deleted
+- ✅ `src/pysysfan/platforms/linux_service.py` - Deleted
+- ✅ `src/pysysfan/install_linux.py` - Deleted
+- ✅ `src/pysysfan/hardware.py` - Lazy loading for cross-platform compatibility
+- ✅ `src/pysysfan/cli.py` - Removed Linux-specific code
+- ✅ `tests/test_platform_detection.py` - Updated for Windows-only
+- ✅ `tests/test_linux_hardware.py` - Deleted
+- ✅ `tests/test_linux_service.py` - Deleted
+- ✅ `README.md` - Updated to Windows-only
+- ✅ `docs/linux.md` - Deleted
+- ✅ `TODO.md` - Added note about future Linux support
+- ✅ `pyproject.toml` - Removed Linux dependencies
+
+### Results
+- Cleaner codebase focused on Windows
+- No confusion about Linux compatibility
+- Clear messaging that Linux support may be revisited in the future
+
+---
+
+## Previous: Performance Optimization (March 2026)
 
 **Status:** ✅ Completed
 
