@@ -139,3 +139,93 @@ class TestGetTaskStatus:
             stdout="TaskName: \\pysysfan\n",
         )
         assert get_task_status() == "Unknown"
+
+
+class TestEnableTask:
+    """Tests for enable_task()."""
+
+    @patch("pysysfan.platforms.windows_service.subprocess.run")
+    def test_enable_success(self, mock_run):
+        """Should enable task successfully."""
+        mock_run.return_value = MagicMock(returncode=0)
+        from pysysfan.platforms.windows_service import enable_task
+
+        enable_task()  # Should not raise
+        mock_run.assert_called_once()
+        args = mock_run.call_args[0][0]
+        assert "schtasks" in args
+        assert "/ENABLE" in args
+
+    @patch("pysysfan.platforms.windows_service.subprocess.run")
+    def test_enable_raises_not_found(self, mock_run):
+        """Should raise FileNotFoundError when task doesn't exist."""
+        mock_run.return_value = MagicMock(
+            returncode=1,
+            stdout="",
+            stderr="The system cannot find the file specified.",
+        )
+        from pysysfan.platforms.windows_service import enable_task
+
+        import pytest
+
+        with pytest.raises(FileNotFoundError, match="not installed"):
+            enable_task()
+
+    @patch("pysysfan.platforms.windows_service.subprocess.run")
+    def test_enable_raises_generic_error(self, mock_run):
+        """Should raise RuntimeError for other schtasks errors."""
+        mock_run.return_value = MagicMock(
+            returncode=1,
+            stdout="",
+            stderr="Access is denied.",
+        )
+        from pysysfan.platforms.windows_service import enable_task
+
+        import pytest
+
+        with pytest.raises(RuntimeError, match="failed"):
+            enable_task()
+
+
+class TestDisableTask:
+    """Tests for disable_task()."""
+
+    @patch("pysysfan.platforms.windows_service.subprocess.run")
+    def test_disable_success(self, mock_run):
+        """Should disable task successfully."""
+        mock_run.return_value = MagicMock(returncode=0)
+        from pysysfan.platforms.windows_service import disable_task
+
+        disable_task()  # Should not raise
+        mock_run.assert_called_once()
+        args = mock_run.call_args[0][0]
+        assert "schtasks" in args
+        assert "/DISABLE" in args
+
+    @patch("pysysfan.platforms.windows_service.subprocess.run")
+    def test_disable_raises_not_found(self, mock_run):
+        """Should raise FileNotFoundError when task doesn't exist."""
+        mock_run.return_value = MagicMock(
+            returncode=1,
+            stdout="",
+            stderr="The system cannot find the file specified.",
+        )
+        from pysysfan.platforms.windows_service import disable_task
+        import pytest
+
+        with pytest.raises(FileNotFoundError, match="not installed"):
+            disable_task()
+
+    @patch("pysysfan.platforms.windows_service.subprocess.run")
+    def test_disable_raises_generic_error(self, mock_run):
+        """Should raise RuntimeError for other schtasks errors."""
+        mock_run.return_value = MagicMock(
+            returncode=1,
+            stdout="",
+            stderr="Access is denied.",
+        )
+        from pysysfan.platforms.windows_service import disable_task
+        import pytest
+
+        with pytest.raises(RuntimeError, match="failed"):
+            disable_task()

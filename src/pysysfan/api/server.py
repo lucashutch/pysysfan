@@ -342,6 +342,32 @@ def create_app(daemon, state: StateManager) -> FastAPI:
             "hysteresis": curve.hysteresis,
         }
 
+    @app.post("/api/curves/preview")
+    async def preview_curve(
+        preview_data: dict, token: str = Depends(verify_token)
+    ) -> dict[str, Any]:
+        """Evaluate a curve at a given temperature."""
+        from pysysfan.curves import FanCurve
+
+        points = preview_data.get("points", [])
+        hysteresis = preview_data.get("hysteresis", 3.0)
+        temperature = preview_data.get("temperature", 50.0)
+
+        try:
+            curve = FanCurve(name="preview", points=points, hysteresis=hysteresis)
+            result = curve.evaluate(temperature)
+            return {
+                "temperature": temperature,
+                "speed_percent": result,
+                "points": points,
+                "hysteresis": hysteresis,
+            }
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Failed to evaluate curve: {e}",
+            )
+
     @app.post("/api/curves/{name}")
     async def create_or_update_curve(
         name: str, curve_data: dict, token: str = Depends(verify_token)
@@ -403,32 +429,6 @@ def create_app(daemon, state: StateManager) -> FastAPI:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Failed to delete curve: {e}",
-            )
-
-    @app.post("/api/curves/preview")
-    async def preview_curve(
-        preview_data: dict, token: str = Depends(verify_token)
-    ) -> dict[str, Any]:
-        """Evaluate a curve at a given temperature."""
-        from pysysfan.curves import FanCurve
-
-        points = preview_data.get("points", [])
-        hysteresis = preview_data.get("hysteresis", 3.0)
-        temperature = preview_data.get("temperature", 50.0)
-
-        try:
-            curve = FanCurve(name="preview", points=points, hysteresis=hysteresis)
-            result = curve.evaluate(temperature)
-            return {
-                "temperature": temperature,
-                "speed_percent": result,
-                "points": points,
-                "hysteresis": hysteresis,
-            }
-        except Exception as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to evaluate curve: {e}",
             )
 
     # Fans endpoints

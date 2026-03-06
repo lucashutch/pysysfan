@@ -467,9 +467,7 @@ class TestFansEndpoints:
 
         with patch.object(Path, "home", return_value=mock_home_dir):
             client = PySysFanClient(base_url="http://localhost:8765")
-            client.update_fan(
-                "cpu_fan", curve="performance", aggregation="max"
-            )
+            client.update_fan("cpu_fan", curve="performance", aggregation="max")
 
         mock_request.assert_called_once()
         call_args = mock_request.call_args
@@ -488,9 +486,7 @@ class TestFansEndpoints:
 
         with patch.object(Path, "home", return_value=mock_home_dir):
             client = PySysFanClient(base_url="http://localhost:8765")
-            client.override_fan(
-                "cpu_fan", speed_percent=75.0, duration_seconds=30
-            )
+            client.override_fan("cpu_fan", speed_percent=75.0, duration_seconds=30)
 
         mock_request.assert_called_once()
         call_args = mock_request.call_args
