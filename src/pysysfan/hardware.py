@@ -1,22 +1,10 @@
-"""Hardware manager factory and re-exports.
+"""Hardware manager exports.
 
-This module provides backward compatibility by re-exporting the platform
-detection and factory functions. The actual implementations are in the
-platforms/ package.
-
-For new code, you can use either:
-    # Factory pattern (recommended for library code)
-    from pysysfan.platforms import get_hardware_manager
-    HardwareManager = get_hardware_manager()
-
-    # Direct import (backward compatible)
-    from pysysfan.hardware import HardwareManager
-
-Both approaches return the same platform-specific hardware manager class.
+This module exports the Windows hardware manager and shared types.
 """
 
-from pysysfan.platforms import (
-    get_hardware_manager,
+from pysysfan.platforms.windows import WindowsHardwareManager as HardwareManager
+from pysysfan.platforms.base import (
     BaseHardwareManager,
     PlatformNotSupportedError,
     SensorKind,
@@ -24,9 +12,6 @@ from pysysfan.platforms import (
     ControlInfo,
     HardwareScanResult,
 )
-
-# For backward compatibility: HardwareManager is the platform-specific class
-HardwareManager = get_hardware_manager()
 
 __all__ = [
     "HardwareManager",
@@ -36,5 +21,4 @@ __all__ = [
     "SensorInfo",
     "ControlInfo",
     "HardwareScanResult",
-    "get_hardware_manager",
 ]

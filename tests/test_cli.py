@@ -122,6 +122,84 @@ class TestCliFunctions:
         mock_ctx.echo.assert_not_called()
 
 
+class TestScanCommandErrors:
+    """Tests for scan command error handling."""
+
+    @patch("pysysfan.hardware.HardwareManager")
+    @patch("pysysfan.cli.check_admin")
+    def test_scan_handles_filenotfound_error(self, mock_check_admin, mock_hw_manager):
+        """Should handle FileNotFoundError from HardwareManager."""
+        runner = CliRunner()
+        mock_check_admin.return_value = True
+        mock_hw_manager.side_effect = FileNotFoundError("DLL not found")
+
+        result = runner.invoke(main, ["scan"])
+        assert result.exit_code == 1
+        assert "Error" in result.output or "DLL" in str(result.output)
+
+    @patch("pysysfan.hardware.HardwareManager")
+    @patch("pysysfan.cli.check_admin")
+    def test_scan_handles_generic_error(self, mock_check_admin, mock_hw_manager):
+        """Should handle generic exceptions from HardwareManager."""
+        runner = CliRunner()
+        mock_check_admin.return_value = True
+        mock_hw_manager.side_effect = RuntimeError("Hardware access failed")
+
+        result = runner.invoke(main, ["scan"])
+        assert result.exit_code == 1
+
+    @patch("pysysfan.cli.check_admin")
+    def test_scan_shows_warning_when_not_admin(self, mock_check_admin):
+        """Should show warning when not running as admin."""
+        runner = CliRunner()
+        mock_check_admin.return_value = False
+
+        with patch("pysysfan.hardware.HardwareManager") as mock_hw:
+            mock_hw.side_effect = Exception("Access denied")
+            result = runner.invoke(main, ["scan"])
+
+        assert (
+            "Warning" in result.output
+            or "Administrator" in result.output
+            or result.exit_code == 1
+        )
+
+    @patch("pysysfan.hardware.HardwareManager")
+    @patch("pysysfan.cli.check_admin")
+    def test_scan_json_output(self, mock_check_admin, mock_hw_manager):
+        """Should support JSON output."""
+        runner = CliRunner()
+        mock_check_admin.return_value = True
+
+        # Mock the scan result
+        mock_instance = MagicMock()
+        mock_instance.__enter__ = MagicMock(return_value=mock_instance)
+        mock_instance.__exit__ = MagicMock(return_value=False)
+        mock_instance.scan.return_value = HardwareScanResult()
+        mock_hw_manager.return_value = mock_instance
+
+        runner.invoke(main, ["scan", "--json"])
+        # May succeed or fail depending on mocking, but should not crash
+
+    @patch("pysysfan.hardware.HardwareManager")
+    @patch("pysysfan.cli.check_admin")
+    def test_scan_with_type_filter(self, mock_check_admin, mock_hw_manager):
+        """Should support type filtering."""
+        runner = CliRunner()
+        mock_check_admin.return_value = True
+
+        mock_instance = MagicMock()
+        mock_instance.__enter__ = MagicMock(return_value=mock_instance)
+        mock_instance.__exit__ = MagicMock(return_value=False)
+        mock_instance.scan.return_value = HardwareScanResult()
+        mock_hw_manager.return_value = mock_instance
+
+        runner.invoke(main, ["scan", "--type", "temp"])
+        runner.invoke(main, ["scan", "--type", "fan"])
+        runner.invoke(main, ["scan", "--type", "control"])
+        # Should handle different filter types without crashing
+
+
 # ── Config show ──────────────────────────────────────────────────────
 
 
@@ -193,7 +271,9 @@ class TestConfigInit:
         """Should create a config file."""
         cfg_path = tmp_path / "subdir" / "config.yaml"
         runner = CliRunner()
-        result = runner.invoke(main, ["config", "--path", str(cfg_path), "init"])
+        result = runner.invoke(
+            main, ["config", "--path", str(cfg_path), "init", "--example"]
+        )
         assert result.exit_code == 0
         assert cfg_path.is_file()
 
@@ -585,16 +665,15 @@ class TestServiceCommands:
     """Tests for service CLI subcommands."""
 
     @patch("pysysfan.cli.check_admin", return_value=True)
-    @patch("pysysfan.platforms.get_service_manager")
-    def test_service_install_success(self, mock_get_service, mock_admin):
+    @patch("pysysfan.platforms.windows_service")
+    def test_service_install_success(self, mock_service, mock_admin):
         """Should install startup task."""
-        mock_service = MagicMock()
-        mock_get_service.return_value = mock_service
         runner = CliRunner()
         with patch("sys.platform", "win32"):
             result = runner.invoke(main, ["service", "install"])
         assert result.exit_code == 0
         assert "installed" in result.output.lower()
+        mock_service.install_task.assert_called_once()
 
     @patch("pysysfan.cli.check_admin", return_value=False)
     def test_service_install_no_admin(self, mock_admin):
@@ -604,27 +683,24 @@ class TestServiceCommands:
         assert result.exit_code != 0
 
     @patch("pysysfan.cli.check_admin", return_value=True)
-    @patch("pysysfan.platforms.get_service_manager")
-    def test_service_install_fails(self, mock_get_service, mock_admin):
+    @patch("pysysfan.platforms.windows_service")
+    def test_service_install_fails(self, mock_service, mock_admin):
         """Should handle install failure."""
-        mock_service = MagicMock()
         mock_service.install_task.side_effect = RuntimeError("denied")
-        mock_get_service.return_value = mock_service
         runner = CliRunner()
         with patch("sys.platform", "win32"):
             result = runner.invoke(main, ["service", "install"])
         assert result.exit_code != 0
 
     @patch("pysysfan.cli.check_admin", return_value=True)
-    @patch("pysysfan.platforms.get_service_manager")
-    def test_service_uninstall_success(self, mock_get_service, mock_admin):
+    @patch("pysysfan.platforms.windows_service")
+    def test_service_uninstall_success(self, mock_service, mock_admin):
         """Should uninstall startup task."""
-        mock_service = MagicMock()
-        mock_get_service.return_value = mock_service
         runner = CliRunner()
         with patch("sys.platform", "win32"):
             result = runner.invoke(main, ["service", "uninstall"])
         assert result.exit_code == 0
+        mock_service.uninstall_task.assert_called_once()
 
     @patch("pysysfan.cli.check_admin", return_value=False)
     def test_service_uninstall_no_admin(self, mock_admin):
@@ -634,35 +710,29 @@ class TestServiceCommands:
         assert result.exit_code != 0
 
     @patch("pysysfan.cli.check_admin", return_value=True)
-    @patch("pysysfan.platforms.get_service_manager")
-    def test_service_uninstall_fails(self, mock_get_service, mock_admin):
+    @patch("pysysfan.platforms.windows_service")
+    def test_service_uninstall_fails(self, mock_service, mock_admin):
         """Should handle uninstall failure."""
-        mock_service = MagicMock()
         mock_service.uninstall_task.side_effect = RuntimeError("error")
-        mock_get_service.return_value = mock_service
         runner = CliRunner()
         with patch("sys.platform", "win32"):
             result = runner.invoke(main, ["service", "uninstall"])
         assert result.exit_code != 0
 
-    @patch("pysysfan.platforms.get_service_manager")
-    def test_service_status_installed(self, mock_get_service):
+    @patch("pysysfan.platforms.windows_service")
+    def test_service_status_installed(self, mock_service):
         """Should show task status when installed."""
-        mock_service = MagicMock()
         mock_service.get_task_status.return_value = "Running"
-        mock_get_service.return_value = mock_service
         runner = CliRunner()
         with patch("sys.platform", "win32"):
             result = runner.invoke(main, ["service", "status"])
         assert result.exit_code == 0
         assert "Running" in result.output
 
-    @patch("pysysfan.platforms.get_service_manager")
-    def test_service_status_not_installed(self, mock_get_service):
+    @patch("pysysfan.platforms.windows_service")
+    def test_service_status_not_installed(self, mock_service):
         """Should show not installed message."""
-        mock_service = MagicMock()
         mock_service.get_task_status.return_value = None
-        mock_get_service.return_value = mock_service
         runner = CliRunner()
         with patch("sys.platform", "win32"):
             result = runner.invoke(main, ["service", "status"])

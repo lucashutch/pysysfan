@@ -21,10 +21,9 @@ jobs:
           args: "format --check ."
 
   test:
-    runs-on: ubuntu-24.04
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
       - name: Install uv
         uses: astral-sh/setup-uv@v5
         with:
@@ -33,11 +32,11 @@ jobs:
 
       - name: Install dependencies
         run: uv sync
-
       - name: Run tests
         run: |
-          uv run pytest | tee pytest_output.txt
-          echo "## Coverage Summary" >> $GITHUB_STEP_SUMMARY
-          echo '```text' >> $GITHUB_STEP_SUMMARY
-          sed -n '/^Name.*Stmts/,/^TOTAL/p' pytest_output.txt >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
+          uv run pytest | Tee-Object -FilePath pytest_output.txt
+          echo "## Coverage Summary" >> $env:GITHUB_STEP_SUMMARY
+          echo '```text' >> $env:GITHUB_STEP_SUMMARY
+          Select-String -Path pytest_output.txt -Pattern '^Name.*Stmts','^TOTAL' | ForEach-Object { $_.Line } >> $env:GITHUB_STEP_SUMMARY
+          echo '```' >> $env:GITHUB_STEP_SUMMARY
+        shell: pwsh

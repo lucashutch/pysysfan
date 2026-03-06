@@ -63,7 +63,7 @@ class ConfigFileHandler(FileSystemEventHandler):
             logger.error(f"Config change handler error: {e}")
             if self._on_error:
                 try:
-                    self.on_error(e)
+                    self._on_error(e)
                 except Exception:
                     pass
 
