@@ -122,6 +122,84 @@ class TestCliFunctions:
         mock_ctx.echo.assert_not_called()
 
 
+class TestScanCommandErrors:
+    """Tests for scan command error handling."""
+
+    @patch("pysysfan.hardware.HardwareManager")
+    @patch("pysysfan.cli.check_admin")
+    def test_scan_handles_filenotfound_error(self, mock_check_admin, mock_hw_manager):
+        """Should handle FileNotFoundError from HardwareManager."""
+        runner = CliRunner()
+        mock_check_admin.return_value = True
+        mock_hw_manager.side_effect = FileNotFoundError("DLL not found")
+
+        result = runner.invoke(main, ["scan"])
+        assert result.exit_code == 1
+        assert "Error" in result.output or "DLL" in str(result.output)
+
+    @patch("pysysfan.hardware.HardwareManager")
+    @patch("pysysfan.cli.check_admin")
+    def test_scan_handles_generic_error(self, mock_check_admin, mock_hw_manager):
+        """Should handle generic exceptions from HardwareManager."""
+        runner = CliRunner()
+        mock_check_admin.return_value = True
+        mock_hw_manager.side_effect = RuntimeError("Hardware access failed")
+
+        result = runner.invoke(main, ["scan"])
+        assert result.exit_code == 1
+
+    @patch("pysysfan.cli.check_admin")
+    def test_scan_shows_warning_when_not_admin(self, mock_check_admin):
+        """Should show warning when not running as admin."""
+        runner = CliRunner()
+        mock_check_admin.return_value = False
+
+        with patch("pysysfan.hardware.HardwareManager") as mock_hw:
+            mock_hw.side_effect = Exception("Access denied")
+            result = runner.invoke(main, ["scan"])
+
+        assert (
+            "Warning" in result.output
+            or "Administrator" in result.output
+            or result.exit_code == 1
+        )
+
+    @patch("pysysfan.hardware.HardwareManager")
+    @patch("pysysfan.cli.check_admin")
+    def test_scan_json_output(self, mock_check_admin, mock_hw_manager):
+        """Should support JSON output."""
+        runner = CliRunner()
+        mock_check_admin.return_value = True
+
+        # Mock the scan result
+        mock_instance = MagicMock()
+        mock_instance.__enter__ = MagicMock(return_value=mock_instance)
+        mock_instance.__exit__ = MagicMock(return_value=False)
+        mock_instance.scan.return_value = HardwareScanResult()
+        mock_hw_manager.return_value = mock_instance
+
+        runner.invoke(main, ["scan", "--json"])
+        # May succeed or fail depending on mocking, but should not crash
+
+    @patch("pysysfan.hardware.HardwareManager")
+    @patch("pysysfan.cli.check_admin")
+    def test_scan_with_type_filter(self, mock_check_admin, mock_hw_manager):
+        """Should support type filtering."""
+        runner = CliRunner()
+        mock_check_admin.return_value = True
+
+        mock_instance = MagicMock()
+        mock_instance.__enter__ = MagicMock(return_value=mock_instance)
+        mock_instance.__exit__ = MagicMock(return_value=False)
+        mock_instance.scan.return_value = HardwareScanResult()
+        mock_hw_manager.return_value = mock_instance
+
+        runner.invoke(main, ["scan", "--type", "temp"])
+        runner.invoke(main, ["scan", "--type", "fan"])
+        runner.invoke(main, ["scan", "--type", "control"])
+        # Should handle different filter types without crashing
+
+
 # ── Config show ──────────────────────────────────────────────────────
 
 

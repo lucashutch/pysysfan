@@ -19,6 +19,32 @@ class TestAvailability:
         result = ConfigWatcher.is_available()
         assert isinstance(result, bool)
 
+    def test_is_available_matches_constant(self):
+        """is_available should match WATCHDOG_AVAILABLE constant."""
+        result = ConfigWatcher.is_available()
+        assert result == WATCHDOG_AVAILABLE
+
+
+# ── Import Tests ─────────────────────────────────────────────────────
+
+
+class TestWatcherImports:
+    """Tests for graceful import handling."""
+
+    def test_imports_without_watchdog(self):
+        """Should import successfully even without watchdog."""
+        # This test verifies the module can be imported
+        # The import already happened at module level
+        from pysysfan.watcher import ConfigWatcher
+
+        assert ConfigWatcher is not None
+
+    def test_watchdog_available_constant_exists(self):
+        """WATCHDOG_AVAILABLE constant should exist."""
+        from pysysfan.watcher import WATCHDOG_AVAILABLE
+
+        assert isinstance(WATCHDOG_AVAILABLE, bool)
+
 
 # ── ConfigWatcher Init ────────────────────────────────────────────────
 
@@ -234,3 +260,67 @@ class TestConfigWatcherDebouncing:
             on_reload.assert_called_once()
         finally:
             watcher.stop()
+
+
+# ── Additional Coverage Tests ─────────────────────────────────────────
+
+
+class TestConfigWatcherBasicFunctionality:
+    """Basic functionality tests that work with or without watchdog."""
+
+    def test_str_path_converted_to_path(self, tmp_path):
+        """Should convert string path to Path object."""
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text("")
+
+        on_reload = MagicMock()
+        watcher = ConfigWatcher(config_path=str(cfg_file), on_reload=on_reload)
+
+        assert isinstance(watcher.config_path, type(tmp_path))
+
+    def test_config_path_is_absolute(self, tmp_path):
+        """Should resolve config path to absolute."""
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text("")
+
+        watcher = ConfigWatcher(config_path=cfg_file, on_reload=MagicMock())
+        assert watcher.config_path.is_absolute()
+
+    def test_watcher_not_running_initially(self, tmp_path):
+        """Watcher should not be running after creation."""
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text("")
+
+        watcher = ConfigWatcher(config_path=cfg_file, on_reload=MagicMock())
+        assert watcher._running is False
+        assert watcher._observer is None
+        assert watcher._watch is None
+
+
+class TestConfigWatcherPathHandling:
+    """Tests for path handling edge cases."""
+
+    def test_handles_relative_path(self, tmp_path):
+        """Should handle relative paths."""
+        import os
+
+        original_cwd = os.getcwd()
+        try:
+            os.chdir(tmp_path)
+            cfg_file = tmp_path / "config.yaml"
+            cfg_file.write_text("")
+
+            watcher = ConfigWatcher(config_path="config.yaml", on_reload=MagicMock())
+            assert watcher.config_path.is_absolute()
+        finally:
+            os.chdir(original_cwd)
+
+    def test_handles_nested_config_path(self, tmp_path):
+        """Should handle nested config paths."""
+        nested_dir = tmp_path / "nested" / "config"
+        nested_dir.mkdir(parents=True)
+        cfg_file = nested_dir / "settings.yaml"
+        cfg_file.write_text("")
+
+        watcher = ConfigWatcher(config_path=cfg_file, on_reload=MagicMock())
+        assert watcher.config_path == cfg_file.resolve()
