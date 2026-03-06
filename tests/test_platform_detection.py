@@ -1,99 +1,30 @@
-"""Tests for platform detection and hardware abstraction layer."""
-
-from unittest.mock import patch
-
-import pytest
+"""Tests for platform exports and hardware abstraction layer."""
 
 from pysysfan.platforms import (
-    detect_platform,
-    get_hardware_manager,
-    get_service_manager,
-    PlatformNotSupportedError,
-)
-from pysysfan.platforms.base import (
+    WindowsHardwareManager,
+    windows_service,
     BaseHardwareManager,
+    SensorKind,
+    SensorInfo,
     ControlInfo,
     HardwareScanResult,
-    SensorInfo,
-    SensorKind,
 )
 
 
-class TestDetectPlatform:
-    """Tests for platform detection."""
+class TestPlatformExports:
+    """Tests that platform exports work correctly."""
 
-    def test_detects_windows(self):
-        """Should detect Windows platform."""
-        with patch("sys.platform", "win32"):
-            assert detect_platform() == "windows"
+    def test_windows_hardware_manager_exported(self):
+        """Should export WindowsHardwareManager class."""
+        assert WindowsHardwareManager is not None
+        assert issubclass(WindowsHardwareManager, BaseHardwareManager)
 
-    def test_detects_windows_with_suffix(self):
-        """Should detect Windows even with platform suffix."""
-        with patch("sys.platform", "win64"):
-            assert detect_platform() == "windows"
-
-    def test_raises_on_linux(self):
-        """Should raise PlatformNotSupportedError on Linux."""
-        with patch("sys.platform", "linux"):
-            with pytest.raises(PlatformNotSupportedError) as exc_info:
-                detect_platform()
-            assert "linux" in str(exc_info.value).lower()
-            assert "windows" in str(exc_info.value).lower()
-
-    def test_raises_on_linux_with_suffix(self):
-        """Should raise on Linux even with platform suffix."""
-        with patch("sys.platform", "linux2"):
-            with pytest.raises(PlatformNotSupportedError):
-                detect_platform()
-
-    def test_raises_on_unsupported_platform(self):
-        """Should raise on unsupported platforms like macOS."""
-        with patch("sys.platform", "darwin"):
-            with pytest.raises(PlatformNotSupportedError) as exc_info:
-                detect_platform()
-            assert "darwin" in str(exc_info.value).lower()
-
-
-class TestGetHardwareManager:
-    """Tests for hardware manager factory."""
-
-    def test_returns_windows_manager_on_windows(self):
-        """Should return WindowsHardwareManager on Windows."""
-        with patch("sys.platform", "win32"):
-            manager_class = get_hardware_manager()
-            from pysysfan.platforms.windows import WindowsHardwareManager
-
-            assert manager_class is WindowsHardwareManager
-
-    def test_raises_on_linux(self):
-        """Should raise on Linux platform."""
-        with patch("sys.platform", "linux"):
-            with pytest.raises(PlatformNotSupportedError):
-                get_hardware_manager()
-
-    def test_raises_on_unsupported_platform(self):
-        """Should raise on unsupported platforms."""
-        with patch("sys.platform", "darwin"):
-            with pytest.raises(PlatformNotSupportedError):
-                get_hardware_manager()
-
-
-class TestGetServiceManager:
-    """Tests for service manager factory."""
-
-    def test_returns_windows_service_on_windows(self):
-        """Should return Windows service module on Windows."""
-        with patch("sys.platform", "win32"):
-            service_module = get_service_manager()
-            from pysysfan.platforms import windows_service
-
-            assert service_module is windows_service
-
-    def test_raises_on_linux(self):
-        """Should raise on Linux platform."""
-        with patch("sys.platform", "linux"):
-            with pytest.raises(PlatformNotSupportedError):
-                get_service_manager()
+    def test_windows_service_exported(self):
+        """Should export windows_service module."""
+        assert windows_service is not None
+        assert hasattr(windows_service, "install_task")
+        assert hasattr(windows_service, "uninstall_task")
+        assert hasattr(windows_service, "get_task_status")
 
 
 class TestBaseHardwareManager:
@@ -101,11 +32,14 @@ class TestBaseHardwareManager:
 
     def test_is_abstract(self):
         """BaseHardwareManager should be abstract."""
+        import pytest
+
         with pytest.raises(TypeError):
             BaseHardwareManager()
 
     def test_subclass_must_implement_methods(self):
         """Subclasses must implement all abstract methods."""
+        import pytest
 
         class IncompleteManager(BaseHardwareManager):
             pass
@@ -240,9 +174,9 @@ class TestHardwareModuleBackwardCompatibility:
         assert SensorKind is BaseSensorKind
         assert SensorInfo is BaseSensorInfo
 
-    def test_get_hardware_manager_export(self):
-        """Should export get_hardware_manager function."""
-        from pysysfan.hardware import get_hardware_manager
-        from pysysfan.platforms import get_hardware_manager as platforms_getter
+    def test_hardware_manager_export(self):
+        """Should export HardwareManager from hardware module."""
+        from pysysfan.hardware import HardwareManager
+        from pysysfan.platforms import WindowsHardwareManager
 
-        assert get_hardware_manager is platforms_getter
+        assert HardwareManager is WindowsHardwareManager

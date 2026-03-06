@@ -304,19 +304,27 @@ class FanDaemon:
             return
 
         try:
-            from pysysfan.updater import check_for_update
+            from pysysfan.updater import check_for_update, perform_update
 
             info = check_for_update()
             if not info.available:
                 logger.debug("pysysfan is up-to-date (%s).", info.current_version)
                 return
 
-            logger.info(
-                "A new pysysfan version is available: %s → %s. "
-                "Run 'pysysfan update apply' to upgrade.",
-                info.current_version,
-                info.latest_version,
-            )
+            if cfg.update.notify_only:
+                logger.info(
+                    "A new pysysfan version is available: %s → %s. "
+                    "Run 'pysysfan update apply' to upgrade.",
+                    info.current_version,
+                    info.latest_version,
+                )
+            else:
+                logger.info(
+                    "Auto-updating pysysfan: %s → %s",
+                    info.current_version,
+                    info.latest_version,
+                )
+                perform_update(info.latest_version)
         except Exception as exc:
             logger.debug("Update check failed (non-fatal): %s", exc)
 

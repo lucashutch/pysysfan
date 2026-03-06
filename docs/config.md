@@ -6,7 +6,6 @@ This guide covers the pysysfan configuration file format and all available optio
 
 The configuration file is stored at:
 - **Windows**: `%USERPROFILE%\.pysysfan\config.yaml`
-- **Linux**: `~/.pysysfan/config.yaml`
 
 ## Basic Structure
 
@@ -36,14 +35,10 @@ fans:
 
 ### Finding Hardware IDs
 
-Use `pysysfan scan` to discover available sensors and controls:
+Use `pysysfan scan` to discover available sensors and controls (run as Administrator):
 
-```bash
-# Windows (run as Administrator)
+```powershell
 pysysfan scan
-
-# Linux
-sudo pysysfan scan
 ```
 
 This will show all available:
@@ -192,38 +187,31 @@ curves:
 
 Validate your configuration before running:
 
-```bash
+```powershell
 pysysfan config validate
 ```
 
 This checks:
 - YAML syntax is valid
 - All curve references exist or are valid special curves
-- Sensor IDs are present on the current hardware (when run with admin privileges)
+- Sensor IDs are present on the current hardware (when run with Administrator privileges)
 
-## Platform-Specific Notes
-
-### Windows
+## Hardware IDs
 
 Fan and temperature IDs use LibreHardwareMonitor paths:
+
 ```yaml
 fan_id: "/motherboard/nct6791d/control/0"
 temp_id: "/amdcpu/0/temperature/0"
 ```
 
-### Linux
+Common prefixes:
+- `/amdcpu/` - AMD CPU sensors
+- `/intelcpu/` - Intel CPU sensors
+- `/gpu/` - GPU sensors
+- `/motherboard/` - Motherboard sensors and controls
 
-Fan and temperature IDs use sysfs hwmon paths:
-```yaml
-fan_id: "/sys/class/hwmon/hwmon0/pwm1"
-temp_id: "/sys/class/hwmon/hwmon1/temp1_input"
-```
-
-For ThinkPads, use the thinkpad_acpi paths:
-```yaml
-fan_id: "/sys/class/hwmon/hwmon4/pwm1"
-temp_id: "/sys/class/hwmon/hwmon4/temp1_input"
-```
+Use `pysysfan scan` to discover the correct IDs for your hardware.
 
 ## Safety Features
 
@@ -242,7 +230,7 @@ If you see errors like `Fan 'xxx' references unknown curve 'yyy'`:
 
 ### Fan not responding
 
-1. Verify you're running as Administrator (Windows) or root (Linux)
+1. Verify you're running as Administrator
 2. Check that the `fan_id` is correct using `pysysfan scan`
 3. Some motherboards require BIOS settings to enable manual fan control
 
@@ -250,4 +238,4 @@ If you see errors like `Fan 'xxx' references unknown curve 'yyy'`:
 
 The daemon skips updates when sensors return 0°C (indicates sensor unavailable). Check:
 1. The `temp_id` path is correct
-2. The sensor driver is loaded (especially on Linux)
+2. The sensor driver is loaded

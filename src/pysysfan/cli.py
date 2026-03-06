@@ -808,7 +808,7 @@ def service_install(config_path: str | None):
 
     Creates a Windows Task Scheduler task that runs at system startup.
     """
-    from pysysfan.platforms import get_service_manager
+    from pysysfan.platforms import windows_service
 
     if not check_admin():
         console.print(
@@ -816,10 +816,8 @@ def service_install(config_path: str | None):
         )
         raise SystemExit(1)
 
-    service_mgr = get_service_manager()
-
     try:
-        service_mgr.install_task(config_path=config_path)
+        windows_service.install_task(config_path=config_path)
         console.print("[bold green]✓ Startup task installed.[/]")
         console.print("  pysysfan will now start automatically at boot.")
         console.print("  Use [bold]pysysfan service status[/] to check.")
@@ -831,7 +829,7 @@ def service_install(config_path: str | None):
 @service.command("uninstall")
 def service_uninstall():
     """Remove the pysysfan startup service."""
-    from pysysfan.platforms import get_service_manager
+    from pysysfan.platforms import windows_service
 
     if not check_admin():
         console.print(
@@ -839,10 +837,8 @@ def service_uninstall():
         )
         raise SystemExit(1)
 
-    service_mgr = get_service_manager()
-
     try:
-        service_mgr.uninstall_task()
+        windows_service.uninstall_task()
         console.print("[bold green]✓ Startup service removed.[/]")
     except Exception as e:
         console.print(f"[red]Failed to remove service:[/] {e}")
@@ -852,11 +848,9 @@ def service_uninstall():
 @service.command("status")
 def service_status():
     """Check whether the pysysfan service is installed and running."""
-    from pysysfan.platforms import get_service_manager
+    from pysysfan.platforms import windows_service
 
-    service_mgr = get_service_manager()
-
-    status = service_mgr.get_task_status()
+    status = windows_service.get_task_status()
     if status is None:
         console.print(
             "[yellow]Task not installed.[/] Run [bold]pysysfan service install[/]."
