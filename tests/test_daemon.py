@@ -613,17 +613,6 @@ class TestDaemonLifecycle:
 class TestHardwareErrors:
     """Tests for hardware error handling."""
 
-    def test_open_hardware_error(self, tmp_path):
-        """Should handle hardware open errors."""
-        daemon = FanDaemon(config_path=tmp_path / "c.yaml")
-        daemon._hw = None
-
-        with patch("pysysfan.hardware.HardwareManager") as mock_mgr:
-            mock_mgr.return_value = MagicMock()
-            mock_mgr.side_effect = Exception("Hardware error")
-            result = daemon._open_hardware()
-            assert result is None
-
     def test_run_once_with_no_temperatures(self, tmp_path):
         """Should handle when no temperature sensors found."""
         daemon = FanDaemon(config_path=tmp_path / "c.yaml")

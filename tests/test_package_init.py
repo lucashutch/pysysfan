@@ -1,7 +1,6 @@
 """Tests for pysysfan.__init__ - Package version handling."""
 
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 class TestPackageVersion:
