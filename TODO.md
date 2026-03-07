@@ -25,11 +25,9 @@
 - Improve code structure
 - Ensure no files are larger than 500 lines
 
-## Completed Phases
-- [x] **Phase 0**: Contracts & Architecture (2026-03-06)
-  - API module structure created
-  - Daemon state management implemented
-  - Token authentication implemented
-  - Windows service updated with explicit config path
-  - Config schema documented
-  - Unit tests added (30 tests, 100% passing)
+## implement ty type checker
+- Using the ty type checker to improve code quality and maintainability
+- Add type annotations to all functions and classes
+- Ensure 100% type coverage across the codebase
+
+
