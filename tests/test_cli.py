@@ -1067,7 +1067,7 @@ class TestRunCommandVariations:
         mock_daemon_class.return_value = mock_daemon
 
         runner = CliRunner()
-        result = runner.invoke(
+        runner.invoke(
             main,
             [
                 "run",
@@ -1095,7 +1095,7 @@ class TestRunCommandVariations:
         mock_daemon_class.return_value = mock_daemon
 
         runner = CliRunner()
-        result = runner.invoke(main, ["run", "--config", str(cfg_file), "--no-api"])
+        runner.invoke(main, ["run", "--config", str(cfg_file), "--no-api"])
         mock_daemon_class.assert_called_once()
         call_kwargs = mock_daemon_class.call_args.kwargs
         assert call_kwargs["api_enabled"] is False
@@ -1259,8 +1259,6 @@ class TestScanOutputVariations:
             controls=[],
         )
         mock_hw_manager.return_value = mock_instance
-
-        from pysysfan.config import DEFAULT_CONFIG_DIR
 
         with patch("pysysfan.config.DEFAULT_CONFIG_DIR", tmp_path / ".pysysfan"):
             result = runner.invoke(main, ["scan"])

@@ -3,7 +3,6 @@
 from unittest.mock import MagicMock, patch
 
 import psutil
-import pytest
 
 from pysysfan.api.service_control import (
     StopMethod,

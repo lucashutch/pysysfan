@@ -776,8 +776,6 @@ class TestUseCachedScan:
     @patch("pysysfan.cache.HardwareCacheManager")
     def test_cache_hit(self, mock_cache_mgr_class, tmp_path):
         """Should use cached scan when valid."""
-        from pysysfan.cache import HardwareCache
-
         mock_cache_mgr = MagicMock()
         mock_cache_mgr_class.return_value = mock_cache_mgr
         mock_cache_mgr.is_valid.return_value = True
@@ -1016,12 +1014,11 @@ class TestWatcherCallbacks:
         cfg_file.write_text("general:\n  poll_interval: 2\nfans: {}\ncurves: {}\n")
         daemon = FanDaemon(config_path=cfg_file, auto_reload=True)
 
-        with patch.object(daemon, "reload_config") as mock_reload:
-            daemon._start_watcher()
-            # Simulate error callback
-            error_callback = mock_watcher_class.call_args.kwargs["on_error"]
-            error_callback(Exception("Watcher error"))
-            # Should not raise
+        daemon._start_watcher()
+        # Simulate error callback
+        error_callback = mock_watcher_class.call_args.kwargs["on_error"]
+        error_callback(Exception("Watcher error"))
+        # Should not raise
 
 
 class TestSignalHandler:

@@ -744,8 +744,6 @@ def create_app(daemon, state: StateManager) -> FastAPI:
     @app.post("/api/service/stop")
     async def stop_service(token: str = Depends(verify_token)) -> dict[str, Any]:
         """Stop the daemon with graceful fallback."""
-        from pysysfan.api.service_control import StopMethod
-
         success, method = stop_daemon_graceful()
 
         if success:
