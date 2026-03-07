@@ -15,6 +15,7 @@ from pysysfan.api.state import StateManager
 from pysysfan.cache import HardwareCacheManager, get_default_cache_manager
 from pysysfan.config import Config, DEFAULT_CONFIG_PATH
 from pysysfan.curves import FanCurve, StaticCurve, parse_curve, InvalidCurveError
+from pysysfan.profiles import ProfileManager, DEFAULT_PROFILE_NAME
 from pysysfan.temperature import lookup_and_aggregate, get_valid_aggregation_methods
 from pysysfan.watcher import ConfigWatcher
 
@@ -42,7 +43,15 @@ class FanDaemon:
         api_host: str = "127.0.0.1",
         api_port: int = 8765,
     ):
-        self.config_path = Path(config_path)
+        # Use active profile if no explicit config_path provided
+        config_path = Path(config_path) if config_path else DEFAULT_CONFIG_PATH
+        if config_path == DEFAULT_CONFIG_PATH:
+            # Check for active profile
+            pm = ProfileManager()
+            active_profile = pm.get_active_profile()
+            config_path = pm.get_profile_config_path(active_profile)
+
+        self.config_path = config_path
         self._running = False
         self._hw = None
         self._curves: dict[str, FanCurve] = {}
@@ -62,6 +71,15 @@ class FanDaemon:
         self._api_thread: threading.Thread | None = None
         self._state_manager = StateManager()
         self._start_time: float = 0.0
+
+    def stop(self) -> None:
+        """Stop the daemon gracefully.
+
+        This method sets the running flag to False, which will cause
+        the main loop to exit and cleanup to occur.
+        """
+        logger.info("Stopping daemon via API request...")
+        self._running = False
 
     # ── Setup / teardown ──────────────────────────────────────────────
 
@@ -483,6 +501,13 @@ class FanDaemon:
 
     def _update_state(self) -> None:
         """Update state manager with current daemon state."""
+        # Get active profile name
+        try:
+            pm = ProfileManager()
+            active_profile = pm.get_active_profile()
+        except Exception:
+            active_profile = DEFAULT_PROFILE_NAME
+
         self._state_manager.update_state(
             pid=os.getpid(),
             config_path=str(self.config_path),
@@ -494,7 +519,7 @@ class FanDaemon:
             poll_interval=self._cfg.poll_interval if self._cfg else 2.0,
             fans_configured=len(self._cfg.fans) if self._cfg else 0,
             curves_configured=len(self._cfg.curves) if self._cfg else 0,
-            active_profile="default",  # TODO: Add profile support
+            active_profile=active_profile,
             current_temps={},  # Populated in _run_once
             current_fan_speeds={},
             current_targets={},

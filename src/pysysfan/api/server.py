@@ -21,6 +21,7 @@ from pysysfan.api.service_control import (
 )
 from pysysfan.api.state import StateManager
 from pysysfan.platforms import windows_service
+from pysysfan.profiles import ProfileManager
 
 logger = logging.getLogger(__name__)
 
@@ -787,6 +788,279 @@ def create_app(daemon, state: StateManager) -> FastAPI:
             "logs": log_lines,
             "total_lines": len(log_lines),
         }
+
+    # Profile management endpoints
+    @app.get("/api/profiles")
+    async def list_profiles(token: str = Depends(verify_token)) -> dict[str, Any]:
+        """List all available profiles with metadata."""
+        try:
+            pm = ProfileManager()
+            profiles = pm.list_profiles()
+            active = pm.get_active_profile()
+
+            return {
+                "profiles": [p.to_dict() for p in profiles],
+                "active": active,
+                "count": len(profiles),
+            }
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to list profiles: {e}",
+            )
+
+    @app.get("/api/profiles/active")
+    async def get_active_profile(token: str = Depends(verify_token)) -> dict[str, Any]:
+        """Get the name of the currently active profile."""
+        try:
+            pm = ProfileManager()
+            active = pm.get_active_profile()
+
+            return {"active": active}
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to get active profile: {e}",
+            )
+
+    @app.post("/api/profiles/{name}/activate")
+    async def activate_profile(
+        name: str, token: str = Depends(verify_token)
+    ) -> dict[str, Any]:
+        """Switch to a different profile.
+
+        Activates the profile and reloads the daemon configuration.
+        """
+        try:
+            pm = ProfileManager()
+
+            # Validate profile exists
+            if not pm.get_profile_config_path(name).exists():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Profile '{name}' not found",
+                )
+
+            # Set active profile
+            pm.set_active_profile(name)
+
+            # Update daemon config path and reload
+            new_config_path = pm.get_profile_config_path(name)
+            daemon.config_path = new_config_path
+
+            # Reload config
+            success = daemon.reload_config()
+
+            if success:
+                return {
+                    "success": True,
+                    "message": f"Switched to profile: {name}",
+                    "profile": name,
+                    "config_path": str(new_config_path),
+                }
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Failed to reload configuration for new profile",
+                )
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to activate profile: {e}",
+            )
+
+    @app.post("/api/profiles/{name}")
+    async def create_profile(
+        name: str, profile_data: dict, token: str = Depends(verify_token)
+    ) -> dict[str, Any]:
+        """Create a new profile.
+
+        Request body can include:
+        - display_name: Human-readable name
+        - description: Profile description
+        - copy_from: Name of profile to copy from
+        """
+        try:
+            pm = ProfileManager()
+
+            # Check if profile already exists
+            if pm.get_profile_config_path(name).exists():
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=f"Profile '{name}' already exists",
+                )
+
+            # Create the profile
+            profile = pm.create_profile(
+                name=name,
+                display_name=profile_data.get("display_name"),
+                description=profile_data.get("description", ""),
+                copy_from=profile_data.get("copy_from"),
+            )
+
+            return {
+                "success": True,
+                "profile": profile.to_dict(),
+            }
+
+        except HTTPException:
+            raise
+        except FileExistsError as e:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=str(e),
+            )
+        except FileNotFoundError as e:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(e),
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to create profile: {e}",
+            )
+
+    @app.delete("/api/profiles/{name}")
+    async def delete_profile(
+        name: str, token: str = Depends(verify_token)
+    ) -> dict[str, Any]:
+        """Delete a profile."""
+        try:
+            pm = ProfileManager()
+
+            # Cannot delete default profile
+            if name == "default":
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot delete the default profile",
+                )
+
+            # Cannot delete active profile
+            if name == pm.get_active_profile():
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Cannot delete the active profile. Switch to another profile first.",
+                )
+
+            pm.delete_profile(name)
+
+            return {
+                "success": True,
+                "message": f"Profile '{name}' deleted",
+                "deleted": name,
+            }
+
+        except HTTPException:
+            raise
+        except FileNotFoundError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Profile '{name}' not found",
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e),
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to delete profile: {e}",
+            )
+
+    @app.get("/api/profiles/{name}/config")
+    async def get_profile_config(
+        name: str, token: str = Depends(verify_token)
+    ) -> dict[str, Any]:
+        """Get a profile's configuration."""
+        try:
+            pm = ProfileManager()
+            profile = pm.get_profile(name)
+
+            return config_to_dict(profile.config)
+
+        except FileNotFoundError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Profile '{name}' not found",
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to get profile config: {e}",
+            )
+
+    @app.put("/api/profiles/{name}/config")
+    async def update_profile_config(
+        name: str, config_data: dict, token: str = Depends(verify_token)
+    ) -> dict[str, Any]:
+        """Update a profile's configuration."""
+        from pysysfan.config import Config, FanConfig, CurveConfig
+
+        try:
+            pm = ProfileManager()
+
+            # Verify profile exists
+            if not pm.get_profile_config_path(name).exists():
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Profile '{name}' not found",
+                )
+
+            # Parse config data
+            poll_interval = config_data.get("general", {}).get("poll_interval", 2.0)
+
+            fans = {}
+            for fan_name, fan_data in config_data.get("fans", {}).items():
+                fans[fan_name] = FanConfig(
+                    fan_id=fan_data.get("fan_id", ""),
+                    curve=fan_data.get("curve", "balanced"),
+                    temp_ids=fan_data.get("temp_ids", []),
+                    aggregation=fan_data.get("aggregation", "max"),
+                    allow_fan_off=fan_data.get("allow_fan_off", True),
+                )
+
+            curves = {}
+            for curve_name, curve_data in config_data.get("curves", {}).items():
+                points = curve_data.get("points", [])
+                curves[curve_name] = CurveConfig(
+                    points=[(float(p[0]), float(p[1])) for p in points],
+                    hysteresis=curve_data.get("hysteresis", 2.0),
+                )
+
+            config = Config(
+                poll_interval=poll_interval,
+                fans=fans,
+                curves=curves,
+            )
+
+            # Update the profile
+            pm.update_profile(name, config=config)
+
+            # If this is the active profile, reload the daemon
+            is_active = name == pm.get_active_profile()
+            if is_active:
+                daemon.config_path = pm.get_profile_config_path(name)
+                daemon.reload_config()
+
+            return {
+                "success": True,
+                "profile": name,
+                "is_active": is_active,
+                "reloaded": is_active,
+            }
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Failed to update profile config: {e}",
+            )
 
     # Shutdown endpoint for graceful API stop
     @app.post("/api/service/shutdown")
