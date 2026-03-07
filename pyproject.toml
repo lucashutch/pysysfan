@@ -15,6 +15,7 @@ dependencies = [
     "fastapi",
     "uvicorn[standard]",
     "sse-starlette",
+    "psutil",
 ]
 
 [project.scripts]

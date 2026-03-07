@@ -8,12 +8,19 @@ import logging
 import time
 from typing import Any
 
+import requests
 from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from sse_starlette.sse import EventSourceResponse
 
 from pysysfan.api.middleware import verify_token
+from pysysfan.api.service_control import (
+    find_daemon_process,
+    get_recent_logs,
+    stop_daemon_graceful,
+)
 from pysysfan.api.state import StateManager
+from pysysfan.platforms import windows_service
 
 logger = logging.getLogger(__name__)
 
@@ -619,6 +626,175 @@ def create_app(daemon, state: StateManager) -> FastAPI:
                     break
 
         return EventSourceResponse(event_generator())
+
+    # Service management endpoints
+    @app.get("/api/service/status")
+    async def get_service_status(token: str = Depends(verify_token)) -> dict[str, Any]:
+        """Get full service status model."""
+        import datetime
+
+        # Task status
+        task_status = windows_service.get_task_status()
+        task_details = windows_service.get_task_details()
+
+        task_installed = task_status is not None
+        task_enabled = (
+            task_details.get("Status") != "Disabled" if task_details else False
+        )
+
+        # Parse last run time
+        task_last_run = None
+        if task_details and "Last Run Time" in task_details:
+            try:
+                time_str = task_details["Last Run Time"]
+                if time_str and time_str != "N/A":
+                    task_last_run = datetime.datetime.strptime(
+                        time_str,
+                        "%m/%d/%Y %I:%M:%S %p",
+                    )
+            except (ValueError, TypeError):
+                pass
+
+        # Daemon process status
+        daemon_proc = find_daemon_process()
+        daemon_running = daemon_proc is not None
+        daemon_pid = daemon_proc.pid if daemon_proc else None
+
+        # Daemon health (API responds)
+        daemon_healthy = False
+        if daemon_running:
+            try:
+                response = requests.get("http://localhost:8765/api/health", timeout=2.0)
+                daemon_healthy = response.status_code == 200
+            except Exception:
+                pass
+
+        return {
+            "task_installed": task_installed,
+            "task_enabled": task_enabled,
+            "task_status": task_status,
+            "task_last_run": task_last_run.isoformat() if task_last_run else None,
+            "daemon_running": daemon_running,
+            "daemon_pid": daemon_pid,
+            "daemon_healthy": daemon_healthy,
+        }
+
+    @app.post("/api/service/install")
+    async def install_service(
+        config_path: str | None = None,
+        token: str = Depends(verify_token),
+    ) -> dict[str, Any]:
+        """Install pysysfan as startup service with explicit config path."""
+        try:
+            windows_service.install_task(config_path=config_path)
+            return {"success": True, "message": "Service installed"}
+        except FileNotFoundError as e:
+            raise HTTPException(404, str(e))
+        except Exception as e:
+            raise HTTPException(500, str(e))
+
+    @app.post("/api/service/uninstall")
+    async def uninstall_service(token: str = Depends(verify_token)) -> dict[str, Any]:
+        """Remove pysysfan startup service."""
+        try:
+            windows_service.uninstall_task()
+            return {"success": True, "message": "Service uninstalled"}
+        except FileNotFoundError:
+            raise HTTPException(404, "Service not installed")
+        except Exception as e:
+            raise HTTPException(500, str(e))
+
+    @app.post("/api/service/enable")
+    async def enable_service(token: str = Depends(verify_token)) -> dict[str, Any]:
+        """Enable the scheduled task."""
+        try:
+            windows_service.enable_task()
+            return {"success": True, "message": "Service enabled"}
+        except FileNotFoundError:
+            raise HTTPException(404, "Service not installed")
+        except Exception as e:
+            raise HTTPException(500, str(e))
+
+    @app.post("/api/service/disable")
+    async def disable_service(token: str = Depends(verify_token)) -> dict[str, Any]:
+        """Disable the scheduled task."""
+        try:
+            windows_service.disable_task()
+            return {"success": True, "message": "Service disabled"}
+        except FileNotFoundError:
+            raise HTTPException(404, "Service not installed")
+        except Exception as e:
+            raise HTTPException(500, str(e))
+
+    @app.post("/api/service/start")
+    async def start_service(token: str = Depends(verify_token)) -> dict[str, Any]:
+        """Start the daemon now."""
+        # Check if already running
+        if find_daemon_process():
+            return {"success": True, "message": "Daemon already running"}
+
+        try:
+            windows_service.start_task()
+            return {"success": True, "message": "Daemon started"}
+        except FileNotFoundError:
+            raise HTTPException(404, "Service not installed")
+        except Exception as e:
+            raise HTTPException(500, str(e))
+
+    @app.post("/api/service/stop")
+    async def stop_service(token: str = Depends(verify_token)) -> dict[str, Any]:
+        """Stop the daemon with graceful fallback."""
+        success, method = stop_daemon_graceful()
+
+        if success:
+            return {
+                "success": True,
+                "message": f"Daemon stopped via {method.value}",
+                "method": method.value,
+            }
+        else:
+            raise HTTPException(500, "Failed to stop daemon")
+
+    @app.post("/api/service/restart")
+    async def restart_service(token: str = Depends(verify_token)) -> dict[str, Any]:
+        """Restart the daemon."""
+        # Stop
+        success, method = stop_daemon_graceful()
+        if not success:
+            raise HTTPException(500, "Failed to stop daemon")
+
+        # Wait a moment
+        await asyncio.sleep(1.0)
+
+        # Start
+        try:
+            windows_service.start_task()
+            return {"success": True, "message": "Daemon restarted"}
+        except FileNotFoundError:
+            raise HTTPException(404, "Service not installed")
+        except Exception as e:
+            raise HTTPException(500, f"Failed to start daemon: {e}")
+
+    @app.get("/api/service/logs")
+    async def get_service_logs(
+        lines: int = 100,
+        token: str = Depends(verify_token),
+    ) -> dict[str, Any]:
+        """Get recent daemon logs."""
+        log_lines = get_recent_logs(lines)
+
+        return {
+            "logs": log_lines,
+            "total_lines": len(log_lines),
+        }
+
+    # Shutdown endpoint for graceful API stop
+    @app.post("/api/service/shutdown")
+    async def shutdown_service(token: str = Depends(verify_token)) -> dict[str, bool]:
+        """Shutdown the daemon gracefully via API."""
+        if hasattr(daemon, "stop"):
+            daemon.stop()
+        return {"success": True}
 
     return app
 

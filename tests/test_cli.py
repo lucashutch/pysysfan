@@ -884,3 +884,382 @@ class TestUpdateAuto:
             runner = CliRunner()
             result = runner.invoke(main, ["update", "auto", "on"])
             assert result.exit_code != 0
+
+
+# ── Status command ───────────────────────────────────────────────────
+
+
+class TestStatusCommand:
+    """Tests for 'status' command."""
+
+    @patch("pysysfan.hardware.HardwareManager")
+    @patch("pysysfan.cli.check_admin")
+    def test_status_shows_sensors(self, mock_check_admin, mock_hw_manager):
+        """Should display sensor status."""
+        runner = CliRunner()
+        mock_check_admin.return_value = True
+
+        mock_instance = MagicMock()
+        mock_instance.__enter__ = MagicMock(return_value=mock_instance)
+        mock_instance.__exit__ = MagicMock(return_value=False)
+        mock_instance.scan.return_value = HardwareScanResult(
+            temperatures=[
+                SensorInfo(
+                    "CPU", "Processor", "Core 0", "Temperature", "/cpu/0/temp/0", 55.0
+                )
+            ],
+            fans=[SensorInfo("MB", "Motherboard", "Fan 1", "Fan", "/mb/fan/0", 1200.0)],
+            controls=[ControlInfo("MB", "Fan Control", "/mb/control/0", 75.0, True)],
+        )
+        mock_hw_manager.return_value = mock_instance
+
+        result = runner.invoke(main, ["status"])
+        assert result.exit_code == 0
+
+    @patch("pysysfan.hardware.HardwareManager")
+    def test_status_handles_error(self, mock_hw_manager):
+        """Should handle hardware errors."""
+        runner = CliRunner()
+        mock_hw_manager.side_effect = RuntimeError("Hardware error")
+
+        result = runner.invoke(main, ["status"])
+        assert result.exit_code == 1
+
+
+# ── Config reload command ────────────────────────────────────────────
+
+
+class TestConfigReload:
+    """Tests for 'config reload' subcommand."""
+
+    def test_config_reload_success(self, tmp_path):
+        """Should reload config successfully."""
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text(
+            "general:\n  poll_interval: 2\nfans: {}\ncurves:\n"
+            "  balanced:\n    hysteresis: 3\n    points:\n      - [30, 30]\n"
+        )
+        runner = CliRunner()
+        result = runner.invoke(main, ["config", "--path", str(cfg_file), "reload"])
+        assert result.exit_code == 0
+        assert "success" in result.output.lower() or "reloaded" in result.output.lower()
+
+    def test_config_reload_missing_file(self, tmp_path):
+        """Should fail when config file doesn't exist."""
+        cfg_file = tmp_path / "nonexistent.yaml"
+        runner = CliRunner()
+        result = runner.invoke(main, ["config", "--path", str(cfg_file), "reload"])
+        assert result.exit_code != 0
+
+    def test_config_reload_invalid_yaml(self, tmp_path):
+        """Should fail with invalid YAML."""
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text("invalid: yaml: syntax[")
+        runner = CliRunner()
+        result = runner.invoke(main, ["config", "--path", str(cfg_file), "reload"])
+        assert result.exit_code != 0
+
+
+# ── Config init auto mode ────────────────────────────────────────────
+
+
+class TestConfigInitAuto:
+    """Tests for 'config init' auto mode."""
+
+    @patch("pysysfan.hardware.HardwareManager")
+    @patch("pysysfan.cli.check_admin")
+    def test_config_init_auto_detects_fans(
+        self, mock_check_admin, mock_hw_manager, tmp_path
+    ):
+        """Should auto-detect fans and generate config."""
+        runner = CliRunner()
+        mock_check_admin.return_value = True
+
+        mock_instance = MagicMock()
+        mock_instance.__enter__ = MagicMock(return_value=mock_instance)
+        mock_instance.__exit__ = MagicMock(return_value=False)
+        mock_instance.scan.return_value = HardwareScanResult(
+            temperatures=[
+                SensorInfo(
+                    "AMD", "CPU", "Core (Tctl)", "Temperature", "/amdcpu/0/temp/0", 45.0
+                )
+            ],
+            fans=[SensorInfo("MB", "LPC", "Fan #1", "Fan", "/lpc/nct/0/fan/0", 1200.0)],
+            controls=[ControlInfo("MB", "Fan #1", "/lpc/nct/0/control/0", 75.0, True)],
+        )
+        mock_hw_manager.return_value = mock_instance
+
+        cfg_path = tmp_path / "subdir" / "config.yaml"
+        result = runner.invoke(main, ["config", "--path", str(cfg_path), "init"])
+        assert result.exit_code == 0
+        assert cfg_path.exists()
+
+    @patch("pysysfan.hardware.HardwareManager")
+    @patch("pysysfan.cli.check_admin")
+    def test_config_init_auto_no_fans(
+        self, mock_check_admin, mock_hw_manager, tmp_path
+    ):
+        """Should fallback to example when no fans detected."""
+        runner = CliRunner()
+        mock_check_admin.return_value = True
+
+        mock_instance = MagicMock()
+        mock_instance.__enter__ = MagicMock(return_value=mock_instance)
+        mock_instance.__exit__ = MagicMock(return_value=False)
+        mock_instance.scan.return_value = HardwareScanResult(
+            temperatures=[SensorInfo("CPU", "CPU", "Temp", "Temp", "/cpu/0", 50.0)],
+            fans=[],
+            controls=[],
+        )
+        mock_hw_manager.return_value = mock_instance
+
+        cfg_path = tmp_path / "config.yaml"
+        result = runner.invoke(main, ["config", "--path", str(cfg_path), "init"])
+        assert result.exit_code == 0
+
+    @patch("pysysfan.hardware.HardwareManager")
+    @patch("pysysfan.cli.check_admin")
+    def test_config_init_auto_no_temps(
+        self, mock_check_admin, mock_hw_manager, tmp_path
+    ):
+        """Should fail when no temperature sensors."""
+        runner = CliRunner()
+        mock_check_admin.return_value = True
+
+        mock_instance = MagicMock()
+        mock_instance.__enter__ = MagicMock(return_value=mock_instance)
+        mock_instance.__exit__ = MagicMock(return_value=False)
+        mock_instance.scan.return_value = HardwareScanResult(
+            temperatures=[],
+            fans=[SensorInfo("MB", "LPC", "Fan", "Fan", "/fan/0", 1200.0)],
+            controls=[ControlInfo("MB", "Control", "/control/0", 75.0, True)],
+        )
+        mock_hw_manager.return_value = mock_instance
+
+        cfg_path = tmp_path / "config.yaml"
+        result = runner.invoke(main, ["config", "--path", str(cfg_path), "init"])
+        assert result.exit_code == 1
+
+    @patch("pysysfan.hardware.HardwareManager")
+    def test_config_init_auto_hardware_error(self, mock_hw_manager, tmp_path):
+        """Should fallback to example on hardware error."""
+        runner = CliRunner()
+        mock_hw_manager.side_effect = FileNotFoundError("DLL not found")
+
+        cfg_path = tmp_path / "config.yaml"
+        result = runner.invoke(main, ["config", "--path", str(cfg_path), "init"])
+        assert result.exit_code == 1
+
+
+# ── Run command variations ───────────────────────────────────────────
+
+
+class TestRunCommandVariations:
+    """Additional tests for 'run' command."""
+
+    @patch("pysysfan.daemon.FanDaemon")
+    def test_run_with_custom_api_settings(self, mock_daemon_class, tmp_path):
+        """Should use custom API settings."""
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text("general:\n  poll_interval: 2\nfans: {}\ncurves: {}\n")
+
+        mock_daemon = MagicMock()
+        mock_daemon_class.return_value = mock_daemon
+
+        runner = CliRunner()
+        runner.invoke(
+            main,
+            [
+                "run",
+                "--config",
+                str(cfg_file),
+                "--api-host",
+                "0.0.0.0",
+                "--api-port",
+                "9000",
+            ],
+        )
+        # Command may fail but should attempt to create daemon with correct args
+        mock_daemon_class.assert_called_once()
+        call_kwargs = mock_daemon_class.call_args.kwargs
+        assert call_kwargs["api_host"] == "0.0.0.0"
+        assert call_kwargs["api_port"] == 9000
+
+    @patch("pysysfan.daemon.FanDaemon")
+    def test_run_no_api(self, mock_daemon_class, tmp_path):
+        """Should disable API with --no-api."""
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text("general:\n  poll_interval: 2\nfans: {}\ncurves: {}\n")
+
+        mock_daemon = MagicMock()
+        mock_daemon_class.return_value = mock_daemon
+
+        runner = CliRunner()
+        runner.invoke(main, ["run", "--config", str(cfg_file), "--no-api"])
+        mock_daemon_class.assert_called_once()
+        call_kwargs = mock_daemon_class.call_args.kwargs
+        assert call_kwargs["api_enabled"] is False
+
+
+# ── Service command variations ───────────────────────────────────────
+
+
+class TestServiceVariations:
+    """Additional tests for service commands."""
+
+    @patch("pysysfan.cli.check_admin", return_value=True)
+    @patch("pysysfan.platforms.windows_service")
+    def test_service_install_with_config_path(self, mock_service, mock_admin, tmp_path):
+        """Should install with custom config path."""
+        runner = CliRunner()
+        cfg_file = tmp_path / "custom.yaml"
+        cfg_file.write_text("general:\n  poll_interval: 2\nfans: {}\ncurves: {}\n")
+
+        with patch("sys.platform", "win32"):
+            result = runner.invoke(
+                main, ["service", "install", "--config", str(cfg_file)]
+            )
+        assert result.exit_code == 0
+        mock_service.install_task.assert_called_once_with(config_path=str(cfg_file))
+
+    @patch("pysysfan.cli.check_admin", return_value=True)
+    @patch("pysysfan.platforms.windows_service")
+    def test_service_install_file_not_found(self, mock_service, mock_admin, tmp_path):
+        """Should handle FileNotFoundError."""
+        mock_service.install_task.side_effect = FileNotFoundError("Config not found")
+        runner = CliRunner()
+
+        with patch("sys.platform", "win32"):
+            result = runner.invoke(main, ["service", "install"])
+        assert result.exit_code == 1
+
+    @patch("pysysfan.cli.check_admin", return_value=True)
+    @patch("pysysfan.platforms.windows_service")
+    def test_service_uninstall_not_installed(self, mock_service, mock_admin):
+        """Should handle uninstall when not installed."""
+        mock_service.uninstall_task.side_effect = FileNotFoundError("Not installed")
+        runner = CliRunner()
+
+        with patch("sys.platform", "win32"):
+            result = runner.invoke(main, ["service", "uninstall"])
+        assert result.exit_code == 1
+
+
+# ── Update check variations ──────────────────────────────────────────
+
+
+class TestUpdateCheckVariations:
+    """Additional tests for update check."""
+
+    @patch("pysysfan.updater.check_for_update", side_effect=ConnectionError("offline"))
+    def test_update_check_network_error(self, mock_check):
+        """Should handle network errors."""
+        runner = CliRunner()
+        result = runner.invoke(main, ["update", "check"])
+        assert result.exit_code == 1
+        assert "error" in result.output.lower()
+
+    @patch("pysysfan.updater.check_for_update")
+    def test_update_check_with_release_url(self, mock_check):
+        """Should show release URL when available."""
+        mock_info = MagicMock()
+        mock_info.available = True
+        mock_info.current_version = "0.1.0"
+        mock_info.latest_version = "0.2.0"
+        mock_info.release_url = "https://github.com/user/repo/releases/v0.2.0"
+        mock_info.release_notes = None
+        mock_check.return_value = mock_info
+
+        runner = CliRunner()
+        result = runner.invoke(main, ["update", "check"])
+        assert result.exit_code == 0
+
+
+# ── Check admin variations ───────────────────────────────────────────
+
+
+class TestCheckAdminVariations:
+    """Tests for check_admin function."""
+
+    @patch("ctypes.windll.shell32.IsUserAnAdmin", side_effect=Exception("No ctypes"))
+    def test_check_admin_exception(self, mock_is_admin):
+        """Should return False when exception occurs."""
+        result = check_admin()
+        assert result is False
+
+
+# ── Config validate with hardware ────────────────────────────────────
+
+
+class TestConfigValidateHardware:
+    """Tests for config validate with hardware checks."""
+
+    @patch("pysysfan.hardware.HardwareManager")
+    @patch("pysysfan.cli.check_admin")
+    def test_config_validate_with_hardware_check(
+        self, mock_check_admin, mock_hw_manager, tmp_path
+    ):
+        """Should validate against live hardware."""
+        runner = CliRunner()
+        mock_check_admin.return_value = True
+
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text(
+            "general:\n  poll_interval: 2\nfans:\n"
+            "  test_fan:\n    fan_id: /test/fan/0\n    curve: balanced\n"
+            "    temp_ids: [/test/temp/0]\ncurves:\n"
+            "  balanced:\n    hysteresis: 3\n    points:\n      - [30, 30]\n"
+        )
+
+        mock_instance = MagicMock()
+        mock_instance.__enter__ = MagicMock(return_value=mock_instance)
+        mock_instance.__exit__ = MagicMock(return_value=False)
+        # Return empty scan - sensors won't be found
+        mock_instance.scan.return_value = HardwareScanResult(
+            temperatures=[], fans=[], controls=[]
+        )
+        mock_hw_manager.return_value = mock_instance
+
+        result = runner.invoke(main, ["config", "--path", str(cfg_file), "validate"])
+        # Should succeed validation but warn about missing sensors
+        assert result.exit_code == 0
+
+    @patch("pysysfan.hardware.HardwareManager")
+    def test_config_validate_hardware_error(self, mock_hw_manager, tmp_path):
+        """Should skip hardware check on error."""
+        runner = CliRunner()
+        cfg_file = tmp_path / "config.yaml"
+        cfg_file.write_text("general:\n  poll_interval: 2\nfans: {}\ncurves: {}\n")
+
+        mock_hw_manager.side_effect = Exception("Hardware access failed")
+
+        result = runner.invoke(main, ["config", "--path", str(cfg_file), "validate"])
+        assert result.exit_code == 0
+
+
+# ── Scan output variations ───────────────────────────────────────────
+
+
+class TestScanOutputVariations:
+    """Tests for scan output variations."""
+
+    @patch("pysysfan.hardware.HardwareManager")
+    @patch("pysysfan.cli.check_admin")
+    def test_scan_saves_to_file(self, mock_check_admin, mock_hw_manager, tmp_path):
+        """Should save scan results to file."""
+        runner = CliRunner()
+        mock_check_admin.return_value = True
+
+        mock_instance = MagicMock()
+        mock_instance.__enter__ = MagicMock(return_value=mock_instance)
+        mock_instance.__exit__ = MagicMock(return_value=False)
+        mock_instance.scan.return_value = HardwareScanResult(
+            temperatures=[SensorInfo("CPU", "CPU", "Temp", "Temp", "/cpu/0", 55.0)],
+            fans=[],
+            controls=[],
+        )
+        mock_hw_manager.return_value = mock_instance
+
+        with patch("pysysfan.config.DEFAULT_CONFIG_DIR", tmp_path / ".pysysfan"):
+            result = runner.invoke(main, ["scan"])
+            assert result.exit_code == 0

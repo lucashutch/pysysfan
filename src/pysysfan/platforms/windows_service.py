@@ -273,3 +273,28 @@ def get_service_status() -> ServiceStatus:
         daemon_pid=daemon_pid,
         daemon_healthy=daemon_healthy,
     )
+
+
+def get_task_details() -> dict[str, str] | None:
+    """Get detailed task information from Task Scheduler.
+
+    Returns:
+        Dictionary of task properties if task exists, None otherwise.
+    """
+    result = subprocess.run(
+        ["schtasks", "/Query", "/TN", TASK_NAME, "/FO", "LIST", "/V"],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        return None
+
+    # Parse output
+    details: dict[str, str] = {}
+    for line in result.stdout.splitlines():
+        if ":" in line:
+            key, value = line.split(":", 1)
+            details[key.strip()] = value.strip()
+
+    return details
