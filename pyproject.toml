@@ -37,6 +37,7 @@ dev = [
     "pytest>=9.0.2",
     "pytest-cov>=6.0",
     "pytest-asyncio>=0.23.0",
+    "pytest-timeout>=2.3.0",
     "ruff",
     "httpx",
 ]
@@ -46,6 +47,8 @@ testpaths = ["tests"]
 pythonpath = ["src"]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
+timeout = 10
+timeout_method = "thread"
 markers = [
     "asyncio: mark test as an async test",
 ]

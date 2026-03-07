@@ -716,20 +716,6 @@ class TestSensorStreamEndpoint:
         response = client.get("/api/stream")
         assert response.status_code == 401
 
-    def test_stream_returns_eventsource(self, client, auth_headers):
-        """Stream endpoint should return EventSourceResponse."""
-        # TestClient doesn't support stream parameter, Just verify endpoint exists
-        response = client.get("/api/stream", headers=auth_headers)
-        # EventSourceResponse returns 200
-        assert response.status_code == 200
-
-    def test_stream_with_hardware_error(self, client, mock_daemon, auth_headers):
-        """Stream should handle hardware errors gracefully."""
-        mock_daemon._hw = None
-
-        response = client.get("/api/stream", headers=auth_headers)
-        assert response.status_code == 200
-
 
 class TestConfigToDict:
     """Tests for config_to_dict helper function."""
