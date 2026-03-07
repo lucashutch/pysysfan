@@ -252,10 +252,16 @@ class TestConfigValidate:
         """Should fail when a fan references a non-existent curve."""
         cfg_file = tmp_path / "config.yaml"
         cfg_file.write_text(
-            "general:\n  poll_interval: 2\n"
-            "fans:\n  f1:\n    fan_id: /mb/c/0\n    curve: nonexistent\n    temp_id: /cpu/t/0\n"
+            "general:\n"
+            "  poll_interval: 2\n"
+            "fans:\n"
+            "  f1:\n"
+            "    fan_id: /mb/c/0\n"
+            "    curve: nonexistent\n"
+            "    temp_id: /cpu/t/0\n"
             "curves: {}\n"
         )
+
         runner = CliRunner()
         result = runner.invoke(main, ["config", "--path", str(cfg_file), "validate"])
         assert result.exit_code != 0

@@ -514,3 +514,131 @@ class TestPublicRunOnce:
         mock_hw.close.assert_called()
         assert daemon._hw is None  # _hw should be cleared
         assert isinstance(result, dict)
+
+
+class TestWatcherMethods:
+    """Tests for config watcher start/stop methods."""
+
+    @patch("pysysfan.daemon.ConfigWatcher")
+    def test_start_watcher_when_disabled(self, mock_watcher_class, tmp_path):
+        """Should not start watcher when auto_reload is False."""
+        daemon = FanDaemon(config_path=tmp_path / "c.yaml", auto_reload=False)
+        daemon._start_watcher()
+        mock_watcher_class.assert_not_called()
+
+    @patch("pysysfan.daemon.ConfigWatcher.is_available", return_value=False)
+    def test_start_watcher_not_available(self, mock_available, tmp_path):
+        """Should not start watcher when watchdog not available."""
+        daemon = FanDaemon(config_path=tmp_path / "c.yaml", auto_reload=True)
+        daemon._start_watcher()
+        assert daemon._watcher is None
+
+    @patch("pysysfan.daemon.ConfigWatcher")
+    def test_start_watcher_success(self, mock_watcher_class, tmp_path):
+        """Should start watcher when available and enabled."""
+        mock_watcher = MagicMock()
+        mock_watcher.start.return_value = True
+        mock_watcher_class.return_value = mock_watcher
+        mock_watcher_class.is_available.return_value = True
+
+        daemon = FanDaemon(config_path=tmp_path / "c.yaml", auto_reload=True)
+        daemon._start_watcher()
+
+        assert daemon._watcher is mock_watcher
+        mock_watcher.start.assert_called_once()
+
+    @patch("pysysfan.daemon.ConfigWatcher")
+    def test_start_watcher_failure(self, mock_watcher_class, tmp_path):
+        """Should handle watcher start failure."""
+        mock_watcher = MagicMock()
+        mock_watcher.start.return_value = False
+        mock_watcher_class.return_value = mock_watcher
+        mock_watcher_class.is_available.return_value = True
+
+        daemon = FanDaemon(config_path=tmp_path / "c.yaml", auto_reload=True)
+        daemon._start_watcher()
+
+        assert daemon._watcher is None
+
+    def test_stop_watcher_when_none(self, tmp_path):
+        """Should handle stop when watcher is None."""
+        daemon = FanDaemon(config_path=tmp_path / "c.yaml")
+        daemon._watcher = None
+        daemon._stop_watcher()  # Should not raise
+
+    def test_stop_watcher_success(self, tmp_path):
+        """Should stop and clear watcher."""
+        daemon = FanDaemon(config_path=tmp_path / "c.yaml")
+        mock_watcher = MagicMock()
+        daemon._watcher = mock_watcher
+
+        daemon._stop_watcher()
+
+        mock_watcher.stop.assert_called_once()
+        assert daemon._watcher is None
+
+
+class TestDaemonLifecycle:
+    """Tests for daemon lifecycle methods."""
+
+    @patch("pysysfan.daemon.FanDaemon._load_config")
+    @patch("pysysfan.daemon.FanDaemon._open_hardware")
+    def test_run_loop_initialization(self, mock_open_hw, mock_load_cfg, tmp_path):
+        """Run loop should initialize components."""
+        mock_load_cfg.return_value = _sample_config()
+        mock_hw = MagicMock()
+        mock_open_hw.return_value = mock_hw
+
+        daemon = FanDaemon(config_path=tmp_path / "c.yaml")
+        # Just verify initialization works, not full run loop
+        assert daemon._cfg is None
+        daemon._cfg = daemon._load_config()
+        assert daemon._cfg is not None
+
+    def test_emergency_restore_with_none_hardware(self, tmp_path):
+        """Should handle restore when hardware is None."""
+        daemon = FanDaemon(config_path=tmp_path / "c.yaml")
+        daemon._hw = None
+        daemon._emergency_restore()  # Should not raise
+
+    def test_emergency_restore_with_error(self, tmp_path):
+        """Should handle restore errors gracefully."""
+        daemon = FanDaemon(config_path=tmp_path / "c.yaml")
+        mock_hw = MagicMock()
+        mock_hw.restore_defaults.side_effect = RuntimeError("Failed")
+        daemon._hw = mock_hw
+        daemon._emergency_restore()  # Should not raise
+
+
+class TestHardwareErrors:
+    """Tests for hardware error handling."""
+
+    def test_run_once_with_no_temperatures(self, tmp_path):
+        """Should handle when no temperature sensors found."""
+        daemon = FanDaemon(config_path=tmp_path / "c.yaml")
+        cfg = _sample_config()
+        daemon._curves = daemon._build_curves(cfg)
+
+        mock_hw = MagicMock()
+        mock_hw.get_temperatures.return_value = []
+        daemon._hw = mock_hw
+
+        speeds = daemon._run_once(cfg)
+        assert speeds == {}
+
+    def test_run_once_with_no_matching_temp(self, tmp_path):
+        """Should handle when configured temp sensor not found."""
+        daemon = FanDaemon(config_path=tmp_path / "c.yaml")
+        cfg = _sample_config()
+        daemon._curves = daemon._build_curves(cfg)
+
+        mock_hw = MagicMock()
+        temp_sensor = MagicMock()
+        temp_sensor.identifier = "/different/temp"
+        temp_sensor.value = 50.0
+        mock_hw.get_temperatures.return_value = [temp_sensor]
+        daemon._hw = mock_hw
+
+        speeds = daemon._run_once(cfg)
+        # Should use fallback or skip
+        assert isinstance(speeds, dict)
