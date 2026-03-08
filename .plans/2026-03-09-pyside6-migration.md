@@ -38,3 +38,9 @@ Move the GUI from the current Svelte/Tauri stack to a native PySide6 desktop cli
 - PySide6 desktop scaffold added.
 - `pysysfan-gui` launches the desktop shell.
 - GUI tests updated to desktop assumptions.
+
+## Progress
+
+- Completed: desktop scaffold and launcher retarget.
+- Completed: dashboard page backed by the Python API client with refresh and live sensor streaming.
+- Next: port the service management surface, then the curve editor.

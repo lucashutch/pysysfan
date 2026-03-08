@@ -20,6 +20,11 @@
   - Windows service management UI
   - Seamlessly updates the YAML config file used by the background daemon
 
+## PySide6 migration
+- Replace the desktop launcher and top-level shell with PySide6 while keeping FastAPI as the runtime boundary
+- Port the dashboard, curves, and service views in small validated slices
+- Remove the legacy Tauri/Svelte GUI once feature parity is reached
+
 ## Modularise codebase
 - Split into smaller modules
 - Improve code structure
@@ -46,4 +51,3 @@
 ## simplify the gui code and the way the frontend and backend communicate
 - Refactor the API communication layer to be more straightforward and maintainable
 - Use a consistent pattern for API calls, error handling, and data management
-

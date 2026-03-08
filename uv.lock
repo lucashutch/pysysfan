@@ -650,6 +650,7 @@ dependencies = [
 [package.optional-dependencies]
 gui = [
     { name = "pyside6" },
+    { name = "sseclient-py" },
 ]
 
 [package.dev-dependencies]
@@ -675,6 +676,7 @@ requires-dist = [
     { name = "requests" },
     { name = "rich" },
     { name = "sse-starlette" },
+    { name = "sseclient-py", marker = "extra == 'gui'", specifier = ">=1.8.0" },
     { name = "uvicorn", extras = ["standard"] },
     { name = "watchdog", specifier = ">=3.0" },
 ]
@@ -912,6 +914,14 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/5a/9f/c3695c2d2d4ef70072c3a06992850498b01c6bc9be531950813716b426fa/sse_starlette-3.3.2.tar.gz", hash = "sha256:678fca55a1945c734d8472a6cad186a55ab02840b4f6786f5ee8770970579dcd", size = 32326, upload-time = "2026-02-28T11:24:34.36Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/61/28/8cb142d3fe80c4a2d8af54ca0b003f47ce0ba920974e7990fa6e016402d1/sse_starlette-3.3.2-py3-none-any.whl", hash = "sha256:5c3ea3dad425c601236726af2f27689b74494643f57017cafcb6f8c9acfbb862", size = 14270, upload-time = "2026-02-28T11:24:32.984Z" },
+]
+
+[[package]]
+name = "sseclient-py"
+version = "1.9.0"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4d/2e/59920f7d66b7f9932a3d83dd0ec53fab001be1e058bf582606fe414a5198/sseclient_py-1.9.0-py3-none-any.whl", hash = "sha256:340062b1587fc2880892811e2ab5b176d98ef3eee98b3672ff3a3ba1e8ed0f6f", size = 8351, upload-time = "2026-01-02T23:39:30.995Z" },
 ]
 
 [[package]]

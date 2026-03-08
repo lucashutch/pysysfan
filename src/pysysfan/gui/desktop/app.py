@@ -15,8 +15,8 @@ def get_or_create_application(argv: Sequence[str] | None = None) -> QApplication
     app = QApplication.instance()
     if app is None:
         app = QApplication(list(argv) if argv is not None else sys.argv)
-        app.setApplicationName("PySysFan")
-        app.setOrganizationName("pysysfan")
+    app.setApplicationName("PySysFan")
+    app.setOrganizationName("pysysfan")
     return app
 
 

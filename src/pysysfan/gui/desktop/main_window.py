@@ -5,6 +5,8 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QMainWindow, QTabWidget, QVBoxLayout, QWidget
 
+from pysysfan.gui.desktop.dashboard_page import DashboardPage
+
 
 class PlaceholderPage(QWidget):
     """Simple placeholder page used while porting UI features to Qt."""
@@ -45,12 +47,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(self.tab_widget)
 
         self.tab_widget.addTab(
-            PlaceholderPage(
-                "Dashboard",
-                "The native dashboard shell is in place. Live sensor widgets and "
-                "stream-driven updates will be ported into this tab next.",
-                self,
-            ),
+            DashboardPage(parent=self),
             "Dashboard",
         )
         self.tab_widget.addTab(
