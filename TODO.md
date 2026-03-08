@@ -36,4 +36,14 @@
 - End-to-end tests simulating user interactions with the GUI
 - Use testing frameworks like Jest for Svelte and pytest for FastAPI
 
+## move downloader helpers scripts to separate scripts dir
+- Create a `scripts/` directory for all helper scripts
+- Move existing downloader scripts to this new directory
+- include the python downloaders for pawnio and lhm into this directory as well
+- Ensure all scripts are well-documented and have clear usage instructions
+- remove unity tests for downloader scripts as they are not critical to the core functionality of the project
+
+## simplify the gui code and the way the frontend and backend communicate
+- Refactor the API communication layer to be more straightforward and maintainable
+- Use a consistent pattern for API calls, error handling, and data management
 

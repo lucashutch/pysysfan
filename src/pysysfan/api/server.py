@@ -1095,6 +1095,94 @@ def create_app(daemon, state: StateManager) -> FastAPI:
                 detail=f"Failed to update profile config: {e}",
             )
 
+    # Alert management endpoints
+    @app.get("/api/alerts/rules")
+    async def list_alert_rules(
+        token: str = Depends(verify_token),
+    ) -> dict[str, Any]:
+        """List all alert rules."""
+        rules = daemon.notification_manager.get_rules()
+        return {"rules": rules, "count": len(rules)}
+
+    @app.post("/api/alerts/rules")
+    async def create_alert_rule(
+        rule_data: dict, token: str = Depends(verify_token)
+    ) -> dict[str, Any]:
+        """Create a new alert rule."""
+        from pysysfan.notifications import AlertRule
+
+        try:
+            rule = AlertRule(
+                sensor_id=rule_data.get("sensor_id", ""),
+                alert_type=rule_data.get("alert_type", "high_temp"),
+                threshold=rule_data.get("threshold", 80.0),
+                enabled=rule_data.get("enabled", True),
+                cooldown_seconds=rule_data.get("cooldown_seconds", 60.0),
+            )
+            daemon.notification_manager.add_rule(rule)
+            return {"success": True, "rule": rule_data}
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e),
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to create alert rule: {e}",
+            )
+
+    @app.put("/api/alerts/rules/{sensor_id}")
+    async def update_alert_rule(
+        sensor_id: str,
+        rule_data: dict,
+        token: str = Depends(verify_token),
+    ) -> dict[str, Any]:
+        """Update an existing alert rule."""
+        success = daemon.notification_manager.update_rule(
+            sensor_id=sensor_id,
+            alert_type=rule_data.get("alert_type"),
+            threshold=rule_data.get("threshold"),
+            enabled=rule_data.get("enabled"),
+            cooldown_seconds=rule_data.get("cooldown_seconds"),
+        )
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Alert rule for sensor '{sensor_id}' not found",
+            )
+        return {"success": True, "sensor_id": sensor_id}
+
+    @app.delete("/api/alerts/rules/{sensor_id}")
+    async def delete_alert_rule(
+        sensor_id: str, token: str = Depends(verify_token)
+    ) -> dict[str, Any]:
+        """Delete an alert rule."""
+        success = daemon.notification_manager.remove_rule(sensor_id)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Alert rule for sensor '{sensor_id}' not found",
+            )
+        return {"success": True, "deleted": sensor_id}
+
+    @app.get("/api/alerts/history")
+    async def get_alert_history(
+        limit: int = 50,
+        token: str = Depends(verify_token),
+    ) -> dict[str, Any]:
+        """Get alert history."""
+        history = daemon.notification_manager.get_history(limit=limit)
+        return {"alerts": history, "count": len(history)}
+
+    @app.delete("/api/alerts/history")
+    async def clear_alert_history(
+        token: str = Depends(verify_token),
+    ) -> dict[str, bool]:
+        """Clear alert history."""
+        daemon.notification_manager.clear_history()
+        return {"success": True}
+
     # Shutdown endpoint for graceful API stop
     @app.post("/api/service/shutdown")
     async def shutdown_service(token: str = Depends(verify_token)) -> dict[str, bool]:
