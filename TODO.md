@@ -51,3 +51,4 @@
 ## simplify the gui code and the way the frontend and backend communicate
 - Refactor the API communication layer to be more straightforward and maintainable
 - Use a consistent pattern for API calls, error handling, and data management
+- Repair API contract mismatches around daemon bind settings, live runtime state snapshots, and sensor controllability metadata

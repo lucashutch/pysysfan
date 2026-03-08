@@ -15,6 +15,7 @@ from sse_starlette.sse import EventSourceResponse
 
 from pysysfan.api.middleware import verify_token
 from pysysfan.api.service_control import (
+    build_local_api_base_url,
     find_daemon_process,
     get_recent_logs,
     stop_daemon_graceful,
@@ -24,6 +25,33 @@ from pysysfan.platforms import windows_service
 from pysysfan.profiles import ProfileManager
 
 logger = logging.getLogger(__name__)
+
+
+def _match_control_for_fan(fan_sensor: Any, controls: list[Any]) -> Any | None:
+    """Return the control sensor corresponding to a fan RPM sensor."""
+    fan_prefix = fan_sensor.identifier.rsplit("/", 1)[0]
+    for control in controls:
+        control_prefix = control.identifier.rsplit("/", 1)[0]
+        if control_prefix == fan_prefix:
+            return control
+    return None
+
+
+def _fan_sensor_to_dict(fan_sensor: Any, controls: list[Any]) -> dict[str, Any]:
+    """Serialize a fan sensor with matched control metadata."""
+    matched_control = _match_control_for_fan(fan_sensor, controls)
+    return {
+        "identifier": fan_sensor.identifier,
+        "hardware_name": fan_sensor.hardware_name,
+        "sensor_name": fan_sensor.sensor_name,
+        "rpm": fan_sensor.value,
+        "control_percentage": (
+            matched_control.current_value if matched_control is not None else None
+        ),
+        "controllable": (
+            matched_control.has_control if matched_control is not None else False
+        ),
+    }
 
 
 def create_app(daemon, state: StateManager) -> FastAPI:
@@ -121,17 +149,7 @@ def create_app(daemon, state: StateManager) -> FastAPI:
                 }
                 for s in temps
             ],
-            "fans": [
-                {
-                    "identifier": s.identifier,
-                    "hardware_name": s.hardware_name,
-                    "sensor_name": s.sensor_name,
-                    "rpm": s.value,
-                    "control_percentage": None,  # Match with control
-                    "controllable": True,  # Check against controls
-                }
-                for s in fans
-            ],
+            "fans": [_fan_sensor_to_dict(s, controls) for s in fans],
             "controls": [
                 {
                     "identifier": c.identifier,
@@ -698,7 +716,11 @@ def create_app(daemon, state: StateManager) -> FastAPI:
         daemon_healthy = False
         if daemon_running:
             try:
-                response = requests.get("http://localhost:8765/api/health", timeout=2.0)
+                api_base_url = build_local_api_base_url(
+                    api_host=daemon._api_host,
+                    api_port=daemon._api_port,
+                )
+                response = requests.get(f"{api_base_url}/api/health", timeout=2.0)
                 daemon_healthy = response.status_code == 200
             except Exception:
                 pass
@@ -778,7 +800,10 @@ def create_app(daemon, state: StateManager) -> FastAPI:
     @app.post("/api/service/stop")
     async def stop_service(token: str = Depends(verify_token)) -> dict[str, Any]:
         """Stop the daemon with graceful fallback."""
-        success, method = stop_daemon_graceful()
+        success, method = stop_daemon_graceful(
+            api_host=daemon._api_host,
+            api_port=daemon._api_port,
+        )
 
         if success:
             return {
@@ -793,7 +818,10 @@ def create_app(daemon, state: StateManager) -> FastAPI:
     async def restart_service(token: str = Depends(verify_token)) -> dict[str, Any]:
         """Restart the daemon."""
         # Stop
-        success, method = stop_daemon_graceful()
+        success, method = stop_daemon_graceful(
+            api_host=daemon._api_host,
+            api_port=daemon._api_port,
+        )
         if not success:
             raise HTTPException(500, "Failed to stop daemon")
 

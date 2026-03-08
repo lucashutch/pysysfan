@@ -6,6 +6,7 @@ import psutil
 
 from pysysfan.api.service_control import (
     StopMethod,
+    build_local_api_base_url,
     find_daemon_process,
     get_recent_logs,
     stop_daemon_graceful,
@@ -75,6 +76,28 @@ class TestStopDaemonGraceful:
         assert success is True
         assert method == StopMethod.GRACEFUL_API
         mock_post.assert_called_once()
+        assert (
+            mock_post.call_args.args[0] == "http://127.0.0.1:8765/api/service/shutdown"
+        )
+
+    @patch("pysysfan.api.service_control.find_daemon_process")
+    @patch("pysysfan.api.auth.load_token")
+    @patch("requests.post")
+    def test_stop_uses_configured_api_host_and_port(
+        self, mock_post, mock_load_token, mock_find
+    ):
+        """Should map wildcard bind hosts back to local loopback."""
+        mock_load_token.return_value = "test-token"
+        mock_post.return_value.status_code = 200
+        mock_find.return_value = None
+
+        success, method = stop_daemon_graceful(api_host="0.0.0.0", api_port=9000)
+
+        assert success is True
+        assert method == StopMethod.GRACEFUL_API
+        assert (
+            mock_post.call_args.args[0] == "http://127.0.0.1:9000/api/service/shutdown"
+        )
 
     @patch("pysysfan.api.service_control.find_daemon_process")
     @patch("pysysfan.api.auth.load_token")
@@ -222,3 +245,15 @@ class TestStopMethod:
         assert StopMethod.SIGTERM.value == "sigterm"
         assert StopMethod.TASKKILL.value == "taskkill"
         assert StopMethod.FAILED.value == "failed"
+
+
+class TestBuildLocalAPIBaseURL:
+    """Tests for build_local_api_base_url."""
+
+    def test_preserves_specific_host(self):
+        """Specific hosts should be used directly."""
+        assert build_local_api_base_url("localhost", 8765) == "http://localhost:8765"
+
+    def test_normalizes_wildcard_host(self):
+        """Wildcard bind addresses should be converted to loopback."""
+        assert build_local_api_base_url("0.0.0.0", 9000) == "http://127.0.0.1:9000"

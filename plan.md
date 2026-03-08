@@ -23,6 +23,7 @@
 - Phase 1 curves page: completed
 - Phase 1 native desktop surfaces: completed
 - Phase 1 legacy GUI retirement: completed
-- Phase 2 API repair: not started
+- Phase 2 API repair: in progress
+- Phase 2 service host/port and live-state contract slice: completed
 - Phase 3 testing overhaul: not started
 - Phase 4 cleanup: not started

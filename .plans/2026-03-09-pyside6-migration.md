@@ -46,4 +46,5 @@ Move the GUI from the current Svelte/Tauri stack to a native PySide6 desktop cli
 - Completed: service management page with status, controls, logs, and Python client coverage.
 - Completed: curve management page with validation, preview, save/delete, and fan assignment.
 - Completed: legacy web/Tauri GUI sources removed and the helper script retargeted to PySide6.
-- Next: move into API contract repair.
+- Completed: first API contract slice covering daemon bind host/port propagation, live runtime state snapshots, and truthful fan control metadata.
+- Next: continue API contract repair for config persistence and remaining server-side model mismatches.

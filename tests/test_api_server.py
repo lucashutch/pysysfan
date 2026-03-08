@@ -16,6 +16,8 @@ def mock_daemon():
     """Create a mock daemon for testing."""
     daemon = MagicMock()
     daemon.config_path = "/tmp/config.yaml"
+    daemon._api_host = "127.0.0.1"
+    daemon._api_port = 8765
     daemon._cfg = MagicMock()
     daemon._cfg.poll_interval = 2.0
     daemon._cfg.fans = {}
@@ -137,6 +139,9 @@ class TestStatusEndpoint:
             fans_configured=3,
             curves_configured=2,
             active_profile="default",
+            current_temps={"/cpu/0": 45.5},
+            current_fan_speeds={"/fan/0": 1200.0},
+            current_targets={"/fan/0/control": 55.0},
         )
 
         response = client.get("/api/status", headers=auth_headers)
@@ -145,6 +150,9 @@ class TestStatusEndpoint:
         assert data["pid"] == 1234
         assert data["running"] is True
         assert data["fans_configured"] == 3
+        assert data["current_temps"] == {"/cpu/0": 45.5}
+        assert data["current_fan_speeds"] == {"/fan/0": 1200.0}
+        assert data["current_targets"] == {"/fan/0/control": 55.0}
 
 
 class TestSensorsEndpoints:
@@ -195,6 +203,38 @@ class TestSensorsEndpoints:
 
         assert len(data["temperatures"]) == 1
         assert data["temperatures"][0]["value"] == 45.5
+        assert data["fans"][0]["control_percentage"] == 50.0
+        assert data["fans"][0]["controllable"] is True
+
+    def test_sensors_marks_fans_without_matching_control_as_read_only(
+        self, client, mock_daemon, auth_headers
+    ):
+        """Fans without matching control sensors should be reported as read-only."""
+        mock_daemon._hw.get_temperatures.return_value = []
+        mock_daemon._hw.get_fans.return_value = [
+            MagicMock(
+                identifier="/fan/0/rpm",
+                hardware_name="Motherboard",
+                sensor_name="CPU Fan",
+                value=1200,
+            )
+        ]
+        mock_daemon._hw.get_controls.return_value = [
+            MagicMock(
+                identifier="/fan/1/control",
+                hardware_name="Motherboard",
+                sensor_name="Case Fan Control",
+                current_value=35.0,
+                has_control=True,
+            )
+        ]
+
+        response = client.get("/api/sensors", headers=auth_headers)
+
+        assert response.status_code == 200
+        fan = response.json()["fans"][0]
+        assert fan["control_percentage"] is None
+        assert fan["controllable"] is False
 
     def test_sensors_returns_503_when_hardware_not_ready(
         self, client, mock_daemon, auth_headers
