@@ -54,6 +54,18 @@ class NotificationManager:
         self._alert_history: list[Alert] = []
         self._max_history = 100
 
+    @staticmethod
+    def build_rule_id(sensor_id: str, alert_type: str) -> str:
+        """Build the stable identifier used for alert rules and history."""
+        return f"{sensor_id}:{alert_type}"
+
+    def _rule_matches_identifier(self, rule: AlertRule, identifier: str) -> bool:
+        """Match either the composite rule ID or the legacy sensor-only ID."""
+        return (
+            self.build_rule_id(rule.sensor_id, rule.alert_type) == identifier
+            or rule.sensor_id == identifier
+        )
+
     def add_rule(self, rule: AlertRule) -> None:
         """Add an alert rule to the manager."""
         if rule.alert_type not in self.VALID_ALERT_TYPES:
@@ -73,7 +85,9 @@ class NotificationManager:
         Returns True if rule was found and removed.
         """
         initial_len = len(self.rules)
-        self.rules = [r for r in self.rules if not (r.sensor_id == rule_id)]
+        self.rules = [
+            r for r in self.rules if not self._rule_matches_identifier(r, rule_id)
+        ]
         removed = len(self.rules) < initial_len
         if removed:
             logger.debug(f"Removed alert rule: {rule_id}")
@@ -83,6 +97,7 @@ class NotificationManager:
         """Get all rules as dictionaries."""
         return [
             {
+                "rule_id": self.build_rule_id(r.sensor_id, r.alert_type),
                 "sensor_id": r.sensor_id,
                 "alert_type": r.alert_type,
                 "threshold": r.threshold,
@@ -94,7 +109,7 @@ class NotificationManager:
 
     def update_rule(
         self,
-        sensor_id: str,
+        rule_id: str,
         alert_type: str | None = None,
         threshold: float | None = None,
         enabled: bool | None = None,
@@ -104,8 +119,14 @@ class NotificationManager:
 
         Returns True if rule was found and updated.
         """
+        if alert_type is not None and alert_type not in self.VALID_ALERT_TYPES:
+            raise ValueError(
+                f"Invalid alert_type: {alert_type}. "
+                f"Valid types: {self.VALID_ALERT_TYPES}"
+            )
+
         for rule in self.rules:
-            if rule.sensor_id == sensor_id:
+            if self._rule_matches_identifier(rule, rule_id):
                 if alert_type is not None:
                     rule.alert_type = alert_type
                 if threshold is not None:
@@ -114,7 +135,7 @@ class NotificationManager:
                     rule.enabled = enabled
                 if cooldown_seconds is not None:
                     rule.cooldown_seconds = cooldown_seconds
-                logger.debug(f"Updated alert rule: {sensor_id}")
+                logger.debug(f"Updated alert rule: {rule_id}")
                 return True
         return False
 
@@ -153,7 +174,7 @@ class NotificationManager:
 
                 self.last_alert_time[key] = current_time
                 alert = Alert(
-                    rule_id=f"{rule.sensor_id}:{rule.alert_type}",
+                    rule_id=self.build_rule_id(rule.sensor_id, rule.alert_type),
                     sensor_id=rule.sensor_id,
                     alert_type=rule.alert_type,
                     message=message,

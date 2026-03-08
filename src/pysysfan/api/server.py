@@ -54,6 +54,94 @@ def _fan_sensor_to_dict(fan_sensor: Any, controls: list[Any]) -> dict[str, Any]:
     }
 
 
+def _sensors_payload(
+    temps: list[Any], fans: list[Any], controls: list[Any]
+) -> dict[str, Any]:
+    """Serialize the current hardware snapshot into the API sensor shape."""
+    return {
+        "temperatures": [
+            {
+                "identifier": s.identifier,
+                "hardware_name": s.hardware_name,
+                "sensor_name": s.sensor_name,
+                "value": s.value,
+            }
+            for s in temps
+        ],
+        "fans": [_fan_sensor_to_dict(s, controls) for s in fans],
+        "controls": [
+            {
+                "identifier": c.identifier,
+                "hardware_name": c.hardware_name,
+                "sensor_name": c.sensor_name,
+                "current_value": c.current_value,
+                "has_control": c.has_control,
+            }
+            for c in controls
+        ],
+        "timestamp": time.time(),
+    }
+
+
+def _build_curve_config(curve_data: dict[str, Any]):
+    """Create a real CurveConfig from API payload data."""
+    from pysysfan.config import CurveConfig
+
+    points = curve_data.get("points", [])
+    return CurveConfig(
+        points=[(float(point[0]), float(point[1])) for point in points],
+        hysteresis=float(curve_data.get("hysteresis", 2.0)),
+    )
+
+
+def _build_fan_config(fan_data: dict[str, Any], existing_fan: Any | None = None):
+    """Create a FanConfig, preserving unspecified fields during partial updates."""
+    from pysysfan.config import FanConfig
+
+    return FanConfig(
+        fan_id=fan_data.get("fan_id", getattr(existing_fan, "fan_id", "")),
+        curve=fan_data.get("curve", getattr(existing_fan, "curve", "balanced")),
+        temp_ids=fan_data.get("temp_ids", getattr(existing_fan, "temp_ids", [])),
+        aggregation=fan_data.get(
+            "aggregation", getattr(existing_fan, "aggregation", "max")
+        ),
+        header_name=getattr(existing_fan, "header_name", None),
+        allow_fan_off=fan_data.get(
+            "allow_fan_off", getattr(existing_fan, "allow_fan_off", True)
+        ),
+    )
+
+
+def _build_config_from_payload(
+    config_data: dict[str, Any], existing_config: Any | None = None
+):
+    """Create a real Config from API payload data, preserving update settings."""
+    from pysysfan.config import Config, UpdateConfig
+
+    existing_update = getattr(existing_config, "update", UpdateConfig())
+    update_data = config_data.get("update", {})
+    update_config = UpdateConfig(
+        auto_check=update_data.get("auto_check", existing_update.auto_check),
+        notify_only=update_data.get("notify_only", existing_update.notify_only),
+    )
+
+    fans = {
+        name: _build_fan_config(fan_data)
+        for name, fan_data in config_data.get("fans", {}).items()
+    }
+    curves = {
+        name: _build_curve_config(curve_data)
+        for name, curve_data in config_data.get("curves", {}).items()
+    }
+
+    return Config(
+        poll_interval=float(config_data.get("general", {}).get("poll_interval", 2.0)),
+        fans=fans,
+        curves=curves,
+        update=update_config,
+    )
+
+
 def create_app(daemon, state: StateManager) -> FastAPI:
     """Create and configure the FastAPI application.
 
@@ -139,29 +227,7 @@ def create_app(daemon, state: StateManager) -> FastAPI:
         fans = daemon._hw.get_fans()
         controls = daemon._hw.get_controls()
 
-        return {
-            "temperatures": [
-                {
-                    "identifier": s.identifier,
-                    "hardware_name": s.hardware_name,
-                    "sensor_name": s.sensor_name,
-                    "value": s.value,
-                }
-                for s in temps
-            ],
-            "fans": [_fan_sensor_to_dict(s, controls) for s in fans],
-            "controls": [
-                {
-                    "identifier": c.identifier,
-                    "hardware_name": c.hardware_name,
-                    "sensor_name": c.sensor_name,
-                    "current_value": c.current_value,
-                    "has_control": c.has_control,
-                }
-                for c in controls
-            ],
-            "timestamp": time.time(),
-        }
+        return _sensors_payload(temps, fans, controls)
 
     @app.get("/api/sensors/temperatures")
     async def get_temperatures(token: str = Depends(verify_token)) -> dict[str, Any]:
@@ -253,34 +319,9 @@ def create_app(daemon, state: StateManager) -> FastAPI:
         config_data: dict, token: str = Depends(verify_token)
     ) -> dict[str, bool]:
         """Update entire configuration."""
-        from pysysfan.config import Config, FanConfig, CurveConfig
-
         try:
-            # Parse config data manually
-            poll_interval = config_data.get("general", {}).get("poll_interval", 2.0)
-
-            fans = {}
-            for name, fan_data in config_data.get("fans", {}).items():
-                fans[name] = FanConfig(
-                    fan_id=fan_data.get("fan_id", ""),
-                    curve=fan_data.get("curve", "balanced"),
-                    temp_ids=fan_data.get("temp_ids", []),
-                    aggregation=fan_data.get("aggregation", "max"),
-                    allow_fan_off=fan_data.get("allow_fan_off", True),
-                )
-
-            curves = {}
-            for name, curve_data in config_data.get("curves", {}).items():
-                points = curve_data.get("points", [])
-                curves[name] = CurveConfig(
-                    points=[(float(p[0]), float(p[1])) for p in points],
-                    hysteresis=curve_data.get("hysteresis", 2.0),
-                )
-
-            config = Config(
-                poll_interval=poll_interval,
-                fans=fans,
-                curves=curves,
+            config = _build_config_from_payload(
+                config_data, existing_config=daemon._cfg
             )
             config.save(daemon.config_path)
 
@@ -439,15 +480,8 @@ def create_app(daemon, state: StateManager) -> FastAPI:
                 detail="; ".join(errors),
             )
 
-        # Update curve in config
-        daemon._cfg.curves[name] = type(
-            "CurveConfig",
-            (),
-            {
-                "points": curve_data.get("points", []),
-                "hysteresis": curve_data.get("hysteresis", 3.0),
-            },
-        )()
+        # Update curve in config using the real config dataclass.
+        daemon._cfg.curves[name] = _build_curve_config(curve_data)
 
         # Save and reload
         try:
@@ -549,16 +583,10 @@ def create_app(daemon, state: StateManager) -> FastAPI:
                 detail="Configuration not loaded",
             )
 
-        # Create fan config
-        from pysysfan.config import FanConfig
-
         try:
-            fan_config = FanConfig(
-                fan_id=fan_data.get("fan_id", ""),
-                curve=fan_data.get("curve", "balanced"),
-                temp_ids=fan_data.get("temp_ids", []),
-                aggregation=fan_data.get("aggregation", "max"),
-                allow_fan_off=fan_data.get("allow_fan_off", False),
+            fan_config = _build_fan_config(
+                fan_data,
+                existing_fan=daemon._cfg.fans.get(name),
             )
             daemon._cfg.fans[name] = fan_config
 
@@ -635,37 +663,7 @@ def create_app(daemon, state: StateManager) -> FastAPI:
                     fans = daemon._hw.get_fans()
                     controls = daemon._hw.get_controls()
 
-                    sensors = {
-                        "temperatures": [
-                            {
-                                "identifier": s.identifier,
-                                "hardware_name": s.hardware_name,
-                                "sensor_name": s.sensor_name,
-                                "value": s.value,
-                            }
-                            for s in temps
-                        ],
-                        "fans": [
-                            {
-                                "identifier": s.identifier,
-                                "hardware_name": s.hardware_name,
-                                "sensor_name": s.sensor_name,
-                                "rpm": s.value,
-                            }
-                            for s in fans
-                        ],
-                        "controls": [
-                            {
-                                "identifier": c.identifier,
-                                "hardware_name": c.hardware_name,
-                                "sensor_name": c.sensor_name,
-                                "current_value": c.current_value,
-                                "has_control": c.has_control,
-                            }
-                            for c in controls
-                        ],
-                        "timestamp": time.time(),
-                    }
+                    sensors = _sensors_payload(temps, fans, controls)
 
                     yield {"event": "sensors", "data": json.dumps(sensors)}
 
@@ -1060,8 +1058,6 @@ def create_app(daemon, state: StateManager) -> FastAPI:
         name: str, config_data: dict, token: str = Depends(verify_token)
     ) -> dict[str, Any]:
         """Update a profile's configuration."""
-        from pysysfan.config import Config, FanConfig, CurveConfig
-
         try:
             pm = ProfileManager()
 
@@ -1072,31 +1068,10 @@ def create_app(daemon, state: StateManager) -> FastAPI:
                     detail=f"Profile '{name}' not found",
                 )
 
-            # Parse config data
-            poll_interval = config_data.get("general", {}).get("poll_interval", 2.0)
-
-            fans = {}
-            for fan_name, fan_data in config_data.get("fans", {}).items():
-                fans[fan_name] = FanConfig(
-                    fan_id=fan_data.get("fan_id", ""),
-                    curve=fan_data.get("curve", "balanced"),
-                    temp_ids=fan_data.get("temp_ids", []),
-                    aggregation=fan_data.get("aggregation", "max"),
-                    allow_fan_off=fan_data.get("allow_fan_off", True),
-                )
-
-            curves = {}
-            for curve_name, curve_data in config_data.get("curves", {}).items():
-                points = curve_data.get("points", [])
-                curves[curve_name] = CurveConfig(
-                    points=[(float(p[0]), float(p[1])) for p in points],
-                    hysteresis=curve_data.get("hysteresis", 2.0),
-                )
-
-            config = Config(
-                poll_interval=poll_interval,
-                fans=fans,
-                curves=curves,
+            profile = pm.get_profile(name)
+            config = _build_config_from_payload(
+                config_data,
+                existing_config=profile.config,
             )
 
             # Update the profile
@@ -1148,7 +1123,10 @@ def create_app(daemon, state: StateManager) -> FastAPI:
                 cooldown_seconds=rule_data.get("cooldown_seconds", 60.0),
             )
             daemon.notification_manager.add_rule(rule)
-            return {"success": True, "rule": rule_data}
+            return {
+                "success": True,
+                "rule": daemon.notification_manager.get_rules()[-1],
+            }
         except ValueError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -1167,19 +1145,25 @@ def create_app(daemon, state: StateManager) -> FastAPI:
         token: str = Depends(verify_token),
     ) -> dict[str, Any]:
         """Update an existing alert rule."""
-        success = daemon.notification_manager.update_rule(
-            sensor_id=sensor_id,
-            alert_type=rule_data.get("alert_type"),
-            threshold=rule_data.get("threshold"),
-            enabled=rule_data.get("enabled"),
-            cooldown_seconds=rule_data.get("cooldown_seconds"),
-        )
+        try:
+            success = daemon.notification_manager.update_rule(
+                rule_id=sensor_id,
+                alert_type=rule_data.get("alert_type"),
+                threshold=rule_data.get("threshold"),
+                enabled=rule_data.get("enabled"),
+                cooldown_seconds=rule_data.get("cooldown_seconds"),
+            )
+        except ValueError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=str(e),
+            )
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Alert rule for sensor '{sensor_id}' not found",
+                detail=f"Alert rule '{sensor_id}' not found",
             )
-        return {"success": True, "sensor_id": sensor_id}
+        return {"success": True, "rule_id": sensor_id}
 
     @app.delete("/api/alerts/rules/{sensor_id}")
     async def delete_alert_rule(
@@ -1190,7 +1174,7 @@ def create_app(daemon, state: StateManager) -> FastAPI:
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Alert rule for sensor '{sensor_id}' not found",
+                detail=f"Alert rule '{sensor_id}' not found",
             )
         return {"success": True, "deleted": sensor_id}
 

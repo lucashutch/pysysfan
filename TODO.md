@@ -40,6 +40,7 @@
 - Integration tests for API endpoints
 - End-to-end tests simulating user interactions with the GUI
 - Use Qt widget tests for the desktop GUI and pytest for the FastAPI daemon
+- Keep API stream, alert-rule, and config-persistence contracts covered as the desktop client evolves
 
 ## move downloader helpers scripts to separate scripts dir
 - Create a `scripts/` directory for all helper scripts

@@ -434,6 +434,48 @@ class PySysFanClient:
         """
         return self._request("GET", "/api/service/logs", params={"lines": lines})
 
+    # Alerts
+    def list_alert_rules(self) -> dict[str, Any]:
+        """List configured alert rules."""
+        return self._request("GET", "/api/alerts/rules")
+
+    def create_alert_rule(
+        self,
+        sensor_id: str,
+        alert_type: str,
+        threshold: float,
+        enabled: bool = True,
+        cooldown_seconds: float = 60.0,
+    ) -> dict[str, Any]:
+        """Create a new alert rule."""
+        return self._request(
+            "POST",
+            "/api/alerts/rules",
+            json={
+                "sensor_id": sensor_id,
+                "alert_type": alert_type,
+                "threshold": threshold,
+                "enabled": enabled,
+                "cooldown_seconds": cooldown_seconds,
+            },
+        )
+
+    def update_alert_rule(self, rule_id: str, **updates: Any) -> dict[str, Any]:
+        """Update an existing alert rule."""
+        return self._request("PUT", f"/api/alerts/rules/{rule_id}", json=updates)
+
+    def delete_alert_rule(self, rule_id: str) -> dict[str, Any]:
+        """Delete an alert rule."""
+        return self._request("DELETE", f"/api/alerts/rules/{rule_id}")
+
+    def get_alert_history(self, limit: int = 50) -> dict[str, Any]:
+        """Get recent alert history."""
+        return self._request("GET", "/api/alerts/history", params={"limit": limit})
+
+    def clear_alert_history(self) -> dict[str, Any]:
+        """Clear alert history."""
+        return self._request("DELETE", "/api/alerts/history")
+
     # Streaming
     def stream_sensors(self) -> Iterator[dict[str, Any]]:
         """Stream sensor updates via SSE.
