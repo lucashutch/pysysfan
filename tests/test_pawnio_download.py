@@ -146,8 +146,9 @@ class TestInstallPawnio:
         mock_api.return_value = MOCK_RELEASE
         install_pawnio()
 
+    @patch("pysysfan.pawnio.download.subprocess.run")
     @patch("pysysfan.pawnio.download.get_latest_release_info")
-    def test_raises_when_no_asset(self, mock_api):
+    def test_raises_when_no_asset(self, mock_api, mock_run):
         """Should raise RuntimeError when no setup exe is found in release."""
         mock_api.return_value = {
             "tag_name": "v0.0.1",
