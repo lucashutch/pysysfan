@@ -1181,9 +1181,10 @@ class TestUpdateCheckVariations:
 class TestCheckAdminVariations:
     """Tests for check_admin function."""
 
-    @patch("ctypes.windll.shell32.IsUserAnAdmin", side_effect=Exception("No ctypes"))
-    def test_check_admin_exception(self, mock_is_admin):
+    @patch("ctypes.windll", create=True)
+    def test_check_admin_exception(self, mock_windll):
         """Should return False when exception occurs."""
+        mock_windll.shell32.IsUserAnAdmin.side_effect = Exception("No ctypes")
         result = check_admin()
         assert result is False
 
