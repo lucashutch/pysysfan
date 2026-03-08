@@ -1095,6 +1095,115 @@ def create_app(daemon, state: StateManager) -> FastAPI:
                 detail=f"Failed to update profile config: {e}",
             )
 
+    # Profile rules endpoints
+    @app.get("/api/profiles/rules")
+    async def list_profile_rules(
+        token: str = Depends(verify_token),
+    ) -> dict[str, Any]:
+        """List all profile auto-switch rules."""
+        try:
+            rules = daemon.rule_engine.rules
+            return {
+                "rules": [r.to_dict() for r in rules],
+                "count": len(rules),
+            }
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to list profile rules: {e}",
+            )
+
+    @app.post("/api/profiles/rules")
+    async def create_profile_rule(
+        rule_data: dict, token: str = Depends(verify_token)
+    ) -> dict[str, Any]:
+        """Create a new profile auto-switch rule."""
+        from pysysfan.profile_rules import ProfileRule
+
+        try:
+            rule = ProfileRule(
+                rule_type=rule_data.get("rule_type", "manual"),
+                profile_name=rule_data.get("profile_name", ""),
+                enabled=rule_data.get("enabled", True),
+                start_hour=rule_data.get("start_hour"),
+                end_hour=rule_data.get("end_hour"),
+                days=rule_data.get("days"),
+                process_names=rule_data.get("process_names"),
+            )
+            daemon.rule_engine.add_rule(rule)
+            return {"success": True, "rule": rule.to_dict()}
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Failed to create profile rule: {e}",
+            )
+
+    @app.put("/api/profiles/rules/{rule_id}")
+    async def update_profile_rule(
+        rule_id: str,
+        rule_data: dict,
+        token: str = Depends(verify_token),
+    ) -> dict[str, Any]:
+        """Update an existing profile rule."""
+        try:
+            update_kwargs = {
+                k: v for k, v in rule_data.items() if k != "id" and v is not None
+            }
+            success = daemon.rule_engine.update_rule(rule_id, **update_kwargs)
+            if not success:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail=f"Profile rule '{rule_id}' not found",
+                )
+            return {"success": True, "rule_id": rule_id}
+        except HTTPException:
+            raise
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Failed to update profile rule: {e}",
+            )
+
+    @app.delete("/api/profiles/rules/{rule_id}")
+    async def delete_profile_rule(
+        rule_id: str, token: str = Depends(verify_token)
+    ) -> dict[str, Any]:
+        """Delete a profile rule."""
+        success = daemon.rule_engine.remove_rule(rule_id)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Profile rule '{rule_id}' not found",
+            )
+        return {"success": True, "deleted": rule_id}
+
+    @app.post("/api/profiles/rules/{rule_id}/test")
+    async def test_profile_rule(
+        rule_id: str, token: str = Depends(verify_token)
+    ) -> dict[str, Any]:
+        """Test if a profile rule matches current conditions."""
+        rule = daemon.rule_engine.get_rule(rule_id)
+        if not rule:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Profile rule '{rule_id}' not found",
+            )
+
+        from pysysfan.profile_rules import evaluate_time_rule, evaluate_process_rule
+
+        if rule.rule_type == "time":
+            matches = evaluate_time_rule(rule)
+        elif rule.rule_type == "process":
+            matches = evaluate_process_rule(rule)
+        else:
+            matches = False
+
+        return {
+            "rule_id": rule_id,
+            "matches": matches,
+            "profile_name": rule.profile_name,
+        }
+
     # Alert management endpoints
     @app.get("/api/alerts/rules")
     async def list_alert_rules(

@@ -17,6 +17,7 @@ from pysysfan.config import Config, DEFAULT_CONFIG_PATH
 from pysysfan.curves import FanCurve, StaticCurve, parse_curve, InvalidCurveError
 from pysysfan.notifications import NotificationManager
 from pysysfan.profiles import ProfileManager, DEFAULT_PROFILE_NAME
+from pysysfan.profile_rules import ProfileRuleEngine
 from pysysfan.temperature import lookup_and_aggregate, get_valid_aggregation_methods
 from pysysfan.watcher import ConfigWatcher
 
@@ -76,6 +77,10 @@ class FanDaemon:
         # Notification manager
         self._notification_manager = NotificationManager()
 
+        # Profile rule engine
+        self._rule_engine = ProfileRuleEngine()
+        self._last_profile_check: float = 0.0
+
     def stop(self) -> None:
         """Stop the daemon gracefully.
 
@@ -89,6 +94,11 @@ class FanDaemon:
     def notification_manager(self) -> NotificationManager:
         """Get the notification manager instance."""
         return self._notification_manager
+
+    @property
+    def rule_engine(self) -> ProfileRuleEngine:
+        """Get the profile rule engine instance."""
+        return self._rule_engine
 
     # ── Setup / teardown ──────────────────────────────────────────────
 
@@ -413,6 +423,38 @@ class FanDaemon:
         for alert in alerts:
             logger.warning(f"ALERT: {alert.message}")
 
+    def _check_profile_rules(self) -> None:
+        """Check if any profile rules match and switch profile if needed."""
+        import time
+
+        current_time = time.time()
+
+        if current_time - self._last_profile_check < 30:
+            return
+
+        self._last_profile_check = current_time
+
+        new_profile = self._rule_engine.evaluate()
+        if new_profile:
+            pm = ProfileManager()
+            current_profile = pm.get_active_profile()
+            if new_profile != current_profile:
+                try:
+                    config_path = pm.get_profile_config_path(new_profile)
+                    if config_path.exists():
+                        logger.info(f"Auto-switching to profile: {new_profile}")
+                        pm.set_active_profile(new_profile)
+                        self.config_path = config_path
+                        self.reload_config()
+                    else:
+                        logger.warning(
+                            f"Profile '{new_profile}' not found, skipping auto-switch"
+                        )
+                except Exception as e:
+                    logger.error(
+                        f"Failed to auto-switch to profile '{new_profile}': {e}"
+                    )
+
     def _run_once(self, cfg: Config) -> dict[str, float]:
         """Perform a single control pass. Returns {fan_name: speed_percent}."""
         applied: dict[str, float] = {}
@@ -639,6 +681,8 @@ class FanDaemon:
             while self._running:
                 # Update daemon state for API
                 self._update_state()
+                # Check profile auto-switch rules
+                self._check_profile_rules()
                 # Get current config (may have been reloaded)
                 current_cfg = self._cfg if self._cfg is not None else cfg
 
