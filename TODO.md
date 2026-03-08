@@ -10,7 +10,7 @@
 ## Graphical User Interface (GUI)
 - **Status**: Phase 7 (Service Management UI) - COMPLETED ✓
 - Optional standalone GUI application
-- Built using Tauri 2.0 + Svelte 5 + FastAPI REST API
+- Native desktop client now built with PySide6 over the FastAPI daemon API
 - Features:
   - Visual fan curve editor (drag and drop points)
   - Live sensor graphs over time
@@ -24,7 +24,6 @@
 - Replace the desktop launcher and top-level shell with PySide6 while keeping FastAPI as the runtime boundary
 - Port the dashboard, service, and curve views in small validated slices
 - Remove the remaining legacy web/Tauri GUI after the native surface is fully in use
-- Remove the legacy Tauri/Svelte GUI once feature parity is reached
 
 ## Modularise codebase
 - Split into smaller modules
@@ -40,7 +39,7 @@
 - Unit tests for all UI components
 - Integration tests for API endpoints
 - End-to-end tests simulating user interactions with the GUI
-- Use testing frameworks like Jest for Svelte and pytest for FastAPI
+- Use Qt widget tests for the desktop GUI and pytest for the FastAPI daemon
 
 ## move downloader helpers scripts to separate scripts dir
 - Create a `scripts/` directory for all helper scripts

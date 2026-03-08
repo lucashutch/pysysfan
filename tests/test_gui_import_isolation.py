@@ -156,14 +156,17 @@ class TestGUIFileStructure:
         required_files = [
             "__init__.py",
             "app.py",
+            "curves_page.py",
+            "dashboard_page.py",
             "main_window.py",
+            "service_page.py",
         ]
 
         for file in required_files:
             assert (desktop_dir / file).exists(), f"Missing file: {file}"
 
     def test_build_script_exists(self):
-        """Verify build.py script exists."""
+        """Verify the desktop helper script exists."""
         from pathlib import Path
         from pysysfan import gui
 

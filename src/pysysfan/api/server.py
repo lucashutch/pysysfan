@@ -46,7 +46,7 @@ def create_app(daemon, state: StateManager) -> FastAPI:
     # CORS for local development
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost", "http://localhost:*", "tauri://localhost"],
+        allow_origins=["http://localhost", "http://localhost:*"],
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
