@@ -11,6 +11,22 @@ from unittest import mock
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def preserve_sys_modules():
+    """Save and restore sys.modules to prevent test pollution."""
+    original_modules = sys.modules.copy()
+    yield
+    # Restore modules, but also keep any new modules that were added
+    # We need to restore the original pysysfan modules to prevent pollution
+    for key in list(sys.modules.keys()):
+        if key.startswith("pysysfan") and key not in original_modules:
+            del sys.modules[key]
+    # Restore original pysysfan modules
+    for key, value in original_modules.items():
+        if key.startswith("pysysfan"):
+            sys.modules[key] = value
+
+
 class TestGUIImportIsolation:
     """Test that GUI imports are isolated and lazy-loaded."""
 
