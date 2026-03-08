@@ -496,6 +496,82 @@ class TestFansEndpoints:
         assert call_args[1]["json"]["duration_seconds"] == 30
 
 
+class TestServiceEndpoints:
+    """Tests for service management endpoints."""
+
+    @patch("pysysfan.api.client.requests.request")
+    def test_get_service_status_sends_get(self, mock_request, mock_home_dir):
+        """Service status should send GET request."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"task_installed": True}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
+
+        with patch.object(Path, "home", return_value=mock_home_dir):
+            client = PySysFanClient(base_url="http://localhost:8765")
+            client.get_service_status()
+
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "GET"
+        assert "/api/service/status" in call_args[0][1]
+
+    @patch("pysysfan.api.client.requests.request")
+    def test_install_service_passes_optional_config_path(
+        self, mock_request, mock_home_dir
+    ):
+        """Service install should send the optional config path as query params."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"success": True}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
+
+        with patch.object(Path, "home", return_value=mock_home_dir):
+            client = PySysFanClient(base_url="http://localhost:8765")
+            client.install_service("/tmp/config.yaml")
+
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "POST"
+        assert "/api/service/install" in call_args[0][1]
+        assert call_args[1]["params"] == {"config_path": "/tmp/config.yaml"}
+
+    @patch("pysysfan.api.client.requests.request")
+    def test_stop_service_sends_post(self, mock_request, mock_home_dir):
+        """Service stop should send POST request."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"success": True, "method": "sigterm"}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
+
+        with patch.object(Path, "home", return_value=mock_home_dir):
+            client = PySysFanClient(base_url="http://localhost:8765")
+            client.stop_service()
+
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "POST"
+        assert "/api/service/stop" in call_args[0][1]
+
+    @patch("pysysfan.api.client.requests.request")
+    def test_get_service_logs_passes_line_count(self, mock_request, mock_home_dir):
+        """Service logs should send the requested line count as query params."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"logs": [], "total_lines": 0}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
+
+        with patch.object(Path, "home", return_value=mock_home_dir):
+            client = PySysFanClient(base_url="http://localhost:8765")
+            client.get_service_logs(250)
+
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "GET"
+        assert "/api/service/logs" in call_args[0][1]
+        assert call_args[1]["params"] == {"lines": 250}
+
+
 class TestClientBaseUrl:
     """Tests for base URL handling."""
 

@@ -6,6 +6,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QMainWindow, QTabWidget, QVBoxLayout, QWidget
 
 from pysysfan.gui.desktop.dashboard_page import DashboardPage
+from pysysfan.gui.desktop.service_page import ServicePage
 
 
 class PlaceholderPage(QWidget):
@@ -60,12 +61,7 @@ class MainWindow(QMainWindow):
             "Curves",
         )
         self.tab_widget.addTab(
-            PlaceholderPage(
-                "Service",
-                "Service status, controls, and logs will live here as the web UI is "
-                "ported to PySide6.",
-                self,
-            ),
+            ServicePage(parent=self),
             "Service",
         )
 

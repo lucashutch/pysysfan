@@ -19,7 +19,7 @@
 
 - Phase 1 scaffold: completed
 - Phase 1 dashboard page: completed
-- Phase 1 service page: not started
+- Phase 1 service page: completed
 - Phase 1 curves page: not started
 - Phase 2 API repair: not started
 - Phase 3 testing overhaul: not started

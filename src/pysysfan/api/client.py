@@ -339,6 +339,86 @@ class PySysFanClient:
         data = {"speed_percent": speed_percent, "duration_seconds": duration_seconds}
         return self._request("POST", f"/api/fans/{name}/override", json=data)
 
+    # Service
+    def get_service_status(self) -> dict[str, Any]:
+        """Get the Windows service and daemon status snapshot.
+
+        Returns:
+            Service status dictionary.
+        """
+        return self._request("GET", "/api/service/status")
+
+    def install_service(self, config_path: str | None = None) -> dict[str, Any]:
+        """Install the scheduled task for pysysfan.
+
+        Args:
+            config_path: Optional config path to pass to the installer.
+
+        Returns:
+            Success response.
+        """
+        params = {"config_path": config_path} if config_path is not None else None
+        return self._request("POST", "/api/service/install", params=params)
+
+    def uninstall_service(self) -> dict[str, Any]:
+        """Uninstall the scheduled task.
+
+        Returns:
+            Success response.
+        """
+        return self._request("POST", "/api/service/uninstall")
+
+    def enable_service(self) -> dict[str, Any]:
+        """Enable the scheduled task.
+
+        Returns:
+            Success response.
+        """
+        return self._request("POST", "/api/service/enable")
+
+    def disable_service(self) -> dict[str, Any]:
+        """Disable the scheduled task.
+
+        Returns:
+            Success response.
+        """
+        return self._request("POST", "/api/service/disable")
+
+    def start_service(self) -> dict[str, Any]:
+        """Start the daemon via the service layer.
+
+        Returns:
+            Success response.
+        """
+        return self._request("POST", "/api/service/start")
+
+    def stop_service(self) -> dict[str, Any]:
+        """Stop the daemon via the service layer.
+
+        Returns:
+            Success response, including the stop method when available.
+        """
+        return self._request("POST", "/api/service/stop")
+
+    def restart_service(self) -> dict[str, Any]:
+        """Restart the daemon via the service layer.
+
+        Returns:
+            Success response.
+        """
+        return self._request("POST", "/api/service/restart")
+
+    def get_service_logs(self, lines: int = 100) -> dict[str, Any]:
+        """Fetch recent daemon log lines.
+
+        Args:
+            lines: Number of trailing log lines to request.
+
+        Returns:
+            Dictionary containing logs and total line count.
+        """
+        return self._request("GET", "/api/service/logs", params={"lines": lines})
+
     # Streaming
     def stream_sensors(self) -> Iterator[dict[str, Any]]:
         """Stream sensor updates via SSE.
