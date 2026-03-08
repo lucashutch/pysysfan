@@ -37,3 +37,7 @@ package-lock.json
 .coverage
 .plans/
 .ignore
+
+# Local plan files (do not commit)
+plan.md
+.plan/
