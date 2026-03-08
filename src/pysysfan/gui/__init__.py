@@ -1,6 +1,19 @@
-"""GUI module for pysysfan.
+"""GUI package - lazy loaded to avoid importing Qt/Svelte dependencies."""
 
-This module will contain the Tauri-based GUI components.
-It is kept separate from the CLI and daemon to avoid importing
-GUI dependencies in headless environments.
-"""
+# This file is intentionally minimal.
+# All imports should be done within functions to avoid
+# loading GUI dependencies when using CLI only.
+
+__all__ = ["main"]
+
+
+def main():
+    """Entry point for pysysfan-gui command.
+
+    This function is only called when the GUI is explicitly launched.
+    All GUI-specific imports happen inside this function.
+    """
+    # Import here to avoid loading GUI deps on CLI-only usage
+    from pysysfan.gui.web import launch_gui
+
+    launch_gui()

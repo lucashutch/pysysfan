@@ -108,13 +108,21 @@ class TestDownloadSetup:
 class TestInstallPawnio:
     """Tests for install_pawnio()."""
 
+    @patch("pysysfan.pawnio.download.subprocess.run")
     @patch("pysysfan.pawnio.download._PAWNIO_VERSION_DIR")
     @patch("pysysfan.pawnio.download._PAWNIO_VERSION_FILE")
     @patch("pysysfan.pawnio.download.get_installed_version", return_value=None)
     @patch("pysysfan.pawnio.download.is_pawnio_installed", return_value=True)
     @patch("pysysfan.pawnio.download.get_latest_release_info")
     def test_already_installed_no_marker(
-        self, mock_api, mock_installed, mock_version, mock_vfile, mock_vdir, tmp_path
+        self,
+        mock_api,
+        mock_installed,
+        mock_version,
+        mock_vfile,
+        mock_vdir,
+        mock_run,
+        tmp_path,
     ):
         """Should record version when PawnIO is installed but no marker exists."""
         mock_api.return_value = MOCK_RELEASE
@@ -127,16 +135,20 @@ class TestInstallPawnio:
         install_pawnio()
         assert mock_vfile_path.read_text().startswith("v1.2.3")
 
+    @patch("pysysfan.pawnio.download.subprocess.run")
     @patch("pysysfan.pawnio.download.get_installed_version", return_value="v1.2.3")
     @patch("pysysfan.pawnio.download.is_pawnio_installed", return_value=True)
     @patch("pysysfan.pawnio.download.get_latest_release_info")
-    def test_already_up_to_date_skips(self, mock_api, mock_installed, mock_version):
+    def test_already_up_to_date_skips(
+        self, mock_api, mock_installed, mock_version, mock_run
+    ):
         """Should skip when already installed and version matches."""
         mock_api.return_value = MOCK_RELEASE
         install_pawnio()
 
+    @patch("pysysfan.pawnio.download.subprocess.run")
     @patch("pysysfan.pawnio.download.get_latest_release_info")
-    def test_raises_when_no_asset(self, mock_api):
+    def test_raises_when_no_asset(self, mock_api, mock_run):
         """Should raise RuntimeError when no setup exe is found in release."""
         mock_api.return_value = {
             "tag_name": "v0.0.1",
