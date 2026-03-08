@@ -44,4 +44,5 @@ Move the GUI from the current Svelte/Tauri stack to a native PySide6 desktop cli
 - Completed: desktop scaffold and launcher retarget.
 - Completed: dashboard page backed by the Python API client with refresh and live sensor streaming.
 - Completed: service management page with status, controls, logs, and Python client coverage.
-- Next: port the curve editor.
+- Completed: curve management page with validation, preview, save/delete, and fan assignment.
+- Next: retire the legacy web/Tauri GUI and then move into API contract repair.

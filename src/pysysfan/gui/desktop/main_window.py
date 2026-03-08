@@ -5,6 +5,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QMainWindow, QTabWidget, QVBoxLayout, QWidget
 
+from pysysfan.gui.desktop.curves_page import CurvesPage
 from pysysfan.gui.desktop.dashboard_page import DashboardPage
 from pysysfan.gui.desktop.service_page import ServicePage
 
@@ -52,12 +53,7 @@ class MainWindow(QMainWindow):
             "Dashboard",
         )
         self.tab_widget.addTab(
-            PlaceholderPage(
-                "Curves",
-                "Curve editing will move here using native Qt widgets backed by the "
-                "existing daemon API.",
-                self,
-            ),
+            CurvesPage(parent=self),
             "Curves",
         )
         self.tab_widget.addTab(

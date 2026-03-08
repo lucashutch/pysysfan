@@ -22,8 +22,8 @@
 
 ## PySide6 migration
 - Replace the desktop launcher and top-level shell with PySide6 while keeping FastAPI as the runtime boundary
-- Port the dashboard and service views in small validated slices
-- Port the curve editor to complete the native desktop replacement surface
+- Port the dashboard, service, and curve views in small validated slices
+- Remove the remaining legacy web/Tauri GUI after the native surface is fully in use
 - Remove the legacy Tauri/Svelte GUI once feature parity is reached
 
 ## Modularise codebase

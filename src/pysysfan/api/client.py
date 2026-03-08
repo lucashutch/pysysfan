@@ -267,6 +267,21 @@ class PySysFanClient:
         data = {"points": points, "temperature": temperature, "hysteresis": hysteresis}
         return self._request("POST", "/api/curves/preview", json=data)
 
+    def validate_curve(
+        self, points: list[list[float]], hysteresis: float = 3.0
+    ) -> dict[str, Any]:
+        """Validate a curve without saving it.
+
+        Args:
+            points: List of [temperature, speed] pairs.
+            hysteresis: Hysteresis in degrees Celsius.
+
+        Returns:
+            Validation response containing validity and errors.
+        """
+        data = {"points": points, "hysteresis": hysteresis}
+        return self._request("POST", "/api/curves/validate", json=data)
+
     # Fans
     def list_fans(self) -> dict[str, Any]:
         """List all configured fans.

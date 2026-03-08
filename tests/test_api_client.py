@@ -419,6 +419,25 @@ class TestCurvesEndpoints:
         assert call_args[0][0] == "POST"
         assert "/api/curves/preview" in call_args[0][1]
 
+    @patch("pysysfan.api.client.requests.request")
+    def test_validate_curve_sends_post(self, mock_request, mock_home_dir):
+        """Validate curve should send POST request with curve data."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"valid": True, "errors": []}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
+
+        with patch.object(Path, "home", return_value=mock_home_dir):
+            client = PySysFanClient(base_url="http://localhost:8765")
+            points = [[30, 30], [60, 60]]
+            client.validate_curve(points, hysteresis=2.5)
+
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "POST"
+        assert "/api/curves/validate" in call_args[0][1]
+        assert call_args[1]["json"] == {"points": points, "hysteresis": 2.5}
+
 
 class TestFansEndpoints:
     """Tests for fans endpoints."""
