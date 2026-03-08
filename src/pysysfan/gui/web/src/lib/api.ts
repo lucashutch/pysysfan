@@ -99,11 +99,31 @@ export class PySysFanAPI {
     })
   }
 
-  async updateCurve(curveId: string, points: [number, number][]): Promise<void> {
+  async updateCurve(curveId: string, points: [number, number][], hysteresis?: number): Promise<void> {
+    const body: Record<string, unknown> = { points }
+    if (hysteresis !== undefined) {
+      body.hysteresis = hysteresis
+    }
     await this.request(`/curves/${curveId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ points }),
+      method: 'POST',
+      body: JSON.stringify(body),
     })
+  }
+
+  async validateCurve(points: [number, number][], hysteresis?: number): Promise<{ valid: boolean; errors: string[] }> {
+    const body: Record<string, unknown> = { points }
+    if (hysteresis !== undefined) {
+      body.hysteresis = hysteresis
+    }
+    return this.request('/curves/validate', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    })
+  }
+
+  async getCurves(): Promise<Record<string, { name: string; points: [number, number][]; hysteresis: number }>> {
+    const response = await this.request<{ curves: Record<string, { name: string; points: [number, number][]; hysteresis: number }> }>('/curves')
+    return response.curves
   }
 }
 

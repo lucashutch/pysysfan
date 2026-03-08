@@ -376,16 +376,49 @@ def create_app(daemon, state: StateManager) -> FastAPI:
                 detail=f"Failed to evaluate curve: {e}",
             )
 
+    @app.post("/api/curves/validate")
+    async def validate_curve(
+        curve_data: dict, token: str = Depends(verify_token)
+    ) -> dict[str, Any]:
+        """Validate curve configuration without saving."""
+        from pysysfan.api.validation import validate_curve as _validate_curve
+        from pysysfan.api.validation import validate_hysteresis as _validate_hysteresis
+
+        points = curve_data.get("points", [])
+        hysteresis = curve_data.get("hysteresis", 3.0)
+
+        errors = _validate_curve(points)
+        errors.extend(_validate_hysteresis(hysteresis))
+
+        return {
+            "valid": len(errors) == 0,
+            "errors": errors,
+        }
+
     @app.post("/api/curves/{name}")
     async def create_or_update_curve(
         name: str, curve_data: dict, token: str = Depends(verify_token)
     ) -> dict[str, Any]:
         """Create or update a fan curve."""
+        from pysysfan.api.validation import validate_curve as _validate_curve
+        from pysysfan.api.validation import validate_hysteresis as _validate_hysteresis
 
         if daemon._cfg is None:
             raise HTTPException(
                 status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
                 detail="Configuration not loaded",
+            )
+
+        points = curve_data.get("points", [])
+        hysteresis = curve_data.get("hysteresis", 3.0)
+
+        errors = _validate_curve(points)
+        errors.extend(_validate_hysteresis(hysteresis))
+
+        if errors:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="; ".join(errors),
             )
 
         # Update curve in config
