@@ -708,3 +708,88 @@ class TestAlertEndpoints:
         call_args = mock_request.call_args
         assert call_args[0][0] == "DELETE"
         assert "/api/alerts/history" in call_args[0][1]
+
+
+class TestProfileEndpoints:
+    """Tests for profile client methods."""
+
+    @patch("pysysfan.api.client.requests.request")
+    def test_list_profiles_sends_get(self, mock_request, mock_home_dir):
+        """Listing profiles should send GET request."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"profiles": [], "active": "default"}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
+
+        with patch.object(Path, "home", return_value=mock_home_dir):
+            client = PySysFanClient(base_url="http://localhost:8765")
+            client.list_profiles()
+
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "GET"
+        assert "/api/profiles" in call_args[0][1]
+
+    @patch("pysysfan.api.client.requests.request")
+    def test_activate_profile_sends_post(self, mock_request, mock_home_dir):
+        """Activating a profile should POST to the activate endpoint."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"success": True, "profile": "gaming"}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
+
+        with patch.object(Path, "home", return_value=mock_home_dir):
+            client = PySysFanClient(base_url="http://localhost:8765")
+            client.activate_profile("gaming")
+
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "POST"
+        assert "/api/profiles/gaming/activate" in call_args[0][1]
+
+    @patch("pysysfan.api.client.requests.request")
+    def test_create_profile_sends_profile_payload(self, mock_request, mock_home_dir):
+        """Creating a profile should send metadata in the request body."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"success": True}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
+
+        with patch.object(Path, "home", return_value=mock_home_dir):
+            client = PySysFanClient(base_url="http://localhost:8765")
+            client.create_profile(
+                "gaming",
+                display_name="Gaming",
+                description="High airflow",
+                copy_from="default",
+            )
+
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "POST"
+        assert "/api/profiles/gaming" in call_args[0][1]
+        assert call_args[1]["json"] == {
+            "display_name": "Gaming",
+            "description": "High airflow",
+            "copy_from": "default",
+        }
+
+    @patch("pysysfan.api.client.requests.request")
+    def test_update_profile_config_sends_put(self, mock_request, mock_home_dir):
+        """Updating a profile config should PUT the config payload."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"success": True}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
+
+        config = {"general": {"poll_interval": 3.0}, "fans": {}, "curves": {}}
+
+        with patch.object(Path, "home", return_value=mock_home_dir):
+            client = PySysFanClient(base_url="http://localhost:8765")
+            client.update_profile_config("gaming", config)
+
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "PUT"
+        assert "/api/profiles/gaming/config" in call_args[0][1]
+        assert call_args[1]["json"] == config

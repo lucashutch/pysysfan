@@ -929,6 +929,60 @@ class TestAlertEndpoints:
         assert rules[0]["rule_id"] == "cpu_temp:low_temp"
 
 
+class TestProfileEndpoints:
+    """Tests for profile API endpoints."""
+
+    @patch("pysysfan.api.server.ProfileManager")
+    def test_profiles_list_returns_profiles(
+        self, mock_profile_manager_cls, client, auth_headers
+    ):
+        """Profile listing should return profile metadata and the active name."""
+        mock_profile_manager = mock_profile_manager_cls.return_value
+        default_profile = MagicMock()
+        default_profile.to_dict.return_value = {
+            "name": "default",
+            "display_name": "Default",
+        }
+        gaming_profile = MagicMock()
+        gaming_profile.to_dict.return_value = {
+            "name": "gaming",
+            "display_name": "Gaming",
+        }
+        mock_profile_manager.list_profiles.return_value = [
+            default_profile,
+            gaming_profile,
+        ]
+        mock_profile_manager.get_active_profile.return_value = "default"
+
+        response = client.get("/api/profiles", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["active"] == "default"
+        assert data["count"] == 2
+        assert data["profiles"][1]["name"] == "gaming"
+
+    @patch("pysysfan.api.server.ProfileManager")
+    def test_activate_profile_switches_daemon_config(
+        self, mock_profile_manager_cls, client, mock_daemon, auth_headers
+    ):
+        """Activating a profile should update daemon config_path and reload it."""
+        mock_profile_manager = mock_profile_manager_cls.return_value
+        mock_profile_path = MagicMock()
+        mock_profile_path.exists.return_value = True
+        mock_profile_path.__str__.return_value = "/tmp/gaming.yaml"
+        mock_profile_manager.get_profile_config_path.return_value = mock_profile_path
+        mock_daemon.reload_config.return_value = True
+
+        response = client.post("/api/profiles/gaming/activate", headers=auth_headers)
+
+        assert response.status_code == 200
+        assert response.json()["profile"] == "gaming"
+        assert mock_daemon.config_path is mock_profile_path
+        mock_profile_manager.set_active_profile.assert_called_once_with("gaming")
+        mock_daemon.reload_config.assert_called_once()
+
+
 class TestConfigToDict:
     """Tests for config_to_dict helper function."""
 

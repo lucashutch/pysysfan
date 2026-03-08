@@ -22,15 +22,18 @@ curves:
 
 ## Fan Configuration
 
-Each fan entry maps a controllable fan to a temperature source and a speed curve:
+Each fan entry maps a controllable fan to one or more temperature sources and a speed curve:
 
 ```yaml
 fans:
   cpu_fan:
     fan_id: "/motherboard/nct6791d/control/0"  # Hardware control path
-    temp_id: "/amdcpu/0/temperature/0"         # Temperature sensor path
+    temp_ids:                                   # One or more temperature sensors
+      - "/amdcpu/0/temperature/0"
     curve: "balanced"                           # Speed curve to use
+    aggregation: "max"                          # max, min, or avg when using multiple sensors
     header_name: "CPU Fan 1"                    # Human-readable name (optional)
+    allow_fan_off: true                         # Whether 0% is allowed
 ```
 
 ### Finding Hardware IDs
@@ -42,7 +45,7 @@ pysysfan scan
 ```
 
 This will show all available:
-- Temperature sensors (for `temp_id`)
+- Temperature sensors (for `temp_ids`)
 - Fan controls (for `fan_id`)
 
 ## Curve Types
@@ -72,19 +75,22 @@ fans:
   # Fan always off
   exhaust_fan:
     fan_id: "/motherboard/nct6791d/control/1"
-    temp_id: "/amdcpu/0/temperature/0"
+    temp_ids:
+      - "/amdcpu/0/temperature/0"
     curve: "off"
 
   # Fan always at 100%
   case_fan:
     fan_id: "/motherboard/nct6791d/control/2"
-    temp_id: "/amdcpu/0/temperature/0"
+    temp_ids:
+      - "/amdcpu/0/temperature/0"
     curve: "on"
 
   # Fan fixed at 50%
   gpu_fan:
     fan_id: "/motherboard/nct6791d/control/3"
-    temp_id: "/gpu/0/temperature/0"
+    temp_ids:
+      - "/gpu/0/temperature/0"
     curve: "50"
     # or: curve: "50%"
 ```
@@ -141,26 +147,34 @@ general:
 fans:
   cpu_fan:
     fan_id: "/motherboard/nct6791d/control/0"
-    temp_id: "/amdcpu/0/temperature/0"
+    temp_ids:
+      - "/amdcpu/0/temperature/0"
     curve: "performance"
+    aggregation: "max"
     header_name: "CPU Fan"
 
   case_fan:
     fan_id: "/motherboard/nct6791d/control/1"
-    temp_id: "/motherboard/nct6791d/temperature/0"
+    temp_ids:
+      - "/motherboard/nct6791d/temperature/0"
     curve: "silent"
+    aggregation: "max"
     header_name: "Case Fan"
 
   gpu_fan:
     fan_id: "/motherboard/nct6791d/control/2"
-    temp_id: "/gpu/0/temperature/0"
+    temp_ids:
+      - "/gpu/0/temperature/0"
     curve: "50%"
+    aggregation: "max"
     header_name: "GPU Fan"
 
   exhaust_fan:
     fan_id: "/motherboard/nct6791d/control/3"
-    temp_id: "/amdcpu/0/temperature/0"
+    temp_ids:
+      - "/amdcpu/0/temperature/0"
     curve: "off"
+    aggregation: "max"
     header_name: "Exhaust Fan"
 
 curves:
@@ -183,6 +197,20 @@ curves:
       - [75, 100]
 ```
 
+## Desktop Workflow
+
+After generating a config, you can keep editing it directly or use the optional PySide6 desktop client:
+
+```powershell
+# Install the optional desktop GUI
+uv tool install pysysfan --extra gui
+
+# Launch the desktop client
+pysysfan-gui
+```
+
+The Dashboard tab shows daemon health, live sensors, the active profile, and recent alerts. The Curves tab edits named curves and assigns them to configured fans. The Service tab manages the scheduled task and recent daemon logs.
+
 ## Validation
 
 Validate your configuration before running:
@@ -202,7 +230,8 @@ Fan and temperature IDs use LibreHardwareMonitor paths:
 
 ```yaml
 fan_id: "/motherboard/nct6791d/control/0"
-temp_id: "/amdcpu/0/temperature/0"
+temp_ids:
+  - "/amdcpu/0/temperature/0"
 ```
 
 Common prefixes:
@@ -237,5 +266,5 @@ If you see errors like `Fan 'xxx' references unknown curve 'yyy'`:
 ### Temperature showing 0°C
 
 The daemon skips updates when sensors return 0°C (indicates sensor unavailable). Check:
-1. The `temp_id` path is correct
+1. The `temp_ids` entries are correct
 2. The sensor driver is loaded

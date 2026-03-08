@@ -29,6 +29,7 @@
 - Split into smaller modules
 - Improve code structure
 - Ensure no files are larger than 500 lines
+- Split the FastAPI server surface into focused route-registration modules and shared serializers
 
 ## implement ty type checker
 - Using the ty type checker to improve code quality and maintainability
@@ -42,6 +43,7 @@
 - Use Qt widget tests for the desktop GUI and pytest for the FastAPI daemon
 - Keep API stream, alert-rule, and config-persistence contracts covered as the desktop client evolves
 - Keep the desktop helper entry points and prerequisite checks covered so GUI packaging regressions are caught early
+- Cover profile switching, alert summaries/history, and richer service interactions in the PySide6 desktop tests
 
 ## move downloader helpers scripts to separate scripts dir
 - Create a `scripts/` directory for all helper scripts
@@ -54,3 +56,4 @@
 - Refactor the API communication layer to be more straightforward and maintainable
 - Use a consistent pattern for API calls, error handling, and data management
 - Repair API contract mismatches around daemon bind settings, live runtime state snapshots, and sensor controllability metadata
+- Keep the desktop dashboard aligned with the daemon API for profiles, alerts, and service state

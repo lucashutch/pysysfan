@@ -31,11 +31,13 @@ class FakeServiceClient:
             "total_lines": 2,
         }
         self.actions: list[str] = []
+        self.last_requested_lines = 100
 
     def get_service_status(self):
         return self.status
 
     def get_service_logs(self, lines: int = 100):
+        self.last_requested_lines = lines
         return self.logs | {"requested_lines": lines}
 
     def install_service(self):
@@ -90,6 +92,31 @@ def test_service_page_refresh_populates_status_and_logs(qtbot) -> None:
     assert page.logs_summary_label.text() == "Showing 2 of 2 lines"
 
 
+def test_service_page_refresh_sets_action_button_states(qtbot) -> None:
+    """Refreshing should enable only the actions that make sense for the current state."""
+    fake_client = FakeServiceClient()
+    fake_client.status.update(
+        {
+            "task_installed": True,
+            "task_enabled": False,
+            "daemon_running": False,
+            "daemon_healthy": False,
+        }
+    )
+    page = ServicePage(client_factory=lambda: fake_client)
+    qtbot.addWidget(page)
+
+    page.refresh_data()
+
+    assert page.install_button.isEnabled() is False
+    assert page.uninstall_button.isEnabled() is True
+    assert page.enable_button.isEnabled() is True
+    assert page.disable_button.isEnabled() is False
+    assert page.start_button.isEnabled() is True
+    assert page.stop_button.isEnabled() is False
+    assert page.restart_button.isEnabled() is False
+
+
 def test_service_page_surfaces_refresh_errors(qtbot) -> None:
     """Service page should surface refresh failures instead of crashing."""
 
@@ -123,3 +150,31 @@ def test_service_page_stop_action_refreshes_status(qtbot) -> None:
     assert fake_client.actions == ["stop"]
     assert page.daemon_running_label.text() == "Daemon: Stopped"
     assert page.message_label.text() == "Daemon stopped via graceful_api (graceful_api)"
+
+
+def test_service_page_refresh_logs_uses_selected_line_count(qtbot) -> None:
+    """Refreshing logs should request the currently selected line count."""
+    fake_client = FakeServiceClient()
+    page = ServicePage(client_factory=lambda: fake_client)
+    qtbot.addWidget(page)
+
+    page.log_line_count.setValue(150)
+    page.refresh_logs()
+
+    assert page.connection_label.text() == "Connection: Connected"
+    assert fake_client.last_requested_lines == 150
+    assert page.logs_summary_label.text() == "Showing 2 of 2 lines"
+    assert page.logs_view.toPlainText() == "line one\nline two"
+
+
+def test_service_page_restart_action_refreshes_message(qtbot) -> None:
+    """Restarting should call the client and surface the response message."""
+    fake_client = FakeServiceClient()
+    page = ServicePage(client_factory=lambda: fake_client)
+    qtbot.addWidget(page)
+    page.refresh_data()
+
+    page.restart_button.click()
+
+    assert fake_client.actions == ["restart"]
+    assert page.message_label.text() == "Daemon restarted"

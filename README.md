@@ -36,6 +36,11 @@ pysysfan-gui
 
 For a source checkout, install the GUI dependencies with `uv sync --extra gui`, then run `python -m pysysfan.gui.build check` to validate the desktop prerequisites before launching the GUI.
 
+The PySide6 desktop client currently provides:
+- Dashboard: daemon status, live sensors, active profile, and recent alerts
+- Curves: curve editing and fan assignment
+- Service: install/start/stop/restart and log inspection
+
 ## First Setup
 
 ```powershell
@@ -45,7 +50,10 @@ pysysfan scan
 # 2. Generate initial config
 pysysfan config init
 
-# 3. Edit ~/.pysysfan/config.yaml
+# 3. Edit ~/.pysysfan/config.yaml or launch the desktop GUI
+
+# Optional: launch the PySide6 desktop client
+pysysfan-gui
 
 # 4. Validate config
 pysysfan config validate
@@ -100,6 +108,8 @@ python -m pysysfan.gui.build check
 # Launch the PySide6 GUI from a source checkout
 python -m pysysfan.gui.build launch
 ```
+
+Use the Dashboard tab to confirm the daemon is reachable, the Curves tab to edit and assign curves, and the Service tab to manage the Windows scheduled task.
 
 ## Platform Support
 

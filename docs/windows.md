@@ -76,6 +76,9 @@ pysysfan --help
 
 # Optional desktop helper checks
 python -m pysysfan.gui.build check
+
+# Optional desktop launch
+pysysfan-gui
 ```
 
 ## Hardware Support
@@ -145,15 +148,17 @@ general:
 fans:
   cpu_fan:
       fan_id: "/motherboard/nct6791d/control/0"
-    curve: balanced
       temp_ids:
          - "/amdcpu/0/temperature/0"
-  
+      curve: balanced
+      aggregation: max
+
   case_fan:
       fan_id: "/motherboard/nct6791d/control/1"
-    curve: silent
       temp_ids:
          - "/motherboard/nct6791d/temperature/0"
+    curve: silent
+      aggregation: max
 
 curves:
   balanced:
@@ -163,7 +168,7 @@ curves:
       - [60, 60]
       - [75, 85]
       - [85, 100]
-  
+
   silent:
     hysteresis: 3
     points:
@@ -185,9 +190,17 @@ pysysfan config show
 # Validate config against hardware
 pysysfan config validate
 
+# Launch the PySide6 desktop client
+pysysfan-gui
+
 # Edit config directly
 notepad $env:USERPROFILE\.pysysfan\config.yaml
 ```
+
+In the desktop client, use:
+- Dashboard to confirm daemon connectivity, switch profiles, and inspect recent alerts
+- Curves to edit named curves and assign them to fans
+- Service to install, start, stop, restart, and inspect the scheduled task logs
 
 ## Service Setup
 

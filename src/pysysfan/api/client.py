@@ -434,6 +434,48 @@ class PySysFanClient:
         """
         return self._request("GET", "/api/service/logs", params={"lines": lines})
 
+    # Profiles
+    def list_profiles(self) -> dict[str, Any]:
+        """List available daemon profiles."""
+        return self._request("GET", "/api/profiles")
+
+    def get_active_profile(self) -> dict[str, Any]:
+        """Get the currently active profile name."""
+        return self._request("GET", "/api/profiles/active")
+
+    def activate_profile(self, name: str) -> dict[str, Any]:
+        """Activate a profile and reload the daemon config."""
+        return self._request("POST", f"/api/profiles/{name}/activate")
+
+    def create_profile(
+        self,
+        name: str,
+        display_name: str | None = None,
+        description: str = "",
+        copy_from: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a new profile."""
+        payload: dict[str, Any] = {"description": description}
+        if display_name is not None:
+            payload["display_name"] = display_name
+        if copy_from is not None:
+            payload["copy_from"] = copy_from
+        return self._request("POST", f"/api/profiles/{name}", json=payload)
+
+    def delete_profile(self, name: str) -> dict[str, Any]:
+        """Delete an existing profile."""
+        return self._request("DELETE", f"/api/profiles/{name}")
+
+    def get_profile_config(self, name: str) -> dict[str, Any]:
+        """Fetch a profile's stored configuration."""
+        return self._request("GET", f"/api/profiles/{name}/config")
+
+    def update_profile_config(
+        self, name: str, config: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update a profile configuration."""
+        return self._request("PUT", f"/api/profiles/{name}/config", json=config)
+
     # Alerts
     def list_alert_rules(self) -> dict[str, Any]:
         """List configured alert rules."""

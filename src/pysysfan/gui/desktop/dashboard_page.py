@@ -8,6 +8,7 @@ from typing import Any
 from PySide6.QtCore import QThread, Signal
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
+    QComboBox,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -108,7 +109,36 @@ class DashboardPage(QWidget):
         self.fans_configured_label.setObjectName("fansConfiguredLabel")
         summary_layout.addWidget(self.fans_configured_label, 1, 1)
 
+        self.alert_rules_label = QLabel("Alert rules: N/A", self)
+        self.alert_rules_label.setObjectName("alertRulesLabel")
+        summary_layout.addWidget(self.alert_rules_label, 2, 0)
+
+        self.alert_history_label = QLabel("Recent alerts: N/A", self)
+        self.alert_history_label.setObjectName("alertHistoryLabel")
+        summary_layout.addWidget(self.alert_history_label, 2, 1)
+
         layout.addLayout(summary_layout)
+
+        profile_row = QHBoxLayout()
+        profile_row.setSpacing(12)
+
+        profile_row.addWidget(QLabel("Available profiles", self))
+        self.profile_selector = QComboBox(self)
+        self.profile_selector.setObjectName("profileSelector")
+        profile_row.addWidget(self.profile_selector)
+
+        self.activate_profile_button = QPushButton("Activate Profile", self)
+        self.activate_profile_button.setObjectName("activateProfileButton")
+        self.activate_profile_button.clicked.connect(self.activate_selected_profile)
+        profile_row.addWidget(self.activate_profile_button)
+
+        self.clear_alert_history_button = QPushButton("Clear Alert History", self)
+        self.clear_alert_history_button.setObjectName("clearAlertHistoryButton")
+        self.clear_alert_history_button.clicked.connect(self.clear_alert_history)
+        profile_row.addWidget(self.clear_alert_history_button)
+
+        profile_row.addStretch(1)
+        layout.addLayout(profile_row)
 
         sensor_layout = QHBoxLayout()
         sensor_layout.setSpacing(16)
@@ -131,6 +161,15 @@ class DashboardPage(QWidget):
         fans_column.addWidget(self.fans_list)
         sensor_layout.addLayout(fans_column)
 
+        alerts_column = QVBoxLayout()
+        alerts_heading = QLabel("Recent Alerts", self)
+        alerts_heading.setStyleSheet("font-weight: 600;")
+        alerts_column.addWidget(alerts_heading)
+        self.alerts_list = QListWidget(self)
+        self.alerts_list.setObjectName("alertsList")
+        alerts_column.addWidget(self.alerts_list)
+        sensor_layout.addLayout(alerts_column)
+
         layout.addLayout(sensor_layout)
         layout.addStretch(1)
 
@@ -140,6 +179,9 @@ class DashboardPage(QWidget):
             client = self._get_client()
             status = client.get_status()
             sensors = client.get_sensors()
+            profiles = client.list_profiles()
+            alert_rules = client.list_alert_rules()
+            alert_history = client.get_alert_history(5)
         except Exception as exc:
             self.connection_label.setText("Connection: Disconnected")
             self._show_error(str(exc))
@@ -149,6 +191,41 @@ class DashboardPage(QWidget):
         self._hide_error()
         self._apply_status(status)
         self._apply_sensor_payload(sensors)
+        self._apply_profiles(profiles)
+        self._apply_alerts(alert_rules, alert_history)
+
+    def activate_selected_profile(self) -> None:
+        """Activate the currently selected profile."""
+        profile_name = self.profile_selector.currentText().strip()
+        if not profile_name:
+            self._show_error("Select a profile before activating it")
+            return
+
+        try:
+            response = self._get_client().activate_profile(profile_name)
+        except Exception as exc:
+            self.connection_label.setText("Connection: Disconnected")
+            self._show_error(str(exc))
+            return
+
+        self.connection_label.setText("Connection: Connected")
+        self.refresh_data()
+        self._show_message(
+            response.get("message", f"Switched to profile: {profile_name}")
+        )
+
+    def clear_alert_history(self) -> None:
+        """Clear the alert history shown on the dashboard."""
+        try:
+            self._get_client().clear_alert_history()
+        except Exception as exc:
+            self.connection_label.setText("Connection: Disconnected")
+            self._show_error(str(exc))
+            return
+
+        self.connection_label.setText("Connection: Connected")
+        self.refresh_data()
+        self._show_message("Alert history cleared")
 
     def toggle_live_updates(self) -> None:
         """Start or stop live sensor updates."""
@@ -207,6 +284,38 @@ class DashboardPage(QWidget):
             f"Configured fans: {status.get('fans_configured', 'N/A')}"
         )
 
+    def _apply_profiles(self, profiles_payload: dict[str, Any]) -> None:
+        profiles = profiles_payload.get("profiles", [])
+        active = profiles_payload.get("active")
+        self.profile_selector.blockSignals(True)
+        self.profile_selector.clear()
+        self.profile_selector.addItems(
+            [profile.get("name", "") for profile in profiles if profile.get("name")]
+        )
+        self.profile_selector.blockSignals(False)
+        if active:
+            self.profile_selector.setCurrentText(active)
+        self.activate_profile_button.setEnabled(self.profile_selector.count() > 0)
+
+    def _apply_alerts(
+        self,
+        rules_payload: dict[str, Any],
+        history_payload: dict[str, Any],
+    ) -> None:
+        rules = rules_payload.get("rules", [])
+        alerts = history_payload.get("alerts", [])
+        self.alert_rules_label.setText(f"Alert rules: {len(rules)}")
+        self.alert_history_label.setText(f"Recent alerts: {len(alerts)}")
+        self.alerts_list.clear()
+        for alert in alerts:
+            sensor_id = alert.get("sensor_id", "unknown")
+            alert_type = alert.get("alert_type", "alert")
+            value = alert.get("value", "N/A")
+            self.alerts_list.addItem(f"{sensor_id} [{alert_type}] -> {value}")
+        if not alerts:
+            self.alerts_list.addItem("No recent alerts")
+        self.clear_alert_history_button.setEnabled(bool(alerts))
+
     def _apply_sensor_payload(self, sensors: dict[str, Any]) -> None:
         self.temperatures_list.clear()
         for sensor in sensors.get("temperatures", []):
@@ -237,6 +346,12 @@ class DashboardPage(QWidget):
             self.live_updates_button.setText("Start Live Updates")
 
     def _show_error(self, message: str) -> None:
+        self.error_label.setStyleSheet("color: #b00020;")
+        self.error_label.setText(message)
+        self.error_label.show()
+
+    def _show_message(self, message: str) -> None:
+        self.error_label.setStyleSheet("color: #1d6f42;")
         self.error_label.setText(message)
         self.error_label.show()
 
