@@ -15,6 +15,7 @@ from pysysfan.api.state import StateManager
 from pysysfan.cache import HardwareCacheManager, get_default_cache_manager
 from pysysfan.config import Config, DEFAULT_CONFIG_PATH
 from pysysfan.curves import FanCurve, StaticCurve, parse_curve, InvalidCurveError
+from pysysfan.notifications import NotificationManager
 from pysysfan.profiles import ProfileManager, DEFAULT_PROFILE_NAME
 from pysysfan.temperature import lookup_and_aggregate, get_valid_aggregation_methods
 from pysysfan.watcher import ConfigWatcher
@@ -72,6 +73,9 @@ class FanDaemon:
         self._state_manager = StateManager()
         self._start_time: float = 0.0
 
+        # Notification manager
+        self._notification_manager = NotificationManager()
+
     def stop(self) -> None:
         """Stop the daemon gracefully.
 
@@ -80,6 +84,11 @@ class FanDaemon:
         """
         logger.info("Stopping daemon via API request...")
         self._running = False
+
+    @property
+    def notification_manager(self) -> NotificationManager:
+        """Get the notification manager instance."""
+        return self._notification_manager
 
     # ── Setup / teardown ──────────────────────────────────────────────
 
@@ -394,11 +403,23 @@ class FanDaemon:
         # Fall back to config curves
         return self._curves.get(curve_name)
 
+    def _check_notifications(self, temps: list) -> None:
+        """Check alert rules against current temperature readings."""
+        sensor_readings: dict[str, float] = {}
+        for sensor in temps:
+            sensor_readings[sensor.identifier] = sensor.value
+
+        alerts = self._notification_manager.check(sensor_readings)
+        for alert in alerts:
+            logger.warning(f"ALERT: {alert.message}")
+
     def _run_once(self, cfg: Config) -> dict[str, float]:
         """Perform a single control pass. Returns {fan_name: speed_percent}."""
         applied: dict[str, float] = {}
 
         temps = self._hw.get_temperatures()
+
+        self._check_notifications(temps)
 
         for fan_name, fan_cfg in cfg.fans.items():
             curve = self._get_curve(fan_cfg.curve)
