@@ -76,6 +76,16 @@ export interface APIError {
   detail: string
 }
 
+export interface ServiceStatus {
+  task_installed: boolean;
+  task_enabled: boolean;
+  task_status: string | null;
+  task_last_run: string | null;
+  daemon_running: boolean;
+  daemon_pid: number | null;
+  daemon_healthy: boolean;
+}
+
 export interface AuthResponse {
   access_token: string
   token_type: string

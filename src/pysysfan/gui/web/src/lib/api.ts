@@ -1,4 +1,4 @@
-import type { SystemState, AuthResponse, DaemonStatus, SensorData } from './types'
+import type { SystemState, AuthResponse, DaemonStatus, SensorData, ServiceStatus } from './types'
 
 const API_BASE = 'http://localhost:8765/api'
 
@@ -124,6 +124,43 @@ export class PySysFanAPI {
   async getCurves(): Promise<Record<string, { name: string; points: [number, number][]; hysteresis: number }>> {
     const response = await this.request<{ curves: Record<string, { name: string; points: [number, number][]; hysteresis: number }> }>('/curves')
     return response.curves
+  }
+
+  async getServiceStatus(): Promise<ServiceStatus> {
+    return this.request<ServiceStatus>('/service/status')
+  }
+
+  async installService(configPath?: string): Promise<{ success: boolean; message: string }> {
+    const url = configPath ? `/service/install?config_path=${encodeURIComponent(configPath)}` : '/service/install'
+    return this.request(url, { method: 'POST' })
+  }
+
+  async uninstallService(): Promise<{ success: boolean; message: string }> {
+    return this.request('/service/uninstall', { method: 'POST' })
+  }
+
+  async enableService(): Promise<{ success: boolean; message: string }> {
+    return this.request('/service/enable', { method: 'POST' })
+  }
+
+  async disableService(): Promise<{ success: boolean; message: string }> {
+    return this.request('/service/disable', { method: 'POST' })
+  }
+
+  async startService(): Promise<{ success: boolean; message: string }> {
+    return this.request('/service/start', { method: 'POST' })
+  }
+
+  async stopService(): Promise<{ success: boolean; message: string; method?: string }> {
+    return this.request('/service/stop', { method: 'POST' })
+  }
+
+  async restartService(): Promise<{ success: boolean; message: string }> {
+    return this.request('/service/restart', { method: 'POST' })
+  }
+
+  async getServiceLogs(lines: number = 100): Promise<{ logs: string[]; total_lines: number }> {
+    return this.request(`/service/logs?lines=${lines}`)
   }
 }
 
