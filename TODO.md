@@ -8,7 +8,7 @@
   - Desktop Linux systems with standard PWM controls may be supported in the future
 
 ## Graphical User Interface (GUI)
-- **Status**: Phase 0 (Contracts & Architecture) - COMPLETED ✓
+- **Status**: Phase 7 (Service Management UI) - COMPLETED ✓
 - Optional standalone GUI application
 - Built using Tauri 2.0 + Svelte 5 + FastAPI REST API
 - Features:
@@ -29,5 +29,11 @@
 - Using the ty type checker to improve code quality and maintainability
 - Add type annotations to all functions and classes
 - Ensure 100% type coverage across the codebase
+
+## add tests for UI
+- Unit tests for all UI components
+- Integration tests for API endpoints
+- End-to-end tests simulating user interactions with the GUI
+- Use testing frameworks like Jest for Svelte and pytest for FastAPI
 
 
