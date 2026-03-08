@@ -1,9 +1,32 @@
 export interface TemperatureSensor {
-  id: string
-  name: string
+  identifier: string
+  hardware_name: string
+  sensor_name: string
   value: number
-  min: number
-  max: number
+}
+
+export interface FanSensor {
+  identifier: string
+  hardware_name: string
+  sensor_name: string
+  rpm: number
+  control_percentage?: number
+  controllable?: boolean
+}
+
+export interface ControlSensor {
+  identifier: string
+  hardware_name: string
+  sensor_name: string
+  current_value: number
+  has_control: boolean
+}
+
+export interface SensorData {
+  temperatures: TemperatureSensor[]
+  fans: FanSensor[]
+  controls: ControlSensor[]
+  timestamp: number
 }
 
 export interface FanConfig {
@@ -27,6 +50,26 @@ export interface SystemState {
   fans: FanConfig[]
   curves: Curve[]
   is_running: boolean
+}
+
+export interface DaemonStatus {
+  pid: number | null
+  config_path: string
+  started_at: number | null
+  running: boolean
+  uptime_seconds: number
+  last_poll_time: number | null
+  last_error: string | null
+  poll_interval: number
+  fans_configured: number
+  curves_configured: number
+  active_profile: string
+  current_temps: Record<string, number>
+  current_fan_speeds: Record<string, number>
+  current_targets: Record<string, number>
+  auto_reload_enabled: boolean
+  api_enabled: boolean
+  api_port: number
 }
 
 export interface APIError {

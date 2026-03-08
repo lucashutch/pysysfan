@@ -1,10 +1,13 @@
-import type { SystemState, AuthResponse } from './types'
+import type { SystemState, AuthResponse, DaemonStatus, SensorData } from './types'
 
 const API_BASE = 'http://localhost:8765/api'
+
+type SensorCallback = (data: SensorData) => void
 
 export class PySysFanAPI {
   private baseUrl: string
   private token: string | null = null
+  private eventSource: EventSource | null = null
 
   constructor(baseUrl: string = API_BASE) {
     this.baseUrl = baseUrl
@@ -42,8 +45,6 @@ export class PySysFanAPI {
   }
 
   async initialize(): Promise<void> {
-    // In a real Tauri app, we would read the token from the daemon's token file
-    // For now, this is a placeholder
     this.token = localStorage.getItem('pysysfan_token')
   }
 
@@ -57,8 +58,38 @@ export class PySysFanAPI {
     return response
   }
 
-  async getState(): Promise<SystemState> {
-    return this.request<SystemState>('/state')
+  async getState(): Promise<DaemonStatus> {
+    return this.request<DaemonStatus>('/status')
+  }
+
+  async getSensors(): Promise<SensorData> {
+    return this.request<SensorData>('/sensors')
+  }
+
+  subscribeToSensors(callback: SensorCallback): () => void {
+    if (this.eventSource) {
+      this.eventSource.close()
+    }
+
+    const tokenParam = this.token ? `?token=${encodeURIComponent(this.token)}` : ''
+    const url = `${this.baseUrl}/stream${tokenParam}`
+    this.eventSource = new EventSource(url)
+
+    this.eventSource.addEventListener('sensors', (event) => {
+      const data = JSON.parse(event.data) as SensorData
+      callback(data)
+    })
+
+    this.eventSource.addEventListener('error', (event) => {
+      console.error('SSE Error:', event)
+    })
+
+    return () => {
+      if (this.eventSource) {
+        this.eventSource.close()
+        this.eventSource = null
+      }
+    }
   }
 
   async setFanSpeed(fanId: string, speed: number): Promise<void> {
