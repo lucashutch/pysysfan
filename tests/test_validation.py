@@ -1,6 +1,6 @@
 """Tests for pysysfan.api.validation — Curve and hysteresis validation."""
 
-import pytest
+import pytest  # noqa: F401
 from pysysfan.api.validation import validate_curve, validate_hysteresis
 
 
