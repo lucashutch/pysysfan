@@ -27,7 +27,7 @@ This guide provides detailed instructions for setting up pysysfan on Windows sys
 
 ### Method 1: One-Click Installer (Recommended)
 
-1. Download [`install-pysysfan.bat`](../install-pysysfan.bat)
+1. Download [`scripts/install-pysysfan.bat`](../scripts/install-pysysfan.bat)
 2. Right-click and select "Run as Administrator"
 3. The installer will:
    - Install UV (Python package manager)
@@ -47,6 +47,9 @@ Download and install UV from [https://docs.astral.sh/uv/getting-started/installa
 ```powershell
 # In Administrator PowerShell
 uv tool install pysysfan
+
+# Optional: install the desktop GUI as well
+uv tool install pysysfan --extra gui
 ```
 
 #### Step 3: Download LibreHardwareMonitor
@@ -70,6 +73,9 @@ winget install PawnIO
 ```powershell
 pysysfan lhm info
 pysysfan --help
+
+# Optional desktop helper checks
+python -m pysysfan.gui.build check
 ```
 
 ## Hardware Support
@@ -138,14 +144,16 @@ general:
 
 fans:
   cpu_fan:
-    sensor: "/motherboard/nct6791d/control/0"
+      fan_id: "/motherboard/nct6791d/control/0"
     curve: balanced
-    source: "/amdcpu/0/temperature/0"
+      temp_ids:
+         - "/amdcpu/0/temperature/0"
   
   case_fan:
-    sensor: "/motherboard/nct6791d/control/1"
+      fan_id: "/motherboard/nct6791d/control/1"
     curve: silent
-    source: "/motherboard/nct6791d/temperature/0"
+      temp_ids:
+         - "/motherboard/nct6791d/temperature/0"
 
 curves:
   balanced:
@@ -229,6 +237,9 @@ pysysfan run
 
 # Monitor live sensor values
 pysysfan monitor
+
+# Launch the optional desktop GUI
+pysysfan-gui
 ```
 
 ## Troubleshooting

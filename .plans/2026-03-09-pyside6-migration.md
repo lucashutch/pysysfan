@@ -48,4 +48,5 @@ Move the GUI from the current Svelte/Tauri stack to a native PySide6 desktop cli
 - Completed: legacy web/Tauri GUI sources removed and the helper script retargeted to PySide6.
 - Completed: first API contract slice covering daemon bind host/port propagation, live runtime state snapshots, and truthful fan control metadata.
 - Completed: second API contract slice covering config persistence, partial fan updates, stable alert-rule identity, stream payload parity, and API state default alignment.
+- Completed: desktop helper coverage and Windows/README cleanup for the PySide6 workflow.
 - Next: expand integration coverage further and clean up remaining oversized API/documentation surfaces.

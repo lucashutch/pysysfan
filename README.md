@@ -21,8 +21,20 @@ Windows fan control daemon. Set custom fan curves based on temperature sensors w
 uv tool install pysysfan
 
 # Or use the one-click installer
-# Download: install-pysysfan.bat
+# Download: scripts/install-pysysfan.bat
 ```
+
+### Optional Desktop GUI
+
+```powershell
+# Install the GUI extra when using uv tools
+uv tool install pysysfan --extra gui
+
+# Launch the desktop client
+pysysfan-gui
+```
+
+For a source checkout, install the GUI dependencies with `uv sync --extra gui`, then run `python -m pysysfan.gui.build check` to validate the desktop prerequisites before launching the GUI.
 
 ## First Setup
 
@@ -51,7 +63,7 @@ general:
 fans:
   cpu_fan:
     fan_id: "/motherboard/nct6791d/control/0"
-    temp_id: "/amdcpu/0/temperature/0"
+    temp_ids: ["/amdcpu/0/temperature/0"]
     curve: "balanced"
 
 curves:
@@ -77,6 +89,16 @@ pysysfan scan              # Show all sensors
 pysysfan run --once        # Test config (single pass)
 pysysfan monitor           # Watch live sensor readings
 pysysfan service install   # Install startup service
+```
+
+## Desktop Helper
+
+```powershell
+# Validate optional desktop dependencies
+python -m pysysfan.gui.build check
+
+# Launch the PySide6 GUI from a source checkout
+python -m pysysfan.gui.build launch
 ```
 
 ## Platform Support

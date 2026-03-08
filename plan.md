@@ -27,4 +27,5 @@
 - Phase 2 service host/port and live-state contract slice: completed
 - Phase 2 config persistence and alert identity slice: completed
 - Phase 3 testing overhaul: in progress
-- Phase 4 cleanup: not started
+- Phase 3 desktop helper coverage slice: completed
+- Phase 4 cleanup: in progress
