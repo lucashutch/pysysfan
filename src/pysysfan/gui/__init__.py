@@ -16,4 +16,4 @@ def main():
     # Import here to avoid loading GUI deps on CLI-only usage.
     from pysysfan.gui.desktop import launch_gui
 
-    launch_gui()
+    return launch_gui()

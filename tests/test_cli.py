@@ -1058,8 +1058,8 @@ class TestRunCommandVariations:
     """Additional tests for 'run' command."""
 
     @patch("pysysfan.daemon.FanDaemon")
-    def test_run_with_custom_api_settings(self, mock_daemon_class, tmp_path):
-        """Should use custom API settings."""
+    def test_run_with_custom_config_path(self, mock_daemon_class, tmp_path):
+        """Should create the daemon with the requested config path."""
         cfg_file = tmp_path / "config.yaml"
         cfg_file.write_text("general:\n  poll_interval: 2\nfans: {}\ncurves: {}\n")
 
@@ -1067,27 +1067,14 @@ class TestRunCommandVariations:
         mock_daemon_class.return_value = mock_daemon
 
         runner = CliRunner()
-        runner.invoke(
-            main,
-            [
-                "run",
-                "--config",
-                str(cfg_file),
-                "--api-host",
-                "0.0.0.0",
-                "--api-port",
-                "9000",
-            ],
-        )
-        # Command may fail but should attempt to create daemon with correct args
+        runner.invoke(main, ["run", "--config", str(cfg_file)])
         mock_daemon_class.assert_called_once()
         call_kwargs = mock_daemon_class.call_args.kwargs
-        assert call_kwargs["api_host"] == "0.0.0.0"
-        assert call_kwargs["api_port"] == 9000
+        assert call_kwargs["config_path"] == cfg_file
 
     @patch("pysysfan.daemon.FanDaemon")
-    def test_run_no_api(self, mock_daemon_class, tmp_path):
-        """Should disable API with --no-api."""
+    def test_run_once_still_constructs_daemon(self, mock_daemon_class, tmp_path):
+        """Single-pass mode should still construct the daemon first."""
         cfg_file = tmp_path / "config.yaml"
         cfg_file.write_text("general:\n  poll_interval: 2\nfans: {}\ncurves: {}\n")
 
@@ -1095,10 +1082,10 @@ class TestRunCommandVariations:
         mock_daemon_class.return_value = mock_daemon
 
         runner = CliRunner()
-        runner.invoke(main, ["run", "--config", str(cfg_file), "--no-api"])
+        runner.invoke(main, ["run", "--once", "--config", str(cfg_file)])
         mock_daemon_class.assert_called_once()
         call_kwargs = mock_daemon_class.call_args.kwargs
-        assert call_kwargs["api_enabled"] is False
+        assert call_kwargs["config_path"] == cfg_file
 
 
 # ── Service command variations ───────────────────────────────────────

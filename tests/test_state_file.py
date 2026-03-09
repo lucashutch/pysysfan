@@ -38,6 +38,7 @@ def _sample_state() -> DaemonStateFile:
         fan_speeds=[
             FanSpeedState(
                 identifier="/mb/control/0",
+                control_identifier="/mb/control/0",
                 hardware_name="Motherboard",
                 sensor_name="CPU Fan",
                 rpm=1200.0,

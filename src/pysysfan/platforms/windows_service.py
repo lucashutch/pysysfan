@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 
 from pysysfan.config import DEFAULT_CONFIG_PATH
+from pysysfan.state_file import read_state
 
 logger = logging.getLogger(__name__)
 
@@ -285,9 +286,14 @@ def get_service_status() -> ServiceStatus:
                         pass
                     break
 
-    daemon_running = False
-    daemon_pid = None
-    daemon_healthy = False
+    daemon_state = read_state()
+    daemon_running = daemon_state is not None and daemon_state.running
+    daemon_pid = daemon_state.pid if daemon_state is not None else None
+    daemon_healthy = (
+        daemon_state is not None
+        and daemon_state.running
+        and daemon_state.config_error is None
+    )
 
     return ServiceStatus(
         task_installed=task_installed,

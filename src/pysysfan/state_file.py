@@ -36,6 +36,7 @@ class FanSpeedState:
     """Serializable fan speed snapshot."""
 
     identifier: str
+    control_identifier: str | None
     hardware_name: str
     sensor_name: str
     rpm: float | None
@@ -94,7 +95,10 @@ class DaemonStateFile:
                 TemperatureState(**item) for item in payload.get("temperatures", [])
             ],
             fan_speeds=[
-                FanSpeedState(**item) for item in payload.get("fan_speeds", [])
+                FanSpeedState(control_identifier=None, **item)
+                if "control_identifier" not in item
+                else FanSpeedState(**item)
+                for item in payload.get("fan_speeds", [])
             ],
             fan_targets={
                 str(key): float(value)

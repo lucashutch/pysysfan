@@ -476,6 +476,9 @@ class FanDaemon:
         fan_speeds = [
             FanSpeedState(
                 identifier=fan.identifier,
+                control_identifier=(
+                    control.identifier if control is not None else None
+                ),
                 hardware_name=fan.hardware_name,
                 sensor_name=fan.sensor_name,
                 rpm=fan.value,

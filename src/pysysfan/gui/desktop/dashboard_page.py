@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any
+from collections import defaultdict, deque
+from pathlib import Path
 
-from PySide6.QtCore import QThread, Signal
-from PySide6.QtGui import QCloseEvent
+from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import (
     QComboBox,
     QGridLayout,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -20,51 +20,62 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from pysysfan.api.client import PySysFanClient
+from pysysfan.gui.desktop.local_backend import read_daemon_state, run_service_command
+from pysysfan.platforms import windows_service
+from pysysfan.state_file import DEFAULT_STATE_PATH, DaemonStateFile
 
-
-class SensorStreamWorker(QThread):
-    """Background worker for daemon sensor streaming."""
-
-    sensors_received = Signal(dict)
-    stream_failed = Signal(str)
-    stream_finished = Signal()
-
-    def __init__(self, client: PySysFanClient):
-        super().__init__()
-        self._client = client
-
-    def run(self) -> None:
-        try:
-            for payload in self._client.stream_sensors():
-                if self.isInterruptionRequested():
-                    return
-                self.sensors_received.emit(payload)
-            # Signal that the generator completed naturally so the UI can
-            # transition back to the stopped state deterministically.
-            self.stream_finished.emit()
-        except Exception as exc:
-            self.stream_failed.emit(str(exc))
+try:  # pragma: no cover - exercised indirectly when installed
+    import pyqtgraph as pg
+except ImportError:  # pragma: no cover - fallback path when optional dep missing
+    pg = None
 
 
 class DashboardPage(QWidget):
-    """Desktop dashboard backed by the Python API client."""
+    """Desktop dashboard backed by the local daemon state file."""
+
+    HISTORY_WINDOWS = {
+        "60 s": 60,
+        "5 min": 300,
+        "15 min": 900,
+    }
+    PLOT_COLORS = [
+        "#4E79A7",
+        "#F28E2B",
+        "#E15759",
+        "#76B7B2",
+        "#59A14F",
+        "#EDC948",
+        "#B07AA1",
+        "#FF9DA7",
+    ]
 
     def __init__(
         self,
-        client_factory: Callable[[], PySysFanClient]
-        | type[PySysFanClient]
-        | None = None,
+        state_path: Path = DEFAULT_STATE_PATH,
+        service_action_runner=None,
+        service_status_getter=None,
         parent: QWidget | None = None,
     ):
         super().__init__(parent)
-        # Handle both factory function and class reference
-        if isinstance(client_factory, type):
-            self._client_factory = client_factory
-        else:
-            self._client_factory = client_factory or PySysFanClient
-        self._client: PySysFanClient | None = None
-        self._stream_worker: SensorStreamWorker | None = None
+        self._state_path = Path(state_path)
+        self._service_action_runner = service_action_runner or run_service_command
+        self._service_status_getter = (
+            service_status_getter or windows_service.get_service_status
+        )
+        self._history_seconds = self.HISTORY_WINDOWS["60 s"]
+        self._last_state_timestamp: float | None = None
+        self._temperature_history: dict[str, deque[tuple[float, float]]] = defaultdict(
+            deque
+        )
+        self._fan_rpm_history: dict[str, deque[tuple[float, float]]] = defaultdict(
+            deque
+        )
+        self._fan_target_history: dict[str, deque[tuple[float, float]]] = defaultdict(
+            deque
+        )
+        self._temperature_labels: dict[str, str] = {}
+        self._fan_labels: dict[str, str] = {}
+        self._target_labels: dict[str, str] = {}
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
@@ -75,338 +86,363 @@ class DashboardPage(QWidget):
         heading.setStyleSheet("font-size: 20px; font-weight: 600;")
         layout.addWidget(heading)
 
-        control_row = QHBoxLayout()
-        control_row.setSpacing(12)
+        toolbar = QHBoxLayout()
+        toolbar.setSpacing(12)
 
-        self.connection_label = QLabel("Connection: Disconnected", self)
+        self.connection_label = QLabel("Daemon: Waiting for state file", self)
         self.connection_label.setObjectName("connectionLabel")
-        control_row.addWidget(self.connection_label)
+        toolbar.addWidget(self.connection_label)
 
         self.refresh_button = QPushButton("Refresh", self)
         self.refresh_button.setObjectName("refreshButton")
         self.refresh_button.clicked.connect(self.refresh_data)
-        control_row.addWidget(self.refresh_button)
+        toolbar.addWidget(self.refresh_button)
 
-        self.live_updates_button = QPushButton("Start Live Updates", self)
-        self.live_updates_button.setObjectName("liveUpdatesButton")
-        self.live_updates_button.clicked.connect(self.toggle_live_updates)
-        control_row.addWidget(self.live_updates_button)
+        self.start_service_button = QPushButton("Start Service", self)
+        self.start_service_button.setObjectName("startServiceButton")
+        self.start_service_button.clicked.connect(self.start_service)
+        toolbar.addWidget(self.start_service_button)
 
-        control_row.addStretch(1)
-        layout.addLayout(control_row)
+        toolbar.addWidget(QLabel("History", self))
+        self.history_selector = QComboBox(self)
+        self.history_selector.setObjectName("historySelector")
+        self.history_selector.addItems(list(self.HISTORY_WINDOWS))
+        self.history_selector.currentTextChanged.connect(self._change_history_window)
+        toolbar.addWidget(self.history_selector)
 
-        self.error_label = QLabel("", self)
-        self.error_label.setObjectName("errorLabel")
-        self.error_label.setWordWrap(True)
-        self.error_label.hide()
-        layout.addWidget(self.error_label)
+        toolbar.addStretch(1)
+        layout.addLayout(toolbar)
 
-        summary_layout = QGridLayout()
+        self.message_label = QLabel("", self)
+        self.message_label.setObjectName("dashboardMessageLabel")
+        self.message_label.setWordWrap(True)
+        self.message_label.hide()
+        layout.addWidget(self.message_label)
+
+        summary_group = QGroupBox("Daemon Summary", self)
+        summary_layout = QGridLayout(summary_group)
         summary_layout.setHorizontalSpacing(24)
         summary_layout.setVerticalSpacing(8)
 
         self.active_profile_label = QLabel("Active profile: N/A", self)
-        self.active_profile_label.setObjectName("activeProfileLabel")
-        summary_layout.addWidget(self.active_profile_label, 0, 0)
-
         self.uptime_label = QLabel("Uptime: N/A", self)
-        self.uptime_label.setObjectName("uptimeLabel")
-        summary_layout.addWidget(self.uptime_label, 0, 1)
-
         self.poll_interval_label = QLabel("Poll interval: N/A", self)
-        self.poll_interval_label.setObjectName("pollIntervalLabel")
-        summary_layout.addWidget(self.poll_interval_label, 1, 0)
-
         self.fans_configured_label = QLabel("Configured fans: N/A", self)
-        self.fans_configured_label.setObjectName("fansConfiguredLabel")
+        self.curves_configured_label = QLabel("Configured curves: N/A", self)
+        self.config_path_label = QLabel("Config path: N/A", self)
+        self.config_path_label.setWordWrap(True)
+        self.config_error_label = QLabel("Config error: none", self)
+        self.config_error_label.setWordWrap(True)
+
+        summary_layout.addWidget(self.active_profile_label, 0, 0)
+        summary_layout.addWidget(self.uptime_label, 0, 1)
+        summary_layout.addWidget(self.poll_interval_label, 1, 0)
         summary_layout.addWidget(self.fans_configured_label, 1, 1)
+        summary_layout.addWidget(self.curves_configured_label, 2, 0)
+        summary_layout.addWidget(self.config_path_label, 2, 1)
+        summary_layout.addWidget(self.config_error_label, 3, 0, 1, 2)
+        layout.addWidget(summary_group)
 
-        self.alert_rules_label = QLabel("Alert rules: N/A", self)
-        self.alert_rules_label.setObjectName("alertRulesLabel")
-        summary_layout.addWidget(self.alert_rules_label, 2, 0)
+        tables_layout = QHBoxLayout()
+        tables_layout.setSpacing(16)
 
-        self.alert_history_label = QLabel("Recent alerts: N/A", self)
-        self.alert_history_label.setObjectName("alertHistoryLabel")
-        summary_layout.addWidget(self.alert_history_label, 2, 1)
+        self.temperatures_table = QTableWidget(0, 3, self)
+        self.temperatures_table.setObjectName("temperaturesTable")
+        self.temperatures_table.setHorizontalHeaderLabels(
+            ["Hardware", "Sensor", "Value"]
+        )
+        self.temperatures_table.horizontalHeader().setStretchLastSection(True)
+        temps_group = self._wrap_widget("Temperatures", self.temperatures_table)
+        tables_layout.addWidget(temps_group, 2)
 
-        layout.addLayout(summary_layout)
+        self.fans_table = QTableWidget(0, 5, self)
+        self.fans_table.setObjectName("fansTable")
+        self.fans_table.setHorizontalHeaderLabels(
+            ["Hardware", "Fan", "RPM", "Actual PWM", "Target PWM"]
+        )
+        self.fans_table.horizontalHeader().setStretchLastSection(True)
+        fans_group = self._wrap_widget("Fans", self.fans_table)
+        tables_layout.addWidget(fans_group, 3)
 
-        profile_row = QHBoxLayout()
-        profile_row.setSpacing(12)
-
-        profile_row.addWidget(QLabel("Available profiles", self))
-        self.profile_selector = QComboBox(self)
-        self.profile_selector.setObjectName("profileSelector")
-        profile_row.addWidget(self.profile_selector)
-
-        self.activate_profile_button = QPushButton("Activate Profile", self)
-        self.activate_profile_button.setObjectName("activateProfileButton")
-        self.activate_profile_button.clicked.connect(self.activate_selected_profile)
-        profile_row.addWidget(self.activate_profile_button)
-
-        self.clear_alert_history_button = QPushButton("Clear Alert History", self)
-        self.clear_alert_history_button.setObjectName("clearAlertHistoryButton")
-        self.clear_alert_history_button.clicked.connect(self.clear_alert_history)
-        profile_row.addWidget(self.clear_alert_history_button)
-
-        profile_row.addStretch(1)
-        layout.addLayout(profile_row)
-
-        sensor_layout = QHBoxLayout()
-        sensor_layout.setSpacing(16)
-
-        temps_column = QVBoxLayout()
-        temps_heading = QLabel("Temperatures", self)
-        temps_heading.setStyleSheet("font-weight: 600;")
-        temps_column.addWidget(temps_heading)
-        self.temperatures_list = QTableWidget(0, 2, self)
-        self.temperatures_list.setObjectName("temperaturesList")
-        self.temperatures_list.setHorizontalHeaderLabels(["Sensor", "Value"])
-        self.temperatures_list.horizontalHeader().setStretchLastSection(False)
-        temps_column.addWidget(self.temperatures_list)
-        sensor_layout.addLayout(temps_column)
-
-        fans_column = QVBoxLayout()
-        fans_heading = QLabel("Fans", self)
-        fans_heading.setStyleSheet("font-weight: 600;")
-        fans_column.addWidget(fans_heading)
-        self.fans_list = QTableWidget(0, 2, self)
-        self.fans_list.setObjectName("fansList")
-        self.fans_list.setHorizontalHeaderLabels(["Fan", "Speed"])
-        self.fans_list.horizontalHeader().setStretchLastSection(False)
-        fans_column.addWidget(self.fans_list)
-        sensor_layout.addLayout(fans_column)
-
-        alerts_column = QVBoxLayout()
-        alerts_heading = QLabel("Recent Alerts", self)
-        alerts_heading.setStyleSheet("font-weight: 600;")
-        alerts_column.addWidget(alerts_heading)
         self.alerts_list = QListWidget(self)
         self.alerts_list.setObjectName("alertsList")
-        alerts_column.addWidget(self.alerts_list)
-        sensor_layout.addLayout(alerts_column)
+        alerts_group = self._wrap_widget("Recent Alerts", self.alerts_list)
+        tables_layout.addWidget(alerts_group, 2)
 
-        layout.addLayout(sensor_layout)
+        layout.addLayout(tables_layout)
+
+        plots_layout = QGridLayout()
+        plots_layout.setHorizontalSpacing(16)
+        plots_layout.setVerticalSpacing(16)
+
+        self.temperature_plot = self._create_plot_widget(
+            "Temperatures", "Seconds", "°C"
+        )
+        self.fan_rpm_plot = self._create_plot_widget("Fan RPM", "Seconds", "RPM")
+        self.fan_target_plot = self._create_plot_widget("Target PWM", "Seconds", "%")
+
+        plots_layout.addWidget(self.temperature_plot, 0, 0)
+        plots_layout.addWidget(self.fan_rpm_plot, 0, 1)
+        plots_layout.addWidget(self.fan_target_plot, 1, 0, 1, 2)
+        layout.addLayout(plots_layout)
         layout.addStretch(1)
 
-    def closeEvent(self, event: QCloseEvent) -> None:
-        """Stop streaming worker before closing."""
-        self.stop_live_updates()
-        super().closeEvent(event)
-
-    def __del__(self) -> None:
-        """Ensure worker is stopped on deletion."""
-        self.stop_live_updates()
+        self._refresh_timer = QTimer(self)
+        self._refresh_timer.setInterval(1000)
+        self._refresh_timer.timeout.connect(self.refresh_data)
+        self._refresh_timer.start()
 
     def refresh_data(self) -> None:
-        """Refresh the dashboard using the latest daemon snapshot and sensors."""
+        """Refresh the dashboard using the latest local daemon state."""
         try:
-            client = self._get_client()
-            status = client.get_status()
-            sensors = client.get_sensors()
-            profiles = client.list_profiles()
-            alert_rules = client.list_alert_rules()
-            alert_history = client.get_alert_history(5)
-        except Exception as exc:
-            self.connection_label.setText("Connection: Disconnected")
-            self._show_error(str(exc))
+            service_status = self._service_status_getter()
+        except Exception:
+            service_status = None
+
+        state = read_daemon_state(self._state_path)
+        if state is None:
+            self._apply_offline_state(service_status)
             return
 
-        self.connection_label.setText("Connection: Connected")
-        self._hide_error()
-        self._apply_status(status)
-        self._apply_sensor_payload(sensors)
-        self._apply_profiles(profiles)
-        self._apply_alerts(alert_rules, alert_history)
+        self.connection_label.setText("Daemon: Connected")
+        self.start_service_button.setEnabled(False)
+        self._show_message("", is_error=False)
+        self._apply_summary(state)
+        self._apply_temperatures(state)
+        self._apply_fans(state)
+        self._apply_alerts(state)
+        self._append_history(state)
+        self._refresh_plots()
 
-    def activate_selected_profile(self) -> None:
-        """Activate the currently selected profile."""
-        profile_name = self.profile_selector.currentText().strip()
-        if not profile_name:
-            self._show_error("Select a profile before activating it")
-            return
-
-        try:
-            response = self._get_client().activate_profile(profile_name)
-        except Exception as exc:
-            self.connection_label.setText("Connection: Disconnected")
-            self._show_error(str(exc))
-            return
-
-        self.connection_label.setText("Connection: Connected")
+    def start_service(self) -> None:
+        """Request startup of the configured service/task."""
+        success, message = self._service_action_runner("start")
         self.refresh_data()
-        self._show_message(
-            response.get("message", f"Switched to profile: {profile_name}")
-        )
+        self._show_message(message, is_error=not success)
 
-    def clear_alert_history(self) -> None:
-        """Clear the alert history shown on the dashboard."""
-        try:
-            self._get_client().clear_alert_history()
-        except Exception as exc:
-            self.connection_label.setText("Connection: Disconnected")
-            self._show_error(str(exc))
-            return
+    def _apply_offline_state(self, service_status) -> None:
+        self.connection_label.setText("Daemon: Not running")
+        installed = bool(getattr(service_status, "task_installed", False))
+        self.start_service_button.setEnabled(installed)
+        if installed:
+            self._show_message(
+                "Daemon state file not found. Start the service to resume monitoring.",
+                is_error=True,
+            )
+        else:
+            self._show_message(
+                "Daemon state file not found. Install the service from the Service tab.",
+                is_error=True,
+            )
 
-        self.connection_label.setText("Connection: Connected")
-        self.refresh_data()
-        self._show_message("Alert history cleared")
-
-    def toggle_live_updates(self) -> None:
-        """Start or stop live sensor updates."""
-        if self._stream_worker and self._stream_worker.isRunning():
-            self.stop_live_updates()
-            return
-
-        try:
-            worker = SensorStreamWorker(self._get_client())
-        except Exception as exc:
-            self._show_error(str(exc))
-            return
-
-        worker.sensors_received.connect(self._handle_stream_payload)
-        worker.stream_failed.connect(self._handle_stream_failure)
-        worker.stream_finished.connect(self._handle_stream_finished)
-        worker.finished.connect(self._handle_stream_finished)
-        self._stream_worker = worker
-        self.live_updates_button.setText("Stop Live Updates")
-        worker.start()
-
-    def stop_live_updates(self) -> None:
-        """Stop the active sensor stream worker, if present."""
-        if self._stream_worker is None:
-            return
-
-        self._stream_worker.requestInterruption()
-        self._stream_worker.wait(1000)
-        self._stream_worker = None
-        self.live_updates_button.setText("Start Live Updates")
-
-    def _get_client(self) -> PySysFanClient:
-        if self._client is None:
-            self._client = self._client_factory()
-        return self._client
-
-    def _apply_status(self, status: dict[str, Any]) -> None:
-        self.active_profile_label.setText(
-            f"Active profile: {status.get('active_profile', 'N/A')}"
-        )
-        uptime = status.get("uptime_seconds")
-        uptime_text = f"{uptime:.1f}s" if isinstance(uptime, (int, float)) else "N/A"
-        self.uptime_label.setText(f"Uptime: {uptime_text}")
-        poll_interval = status.get("poll_interval")
-        poll_text = (
-            f"{poll_interval:.1f}s"
-            if isinstance(poll_interval, (int, float))
-            else "N/A"
-        )
-        self.poll_interval_label.setText(f"Poll interval: {poll_text}")
-        self.fans_configured_label.setText(
-            f"Configured fans: {status.get('fans_configured', 'N/A')}"
-        )
-
-    def _apply_profiles(self, profiles_payload: dict[str, Any]) -> None:
-        profiles = profiles_payload.get("profiles", [])
-        active = profiles_payload.get("active")
-        self.profile_selector.blockSignals(True)
-        self.profile_selector.clear()
-        self.profile_selector.addItems(
-            [profile.get("name", "") for profile in profiles if profile.get("name")]
-        )
-        self.profile_selector.blockSignals(False)
-        if active:
-            self.profile_selector.setCurrentText(active)
-        self.activate_profile_button.setEnabled(self.profile_selector.count() > 0)
-
-    def _apply_alerts(
-        self,
-        rules_payload: dict[str, Any],
-        history_payload: dict[str, Any],
-    ) -> None:
-        rules = rules_payload.get("rules", [])
-        alerts = history_payload.get("alerts", [])
-        self.alert_rules_label.setText(f"Alert rules: {len(rules)}")
-        self.alert_history_label.setText(f"Recent alerts: {len(alerts)}")
+        self.active_profile_label.setText("Active profile: N/A")
+        self.uptime_label.setText("Uptime: N/A")
+        self.poll_interval_label.setText("Poll interval: N/A")
+        self.fans_configured_label.setText("Configured fans: N/A")
+        self.curves_configured_label.setText("Configured curves: N/A")
+        self.config_path_label.setText("Config path: N/A")
+        self.config_error_label.setText("Config error: N/A")
+        self.temperatures_table.setRowCount(0)
+        self.fans_table.setRowCount(0)
         self.alerts_list.clear()
-        for alert in alerts:
-            sensor_id = alert.get("sensor_id", "unknown")
-            alert_type = alert.get("alert_type", "alert")
-            value = alert.get("value", "N/A")
-            self.alerts_list.addItem(f"{sensor_id} [{alert_type}] -> {value}")
-        if not alerts:
+        self.alerts_list.addItem("No daemon state available")
+        self._refresh_plots()
+
+    def _apply_summary(self, state: DaemonStateFile) -> None:
+        self.active_profile_label.setText(f"Active profile: {state.active_profile}")
+        self.uptime_label.setText(f"Uptime: {state.uptime_seconds:.1f}s")
+        self.poll_interval_label.setText(f"Poll interval: {state.poll_interval:.1f}s")
+        self.fans_configured_label.setText(f"Configured fans: {state.fans_configured}")
+        self.curves_configured_label.setText(
+            f"Configured curves: {state.curves_configured}"
+        )
+        self.config_path_label.setText(f"Config path: {state.config_path}")
+        if state.config_error:
+            self.config_error_label.setText(f"Config error: {state.config_error}")
+        else:
+            self.config_error_label.setText("Config error: none")
+
+    def _apply_temperatures(self, state: DaemonStateFile) -> None:
+        self.temperatures_table.setRowCount(len(state.temperatures))
+        for row, sensor in enumerate(state.temperatures):
+            self._temperature_labels[sensor.identifier] = (
+                f"{sensor.hardware_name} / {sensor.sensor_name}"
+            )
+            self.temperatures_table.setItem(
+                row, 0, QTableWidgetItem(sensor.hardware_name)
+            )
+            self.temperatures_table.setItem(
+                row, 1, QTableWidgetItem(sensor.sensor_name)
+            )
+            value_text = "N/A" if sensor.value is None else f"{sensor.value:.1f}°C"
+            self.temperatures_table.setItem(row, 2, QTableWidgetItem(value_text))
+
+    def _apply_fans(self, state: DaemonStateFile) -> None:
+        self.fans_table.setRowCount(len(state.fan_speeds))
+        for row, fan in enumerate(state.fan_speeds):
+            label = f"{fan.hardware_name} / {fan.sensor_name}"
+            self._fan_labels[fan.identifier] = label
+            target_label = fan.control_identifier or fan.identifier
+            self._target_labels[target_label] = label
+            target_value = (
+                state.fan_targets.get(fan.control_identifier)
+                if fan.control_identifier is not None
+                else None
+            )
+            rpm_text = "N/A" if fan.rpm is None else f"{fan.rpm:.0f}"
+            actual_pwm_text = (
+                "N/A"
+                if fan.current_control_pct is None
+                else f"{fan.current_control_pct:.1f}%"
+            )
+            target_pwm_text = "N/A" if target_value is None else f"{target_value:.1f}%"
+            self.fans_table.setItem(row, 0, QTableWidgetItem(fan.hardware_name))
+            self.fans_table.setItem(row, 1, QTableWidgetItem(fan.sensor_name))
+            self.fans_table.setItem(row, 2, QTableWidgetItem(rpm_text))
+            self.fans_table.setItem(row, 3, QTableWidgetItem(actual_pwm_text))
+            self.fans_table.setItem(row, 4, QTableWidgetItem(target_pwm_text))
+
+    def _apply_alerts(self, state: DaemonStateFile) -> None:
+        self.alerts_list.clear()
+        if not state.recent_alerts:
             self.alerts_list.addItem("No recent alerts")
-        self.clear_alert_history_button.setEnabled(bool(alerts))
+            return
 
-    def _apply_sensor_payload(self, sensors: dict[str, Any]) -> None:
-        # Update temperatures table
-        temps = sensors.get("temperatures", [])
-        self.temperatures_list.setRowCount(len(temps))
-        for row, sensor in enumerate(temps):
-            hw_name = sensor.get("hardware_name", "Unknown")
-            sensor_name = sensor.get("sensor_name", "Unknown")
-            value = sensor.get("value", "N/A")
+        for alert in reversed(state.recent_alerts[-10:]):
+            self.alerts_list.addItem(
+                f"{alert.sensor_id} [{alert.alert_type}] - {alert.message}"
+            )
 
-            # Name column
-            name_item = QTableWidgetItem(f"{hw_name} / {sensor_name}")
-            self.temperatures_list.setItem(row, 0, name_item)
+    def _append_history(self, state: DaemonStateFile) -> None:
+        if self._last_state_timestamp == state.timestamp:
+            return
 
-            # Value column
-            if isinstance(value, (int, float)):
-                value_text = f"{value:.1f}°C"
-            else:
-                value_text = str(value)
-            value_item = QTableWidgetItem(value_text)
-            self.temperatures_list.setItem(row, 1, value_item)
+        self._last_state_timestamp = state.timestamp
+        for sensor in state.temperatures:
+            if sensor.value is not None:
+                self._temperature_history[sensor.identifier].append(
+                    (state.timestamp, sensor.value)
+                )
 
-        # Update fans table
-        fans = sensors.get("fans", [])
-        self.fans_list.setRowCount(len(fans))
-        for row, fan in enumerate(fans):
-            hw_name = fan.get("hardware_name", "Unknown")
-            sensor_name = fan.get("sensor_name", "Unknown")
-            rpm = fan.get("rpm", "N/A")
+        for fan in state.fan_speeds:
+            if fan.rpm is not None:
+                self._fan_rpm_history[fan.identifier].append((state.timestamp, fan.rpm))
+            if fan.control_identifier is not None:
+                target = state.fan_targets.get(fan.control_identifier)
+                if target is not None:
+                    self._fan_target_history[fan.control_identifier].append(
+                        (state.timestamp, target)
+                    )
 
-            # Name column
-            name_item = QTableWidgetItem(f"{hw_name} / {sensor_name}")
-            self.fans_list.setItem(row, 0, name_item)
+        self._trim_history(state.timestamp)
 
-            # Value column
-            if isinstance(rpm, (int, float)):
-                rpm_text = f"{int(round(rpm))} RPM"
-            else:
-                rpm_text = str(rpm)
-            value_item = QTableWidgetItem(rpm_text)
-            self.fans_list.setItem(row, 1, value_item)
+    def _trim_history(self, latest_timestamp: float) -> None:
+        cutoff = latest_timestamp - self._history_seconds
+        for history_map in (
+            self._temperature_history,
+            self._fan_rpm_history,
+            self._fan_target_history,
+        ):
+            for sensor_id in list(history_map.keys()):
+                series = history_map[sensor_id]
+                while series and series[0][0] < cutoff:
+                    series.popleft()
+                if not series:
+                    del history_map[sensor_id]
 
-    def _handle_stream_payload(self, sensors: dict[str, Any]) -> None:
-        self.connection_label.setText("Connection: Connected")
-        self._hide_error()
-        self._apply_sensor_payload(sensors)
+    def _change_history_window(self, label: str) -> None:
+        self._history_seconds = self.HISTORY_WINDOWS.get(label, 60)
+        if self._last_state_timestamp is not None:
+            self._trim_history(self._last_state_timestamp)
+        self._refresh_plots()
 
-    def _handle_stream_failure(self, message: str) -> None:
-        self.connection_label.setText("Connection: Disconnected")
-        self._show_error(message)
-        self.stop_live_updates()
+    def _create_plot_widget(self, title: str, x_label: str, y_label: str) -> QWidget:
+        if pg is None:
+            fallback = QLabel(
+                f"Install pyqtgraph to enable the {title.lower()} graph.",
+                self,
+            )
+            fallback.setWordWrap(True)
+            return self._wrap_widget(title, fallback)
 
-    def _handle_stream_finished(self) -> None:
-        # Regardless of thread running state, treat this as the end of
-        # the active stream and update UI immediately. This makes the
-        # behaviour deterministic across platforms and avoids races
-        # where the thread finishes slightly later than the payload
-        # delivery.
-        self._stream_worker = None
-        self.live_updates_button.setText("Start Live Updates")
+        plot_widget = pg.PlotWidget(self)
+        plot_widget.setBackground("w")
+        plot_widget.showGrid(x=True, y=True, alpha=0.2)
+        plot_widget.setLabel("bottom", x_label)
+        plot_widget.setLabel("left", y_label)
+        plot_widget.addLegend()
+        return self._wrap_widget(title, plot_widget)
 
-    def _show_error(self, message: str) -> None:
-        self.error_label.setStyleSheet("color: #b00020;")
-        self.error_label.setText(message)
-        self.error_label.show()
+    def _refresh_plots(self) -> None:
+        if pg is None:
+            return
 
-    def _show_message(self, message: str) -> None:
-        self.error_label.setStyleSheet("color: #1d6f42;")
-        self.error_label.setText(message)
-        self.error_label.show()
+        self._refresh_plot_widget(
+            self.temperature_plot,
+            self._temperature_history,
+            self._temperature_labels,
+        )
+        self._refresh_plot_widget(
+            self.fan_rpm_plot,
+            self._fan_rpm_history,
+            self._fan_labels,
+        )
+        self._refresh_plot_widget(
+            self.fan_target_plot,
+            self._fan_target_history,
+            self._target_labels,
+        )
 
-    def _hide_error(self) -> None:
-        self.error_label.clear()
-        self.error_label.hide()
+    def _refresh_plot_widget(
+        self,
+        plot_container: QWidget,
+        history_map: dict[str, deque[tuple[float, float]]],
+        labels: dict[str, str],
+    ) -> None:
+        plot_widget = plot_container.layout().itemAt(0).widget()
+        if pg is None or not isinstance(plot_widget, pg.PlotWidget):
+            return
+
+        plot_item = plot_widget.getPlotItem()
+        plot_item.clear()
+        if plot_item.legend is None:
+            plot_item.addLegend()
+        else:
+            plot_item.legend.clear()
+        if not history_map:
+            return
+
+        latest_timestamp = max(
+            series[-1][0] for series in history_map.values() if series
+        )
+        for index, (sensor_id, series) in enumerate(sorted(history_map.items())):
+            if not series:
+                continue
+            xs = [point[0] - latest_timestamp for point in series]
+            ys = [point[1] for point in series]
+            color = self.PLOT_COLORS[index % len(self.PLOT_COLORS)]
+            plot_widget.plot(
+                xs,
+                ys,
+                pen=pg.mkPen(color=color, width=2),
+                name=labels.get(sensor_id, sensor_id),
+            )
+
+    @staticmethod
+    def _wrap_widget(title: str, widget: QWidget) -> QGroupBox:
+        group = QGroupBox(title)
+        layout = QVBoxLayout(group)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.addWidget(widget)
+        return group
+
+    def _show_message(self, message: str, *, is_error: bool) -> None:
+        if not message:
+            self.message_label.clear()
+            self.message_label.hide()
+            return
+
+        color = "#b00020" if is_error else "#1d6f42"
+        self.message_label.setStyleSheet(f"color: {color};")
+        self.message_label.setText(message)
+        self.message_label.show()

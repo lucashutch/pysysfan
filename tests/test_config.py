@@ -156,7 +156,7 @@ def test_load_empty_file(tmp_path):
     cfg_file = tmp_path / "empty.yaml"
     cfg_file.write_text("")
     cfg = Config.load(cfg_file)
-    assert cfg.poll_interval == 2.0
+    assert cfg.poll_interval == 1.0
     assert len(cfg.fans) == 0
     assert "balanced" in cfg.curves  # default preset added
 
@@ -326,7 +326,7 @@ def test_get_default_config():
     from pysysfan.config import get_default_config
 
     cfg = get_default_config()
-    assert cfg.poll_interval == 2.0
+    assert cfg.poll_interval == 1.0
     assert len(cfg.fans) == 0
 
 

@@ -80,6 +80,7 @@ class TestDaemonStateSnapshots:
         assert state.curves_configured == 1
         assert state.fan_targets == {"/mb/control/0": 60.0}
         assert state.temperatures[0].value == 61.5
+        assert state.fan_speeds[0].control_identifier == "/mb/control/0"
         assert state.fan_speeds[0].current_control_pct == 55.0
         assert state.fan_speeds[0].controllable is True
 
