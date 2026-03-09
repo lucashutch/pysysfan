@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QMainWindow, QTabWidget, QWidget
 
 from pysysfan.gui.desktop.curves_page import CurvesPage
 from pysysfan.gui.desktop.dashboard_page import DashboardPage
 from pysysfan.gui.desktop.service_page import ServicePage
+from pysysfan.gui.desktop.theme import main_window_stylesheet
 
 
 class MainWindow(QMainWindow):
@@ -20,6 +22,7 @@ class MainWindow(QMainWindow):
 
         self.tab_widget = QTabWidget(self)
         self.tab_widget.setObjectName("mainTabs")
+        self.tab_widget.setDocumentMode(True)
         self.setCentralWidget(self.tab_widget)
 
         self.dashboard_page = DashboardPage(parent=self)
@@ -29,9 +32,14 @@ class MainWindow(QMainWindow):
         self.tab_widget.addTab(self.dashboard_page, "Dashboard")
         self.tab_widget.addTab(self.curves_page, "Config")
         self.tab_widget.addTab(self.service_page, "Service")
+        self.tab_widget.setCornerWidget(
+            self.dashboard_page.status_corner_widget,
+            Qt.Corner.TopRightCorner,
+        )
 
         self.statusBar().showMessage("Local desktop GUI ready")
         self._first_show_done = False
+        self.setStyleSheet(main_window_stylesheet(self.palette()))
 
     def showEvent(self, event) -> None:  # noqa: N802
         """Refresh pages once when the window is first shown."""

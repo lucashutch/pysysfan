@@ -97,9 +97,12 @@ QGroupBox::title {{
     color: {colors["text"]};
 }}
 
-QFrame#profileSummaryCard,
 QFrame[cardRole="fan-summary"],
-QFrame#statusStrip {{
+QWidget#dashboardStatusCorner {{
+    background: transparent;
+}}
+
+QFrame[cardRole="fan-summary"] {{
     border: 1px solid {colors["border"]};
     border-radius: 18px;
     background: {colors["card"]};
@@ -191,6 +194,64 @@ QHeaderView::section {{
     border-bottom: 1px solid {colors["border"]};
     padding: 8px;
     font-weight: 700;
+}}
+"""
+
+
+def main_window_stylesheet(palette: QPalette) -> str:
+    """Return palette-aware tab styling for the desktop shell."""
+    colors = desktop_colors(palette)
+    selected_background = colors["panel"]
+    hover_background = _hex(
+        _mix(QColor(colors["raised"]), QColor(colors["accent"]), 0.12)
+    )
+    border_color = colors["border"]
+    selected_border = colors["accent"]
+    muted = colors["muted"]
+    return f"""
+QMainWindow#mainWindow {{
+    background: {colors["window"]};
+    color: {colors["text"]};
+}}
+
+QTabWidget#mainTabs::pane {{
+    border: 1px solid {border_color};
+    border-radius: 18px;
+    top: -1px;
+    background: {colors["window"]};
+}}
+
+QTabBar::tab {{
+    background: {colors["raised"]};
+    color: {muted};
+    border: 1px solid transparent;
+    border-top-left-radius: 14px;
+    border-top-right-radius: 14px;
+    padding: 12px 22px;
+    margin-right: 6px;
+    font-size: 14px;
+    font-weight: 700;
+    min-width: 130px;
+}}
+
+QTabBar::tab:selected {{
+    color: {colors["text"]};
+    background: {selected_background};
+    border-color: {selected_border};
+}}
+
+QTabBar::tab:hover:!selected {{
+    background: {hover_background};
+    color: {colors["text"]};
+}}
+
+QWidget#dashboardStatusCorner {{
+    background: transparent;
+}}
+
+QStatusBar {{
+    background: {colors["window"]};
+    color: {muted};
 }}
 """
 

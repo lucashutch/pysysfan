@@ -9,7 +9,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QPushButton
+from PySide6.QtWidgets import QFrame, QLabel, QPushButton
 
 from pysysfan.config import Config, CurveConfig, FanConfig, UpdateConfig
 from pysysfan.gui.desktop.dashboard_page import DashboardPage
@@ -158,7 +158,7 @@ def _create_multi_fan_profile_manager(tmp_path) -> ProfileManager:
 
 
 def test_dashboard_refresh_populates_snapshot(qtbot, tmp_path) -> None:
-    """Refreshing the dashboard should populate compact summary widgets."""
+    """Refreshing the dashboard should populate grouped fan mapping widgets."""
     profile_manager = _create_profile_manager(tmp_path)
     config_path = profile_manager.get_profile_config_path("gaming")
     state_path = tmp_path / "daemon_state.json"
@@ -176,17 +176,21 @@ def test_dashboard_refresh_populates_snapshot(qtbot, tmp_path) -> None:
     assert page.main_splitter.count() == 2
     assert page.daemon_indicator.text() == "●"
     assert page.alerts_button.text() == "⚠ 1"
-    assert page.active_profile_label.text() == "Gaming Mode"
-    assert page.profile_status_badge.text() == "Active"
-    assert (
-        page.active_profile_meta_label.text() == "1 fan mappings • 1 sensors • 3 curves"
-    )
-    assert "Aggressive cooling" in page.active_profile_description_label.text()
-    assert "CPU Fan → CPU / Package" in page.profile_mapping_label.text()
+    assert page.findChild(QFrame, "statusStrip") is None
+    assert page.findChild(QFrame, "profileSummaryCard") is None
     assert page.fan_summary_layout.count() == 1
-    assert page.fan_summary_layout.itemAt(0).widget().objectName() == (
-        "cpu_fanSummaryCard"
+    group_card = page.fan_summary_layout.itemAt(0).widget()
+    assert group_card.objectName() == "motherboardGroupCard"
+    assert group_card.findChild(QLabel, "fanGroupTitleLabel").text() == "Motherboard"
+    assert "CPU Fan" in group_card.findChild(QLabel, "fanGroupMembersLabel").text()
+    assert (
+        "CPU / Package 61.5°C"
+        in group_card.findChild(
+            QLabel,
+            "fanGroupSensorsLabel",
+        ).text()
     )
+    assert page._graph_controls["temperature"]["legend"].text().count("Package") == 1
     assert page.temperature_plot.minimumHeight() >= 320
     assert page.fan_rpm_plot.minimumHeight() >= 240
     assert page.fan_target_plot.minimumHeight() >= 240
@@ -206,8 +210,6 @@ def test_dashboard_shows_offline_message_without_state(qtbot, tmp_path) -> None:
 
     assert page.daemon_indicator.text() == "●"
     assert page.alerts_button.text() == "⚠ 0"
-    assert page.profile_status_badge.text() == "Offline"
-    assert page.active_profile_label.text() == "No active config"
     assert "state file" in page.message_label.text().lower()
     assert page.fan_summary_empty_label.isVisible() is True
 
@@ -340,6 +342,7 @@ def test_dashboard_graphs_default_to_grouped_and_controlled_series(
     assert "Motherboard" in fan_actions
     assert any(text.startswith("Fan · Motherboard / CPU Fan") for text in fan_actions)
     assert page._graph_controls["fan_rpm"]["button"].text() == "Series (1)"
+    assert "Motherboard" in page._graph_controls["fan_rpm"]["legend"].text()
 
 
 def test_dashboard_graph_series_menu_toggles_visibility(qtbot, tmp_path) -> None:
