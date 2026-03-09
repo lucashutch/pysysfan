@@ -44,7 +44,7 @@
 - remove unity tests for downloader scripts as they are not critical to the core functionality of the project
 
 ## - Refine UI visuals: 
-- status: dashboard layout, theming, and graph refresh in progress
+- status: dashboard layout, theming, and graph refresh completed
 - add icons, colored status badges, improved card styling, and small UX polish to stat cards and plots
 - fix the curve plotting, it is very basic and doesnt look good and on all screens it isnt scaled well.
 - the chosen card items at the top of the dashboard look very basic and could use some styling and polish to make them more visually appealing and easier to read at a glance.

@@ -12,8 +12,8 @@ Refine the desktop dashboard layout so it stays compact, scrollable, and palette
 3. Rename the `Curves` surface to `Config` and keep config details off the dashboard.
 4. Update GUI tests and run focused validation.
 
-Status: in progress.
+Status: completed.
 
 ## Notes
 - The desktop GUI now uses direct local state/config/service integration throughout.
-- This active plan tracks the current dashboard/layout follow-up work only.
+- This active plan tracks the completed dashboard/layout follow-up work only.

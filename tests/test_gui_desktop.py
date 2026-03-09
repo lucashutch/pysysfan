@@ -28,6 +28,6 @@ def test_main_window_has_expected_tabs(qtbot) -> None:
     assert window.tab_widget.count() == 3
     assert [window.tab_widget.tabText(index) for index in range(3)] == [
         "Dashboard",
-        "Curves",
+        "Config",
         "Service",
     ]

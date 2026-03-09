@@ -9,6 +9,8 @@ import pytest
 
 pytest.importorskip("PySide6")
 
+from PySide6.QtWidgets import QPushButton
+
 from pysysfan.config import Config, CurveConfig, FanConfig, UpdateConfig
 from pysysfan.gui.desktop.dashboard_page import DashboardPage
 from pysysfan.profiles import ProfileManager
@@ -116,7 +118,7 @@ def _create_profile_manager(tmp_path) -> ProfileManager:
 
 
 def test_dashboard_refresh_populates_snapshot(qtbot, tmp_path) -> None:
-    """Refreshing the dashboard should populate status and sensor widgets."""
+    """Refreshing the dashboard should populate compact summary widgets."""
     profile_manager = _create_profile_manager(tmp_path)
     config_path = profile_manager.get_profile_config_path("gaming")
     state_path = tmp_path / "daemon_state.json"
@@ -130,32 +132,25 @@ def test_dashboard_refresh_populates_snapshot(qtbot, tmp_path) -> None:
 
     page.refresh_data()
 
-    assert page.connection_label.text() == "Daemon: Connected"
-    assert page.daemon_status_label.text() == "Connected"
+    assert page.scroll_area.widgetResizable() is True
+    assert page.main_splitter.count() == 2
+    assert page.daemon_indicator.text() == "●"
+    assert page.alerts_button.text() == "⚠ 1"
     assert page.active_profile_label.text() == "Gaming Mode"
-    assert "Profile key: gaming" in page.active_profile_meta_label.text()
+    assert page.profile_status_badge.text() == "Active"
+    assert (
+        page.active_profile_meta_label.text() == "1 fan mappings • 1 sensors • 3 curves"
+    )
     assert "Aggressive cooling" in page.active_profile_description_label.text()
-    assert page.profile_status_badge.text() == "Live"
-    assert page.uptime_label.text() == "25.0s"
-    assert page.poll_interval_label.text() == "1.0s"
-    assert page.hottest_temp_label.text() == "61.5°C"
-    assert page.target_pwm_label.text() == "60.0%"
-    assert page.recent_alerts_label.text() == "1"
-    assert page.fans_configured_label.text() == "1"
-    assert page.curves_configured_label.text() == "3"
-    assert page.temperatures_table.rowCount() == 1
-    assert page.temperatures_table.item(0, 1).text() == "Package"
-    assert page.fans_table.rowCount() == 1
-    assert page.fans_table.item(0, 2).text() == "1325"
-    assert page.fans_table.item(0, 4).text() == "60.0%"
-    assert page.alerts_list.item(0).text().startswith("/cpu/temp/0 [high_temp]")
+    assert "CPU Fan → CPU / Package" in page.profile_mapping_label.text()
     assert page.fan_summary_layout.count() == 1
     assert page.fan_summary_layout.itemAt(0).widget().objectName() == (
         "cpu_fanSummaryCard"
     )
     assert page.temperature_plot.minimumHeight() >= 320
-    assert page.fan_rpm_plot.minimumHeight() >= 260
-    assert page.fan_target_plot.minimumHeight() >= 260
+    assert page.fan_rpm_plot.minimumHeight() >= 240
+    assert page.fan_target_plot.minimumHeight() >= 240
+    assert page.findChild(QPushButton, "refreshButton") is None
 
 
 def test_dashboard_shows_offline_message_without_state(qtbot, tmp_path) -> None:
@@ -169,11 +164,11 @@ def test_dashboard_shows_offline_message_without_state(qtbot, tmp_path) -> None:
 
     page.refresh_data()
 
-    assert page.connection_label.text() == "Daemon: Not running"
-    assert page.daemon_status_label.text() == "Not running"
+    assert page.daemon_indicator.text() == "●"
+    assert page.alerts_button.text() == "⚠ 0"
     assert page.profile_status_badge.text() == "Offline"
-    assert page.start_service_button.isEnabled() is True
-    assert "Start the service" in page.message_label.text()
+    assert page.active_profile_label.text() == "No active config"
+    assert "state file" in page.message_label.text().lower()
     assert page.fan_summary_empty_label.isVisible() is True
 
 

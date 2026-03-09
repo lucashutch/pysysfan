@@ -27,7 +27,7 @@ class MainWindow(QMainWindow):
         self.service_page = ServicePage(parent=self)
 
         self.tab_widget.addTab(self.dashboard_page, "Dashboard")
-        self.tab_widget.addTab(self.curves_page, "Curves")
+        self.tab_widget.addTab(self.curves_page, "Config")
         self.tab_widget.addTab(self.service_page, "Service")
 
         self.statusBar().showMessage("Local desktop GUI ready")

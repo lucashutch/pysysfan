@@ -30,14 +30,11 @@ from pysysfan.gui.desktop.local_backend import (
     read_daemon_state,
     validate_config_model,
 )
+from pysysfan.gui.desktop.plotting import DashboardPlotWidget, pg
+from pysysfan.gui.desktop.theme import PAGE_HEADING_STYLE, plot_theme
 from pysysfan.profiles import ProfileManager
 from pysysfan.state_file import DEFAULT_STATE_PATH
 from pysysfan.temperature import get_valid_aggregation_methods
-
-try:  # pragma: no cover - exercised indirectly when installed
-    import pyqtgraph as pg
-except ImportError:  # pragma: no cover - fallback path when optional dep missing
-    pg = None
 
 
 class CurvesPage(QWidget):
@@ -62,9 +59,9 @@ class CurvesPage(QWidget):
         layout.setContentsMargins(24, 24, 24, 24)
         layout.setSpacing(16)
 
-        heading = QLabel("Curves", self)
+        heading = QLabel("Config", self)
         heading.setObjectName("curvesTitle")
-        heading.setStyleSheet("font-size: 20px; font-weight: 600;")
+        heading.setStyleSheet(PAGE_HEADING_STYLE)
         layout.addWidget(heading)
 
         profile_row = QHBoxLayout()
@@ -558,11 +555,17 @@ class CurvesPage(QWidget):
             fallback.setWordWrap(True)
             return self._wrap_widget("Preview", fallback)
 
-        plot_widget = pg.PlotWidget(self)
-        plot_widget.setBackground("w")
+        plot_widget = DashboardPlotWidget(self)
         plot_widget.showGrid(x=True, y=True, alpha=0.2)
         plot_widget.setLabel("bottom", "Temperature", units="°C")
         plot_widget.setLabel("left", "Fan speed", units="%")
+        colors = plot_theme(self.palette())
+        plot_widget.setBackground(colors["background"])
+        plot_item = plot_widget.getPlotItem()
+        plot_item.getAxis("left").setTextPen(colors["foreground"])
+        plot_item.getAxis("bottom").setTextPen(colors["foreground"])
+        plot_item.getAxis("left").setPen(colors["muted"])
+        plot_item.getAxis("bottom").setPen(colors["muted"])
         return self._wrap_widget("Preview", plot_widget)
 
     @staticmethod
