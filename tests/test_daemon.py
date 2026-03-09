@@ -361,6 +361,7 @@ class TestRunOnce:
         temp_sensor.identifier = "/cpu/temp/0"
         temp_sensor.value = 45.0
         mock_hw.get_temperatures.return_value = [temp_sensor]
+        mock_hw.get_fans.return_value = []
         mock_hw.set_fan_speed = MagicMock()
         daemon._hw = mock_hw
 
@@ -377,6 +378,7 @@ class TestRunOnce:
 
         mock_hw = MagicMock()
         mock_hw.get_temperatures.return_value = []
+        mock_hw.get_fans.return_value = []
         daemon._hw = mock_hw
 
         speeds = daemon._run_once(cfg)
@@ -390,6 +392,7 @@ class TestRunOnce:
 
         mock_hw = MagicMock()
         mock_hw.get_temperatures.return_value = []  # No sensors
+        mock_hw.get_fans.return_value = []
         daemon._hw = mock_hw
 
         speeds = daemon._run_once(cfg)
@@ -406,6 +409,7 @@ class TestRunOnce:
         temp_sensor.identifier = "/cpu/temp/0"
         temp_sensor.value = 0.0
         mock_hw.get_temperatures.return_value = [temp_sensor]
+        mock_hw.get_fans.return_value = []
         daemon._hw = mock_hw
 
         speeds = daemon._run_once(cfg)
@@ -422,6 +426,7 @@ class TestRunOnce:
         temp_sensor.identifier = "/cpu/temp/0"
         temp_sensor.value = 50.0
         mock_hw.get_temperatures.return_value = [temp_sensor]
+        mock_hw.get_fans.return_value = []
         mock_hw.set_fan_speed.side_effect = RuntimeError("hardware error")
         daemon._hw = mock_hw
 
@@ -441,6 +446,7 @@ class TestRunOnce:
         temp_sensor.identifier = "/cpu/temp/0"
         temp_sensor.value = 30.0
         mock_hw.get_temperatures.return_value = [temp_sensor]
+        mock_hw.get_fans.return_value = []
         daemon._hw = mock_hw
 
         speeds = daemon._run_once(cfg)
@@ -460,6 +466,7 @@ class TestRunOnce:
         temp_sensor.identifier = "/cpu/temp/0"
         temp_sensor.value = 30.0
         mock_hw.get_temperatures.return_value = [temp_sensor]
+        mock_hw.get_fans.return_value = []
         daemon._hw = mock_hw
 
         speeds = daemon._run_once(cfg)
@@ -623,6 +630,7 @@ class TestHardwareErrors:
 
         mock_hw = MagicMock()
         mock_hw.get_temperatures.return_value = []
+        mock_hw.get_fans.return_value = []
         daemon._hw = mock_hw
 
         speeds = daemon._run_once(cfg)
@@ -639,6 +647,7 @@ class TestHardwareErrors:
         temp_sensor.identifier = "/different/temp"
         temp_sensor.value = 50.0
         mock_hw.get_temperatures.return_value = [temp_sensor]
+        mock_hw.get_fans.return_value = []
         daemon._hw = mock_hw
 
         speeds = daemon._run_once(cfg)
@@ -721,6 +730,50 @@ class TestBuildCurvesEdgeCases:
         cfg.curves = {}
         curves = daemon._build_curves(cfg)
         assert curves == {}
+
+
+class TestDaemonStatePopulation:
+    """Tests for daemon runtime state snapshots."""
+
+    def test_run_once_populates_runtime_state_maps(self, tmp_path):
+        """A control pass should update temperatures, fan speeds, and targets."""
+        daemon = FanDaemon(config_path=tmp_path / "c.yaml")
+        cfg = _sample_config()
+        daemon._curves = daemon._build_curves(cfg)
+
+        mock_hw = MagicMock()
+        mock_hw.get_temperatures.return_value = [
+            MagicMock(identifier="/cpu/temp/0", value=60.0)
+        ]
+        mock_hw.get_fans.return_value = [
+            MagicMock(identifier="/fan/0/rpm", value=1350.0)
+        ]
+        daemon._hw = mock_hw
+
+        speeds = daemon._run_once(cfg)
+
+        assert speeds == {"cpu_fan": 60.0}
+        assert daemon._current_temps == {"/cpu/temp/0": 60.0}
+        assert daemon._current_fan_speeds == {"/fan/0/rpm": 1350.0}
+        assert daemon._current_targets == {"/mb/control/0": 60.0}
+
+    def test_update_state_uses_runtime_state_maps(self, tmp_path):
+        """State snapshots should include the latest runtime maps."""
+        daemon = FanDaemon(config_path=tmp_path / "c.yaml")
+        daemon._cfg = _sample_config()
+        daemon._start_time = 100.0
+        daemon._running = True
+        daemon._current_temps = {"/cpu/temp/0": 55.0}
+        daemon._current_fan_speeds = {"/fan/0/rpm": 1200.0}
+        daemon._current_targets = {"/mb/control/0": 50.0}
+
+        daemon._update_state()
+        snapshot = daemon._state_manager.get_snapshot()
+
+        assert snapshot is not None
+        assert snapshot.current_temps == {"/cpu/temp/0": 55.0}
+        assert snapshot.current_fan_speeds == {"/fan/0/rpm": 1200.0}
+        assert snapshot.current_targets == {"/mb/control/0": 50.0}
 
 
 class TestGetCurve:

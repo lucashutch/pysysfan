@@ -10,7 +10,7 @@
 ## Graphical User Interface (GUI)
 - **Status**: Phase 7 (Service Management UI) - COMPLETED ✓
 - Optional standalone GUI application
-- Built using Tauri 2.0 + Svelte 5 + FastAPI REST API
+- Native desktop client now built with PySide6 over the FastAPI daemon API
 - Features:
   - Visual fan curve editor (drag and drop points)
   - Live sensor graphs over time
@@ -20,10 +20,16 @@
   - Windows service management UI
   - Seamlessly updates the YAML config file used by the background daemon
 
+## PySide6 migration
+- Replace the desktop launcher and top-level shell with PySide6 while keeping FastAPI as the runtime boundary
+- Port the dashboard, service, and curve views in small validated slices
+- Remove the remaining legacy web/Tauri GUI after the native surface is fully in use
+
 ## Modularise codebase
 - Split into smaller modules
 - Improve code structure
 - Ensure no files are larger than 500 lines
+- Split the FastAPI server surface into focused route-registration modules and shared serializers
 
 ## implement ty type checker
 - Using the ty type checker to improve code quality and maintainability
@@ -34,7 +40,11 @@
 - Unit tests for all UI components
 - Integration tests for API endpoints
 - End-to-end tests simulating user interactions with the GUI
-- Use testing frameworks like Jest for Svelte and pytest for FastAPI
+- Use Qt widget tests for the desktop GUI and pytest for the FastAPI daemon
+- Keep CI installing the `gui` extra so Qt widget tests run under `pytest-qt`
+- Keep API stream, alert-rule, and config-persistence contracts covered as the desktop client evolves
+- Keep the desktop helper entry points and prerequisite checks covered so GUI packaging regressions are caught early
+- Cover profile switching, alert summaries/history, and richer service interactions in the PySide6 desktop tests
 
 ## move downloader helpers scripts to separate scripts dir
 - Create a `scripts/` directory for all helper scripts
@@ -46,4 +56,5 @@
 ## simplify the gui code and the way the frontend and backend communicate
 - Refactor the API communication layer to be more straightforward and maintainable
 - Use a consistent pattern for API calls, error handling, and data management
-
+- Repair API contract mismatches around daemon bind settings, live runtime state snapshots, and sensor controllability metadata
+- Keep the desktop dashboard aligned with the daemon API for profiles, alerts, and service state

@@ -21,8 +21,25 @@ Windows fan control daemon. Set custom fan curves based on temperature sensors w
 uv tool install pysysfan
 
 # Or use the one-click installer
-# Download: install-pysysfan.bat
+# Download: scripts/install-pysysfan.bat
 ```
+
+### Optional Desktop GUI
+
+```powershell
+# Install the GUI extra when using uv tools
+uv tool install pysysfan --extra gui
+
+# Launch the desktop client
+pysysfan-gui
+```
+
+For a source checkout, install the GUI dependencies with `uv sync --extra gui`, then run `python -m pysysfan.gui.build check` to validate the desktop prerequisites before launching the GUI.
+
+The PySide6 desktop client currently provides:
+- Dashboard: daemon status, live sensors, active profile, and recent alerts
+- Curves: curve editing and fan assignment
+- Service: install/start/stop/restart and log inspection
 
 ## First Setup
 
@@ -33,7 +50,10 @@ pysysfan scan
 # 2. Generate initial config
 pysysfan config init
 
-# 3. Edit ~/.pysysfan/config.yaml
+# 3. Edit ~/.pysysfan/config.yaml or launch the desktop GUI
+
+# Optional: launch the PySide6 desktop client
+pysysfan-gui
 
 # 4. Validate config
 pysysfan config validate
@@ -51,7 +71,7 @@ general:
 fans:
   cpu_fan:
     fan_id: "/motherboard/nct6791d/control/0"
-    temp_id: "/amdcpu/0/temperature/0"
+    temp_ids: ["/amdcpu/0/temperature/0"]
     curve: "balanced"
 
 curves:
@@ -78,6 +98,18 @@ pysysfan run --once        # Test config (single pass)
 pysysfan monitor           # Watch live sensor readings
 pysysfan service install   # Install startup service
 ```
+
+## Desktop Helper
+
+```powershell
+# Validate optional desktop dependencies
+python -m pysysfan.gui.build check
+
+# Launch the PySide6 GUI from a source checkout
+python -m pysysfan.gui.build launch
+```
+
+Use the Dashboard tab to confirm the daemon is reachable, the Curves tab to edit and assign curves, and the Service tab to manage the Windows scheduled task.
 
 ## Platform Support
 

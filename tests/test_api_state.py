@@ -28,7 +28,7 @@ class TestDaemonState:
             current_targets={"/fan/0": 50.0},
             auto_reload_enabled=True,
             api_enabled=True,
-            api_port=8080,
+            api_port=8765,
         )
 
         assert state.pid == 1234
@@ -36,7 +36,7 @@ class TestDaemonState:
         assert state.running is True
         assert state.uptime_seconds == 42.5
         assert state.current_temps == {"/cpu/0": 45.0}
-        assert state.api_port == 8080
+        assert state.api_port == 8765
 
     def test_daemon_state_defaults(self):
         """DaemonState should have sensible defaults for optional fields."""
@@ -59,7 +59,7 @@ class TestDaemonState:
         assert state.current_targets == {}
         assert state.auto_reload_enabled is True
         assert state.api_enabled is False
-        assert state.api_port == 8080
+        assert state.api_port == 8765
 
 
 class TestStateManager:

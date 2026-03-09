@@ -72,6 +72,9 @@ class FanDaemon:
         self._api_thread: threading.Thread | None = None
         self._state_manager = StateManager()
         self._start_time: float = 0.0
+        self._current_temps: dict[str, float] = {}
+        self._current_fan_speeds: dict[str, float] = {}
+        self._current_targets: dict[str, float] = {}
 
         # Notification manager
         self._notification_manager = NotificationManager()
@@ -418,6 +421,10 @@ class FanDaemon:
         applied: dict[str, float] = {}
 
         temps = self._hw.get_temperatures()
+        fans = self._hw.get_fans()
+        self._current_temps = {sensor.identifier: sensor.value for sensor in temps}
+        self._current_fan_speeds = {sensor.identifier: sensor.value for sensor in fans}
+        self._current_targets = {}
 
         self._check_notifications(temps)
 
@@ -458,6 +465,7 @@ class FanDaemon:
             try:
                 self._hw.set_fan_speed(fan_cfg.fan_id, target_pct)
                 applied[fan_name] = target_pct
+                self._current_targets[fan_cfg.fan_id] = target_pct
 
                 # Log fan state change with special handling for off mode
                 if target_pct <= 0:
@@ -541,9 +549,9 @@ class FanDaemon:
             fans_configured=len(self._cfg.fans) if self._cfg else 0,
             curves_configured=len(self._cfg.curves) if self._cfg else 0,
             active_profile=active_profile,
-            current_temps={},  # Populated in _run_once
-            current_fan_speeds={},
-            current_targets={},
+            current_temps=self._current_temps,
+            current_fan_speeds=self._current_fan_speeds,
+            current_targets=self._current_targets,
             auto_reload_enabled=self._auto_reload,
             api_enabled=self._api_enabled,
             api_port=self._api_port,
@@ -637,8 +645,6 @@ class FanDaemon:
             logger.info(f"Control loop started (poll interval: {cfg.poll_interval}s)")
 
             while self._running:
-                # Update daemon state for API
-                self._update_state()
                 # Get current config (may have been reloaded)
                 current_cfg = self._cfg if self._cfg is not None else cfg
 
@@ -649,6 +655,9 @@ class FanDaemon:
                         logger.info(f"Applied: {status}")
                 except Exception as e:
                     logger.error(f"Control loop error: {e}", exc_info=True)
+
+                # Update daemon state for API after the control pass.
+                self._update_state()
 
                 time.sleep(current_cfg.poll_interval)
 

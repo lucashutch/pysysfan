@@ -43,7 +43,7 @@ class DaemonState:
 
     auto_reload_enabled: bool = True
     api_enabled: bool = False
-    api_port: int = 8080
+    api_port: int = 8765
 
 
 class StateManager:
@@ -92,7 +92,7 @@ class StateManager:
                     current_targets=kwargs.get("current_targets", {}),
                     auto_reload_enabled=kwargs.get("auto_reload_enabled", True),
                     api_enabled=kwargs.get("api_enabled", False),
-                    api_port=kwargs.get("api_port", 8080),
+                    api_port=kwargs.get("api_port", 8765),
                 )
             else:
                 new_state = DaemonState(

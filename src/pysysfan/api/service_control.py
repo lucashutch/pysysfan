@@ -11,6 +11,9 @@ import psutil
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_API_HOST = "127.0.0.1"
+DEFAULT_API_PORT = 8765
+
 
 class StopMethod(Enum):
     """Methods for stopping the daemon."""
@@ -44,7 +47,21 @@ def find_daemon_process() -> psutil.Process | None:
     return None
 
 
-def stop_daemon_graceful(timeout: float = 10.0) -> tuple[bool, StopMethod]:
+def build_local_api_base_url(
+    api_host: str = DEFAULT_API_HOST, api_port: int = DEFAULT_API_PORT
+) -> str:
+    """Build a loopback-safe base URL for the daemon API."""
+    normalized_host = api_host.strip() if api_host else DEFAULT_API_HOST
+    if normalized_host in {"0.0.0.0", "::", "[::]"}:
+        normalized_host = DEFAULT_API_HOST
+    return f"http://{normalized_host}:{api_port}"
+
+
+def stop_daemon_graceful(
+    timeout: float = 10.0,
+    api_host: str = DEFAULT_API_HOST,
+    api_port: int = DEFAULT_API_PORT,
+) -> tuple[bool, StopMethod]:
     """Attempt to stop daemon gracefully with fallback strategies.
 
     Tries methods in order:
@@ -54,6 +71,8 @@ def stop_daemon_graceful(timeout: float = 10.0) -> tuple[bool, StopMethod]:
 
     Args:
         timeout: Timeout in seconds for graceful exit attempts.
+        api_host: Host where the daemon API is listening.
+        api_port: Port where the daemon API is listening.
 
     Returns:
         Tuple of (success, method_used)
@@ -66,8 +85,9 @@ def stop_daemon_graceful(timeout: float = 10.0) -> tuple[bool, StopMethod]:
 
         token = load_token()
         if token:
+            base_url = build_local_api_base_url(api_host=api_host, api_port=api_port)
             response = requests.post(
-                "http://localhost:8765/api/service/shutdown",
+                f"{base_url}/api/service/shutdown",
                 headers={"Authorization": f"Bearer {token}"},
                 timeout=5.0,
             )

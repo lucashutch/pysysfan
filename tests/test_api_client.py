@@ -419,6 +419,25 @@ class TestCurvesEndpoints:
         assert call_args[0][0] == "POST"
         assert "/api/curves/preview" in call_args[0][1]
 
+    @patch("pysysfan.api.client.requests.request")
+    def test_validate_curve_sends_post(self, mock_request, mock_home_dir):
+        """Validate curve should send POST request with curve data."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"valid": True, "errors": []}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
+
+        with patch.object(Path, "home", return_value=mock_home_dir):
+            client = PySysFanClient(base_url="http://localhost:8765")
+            points = [[30, 30], [60, 60]]
+            client.validate_curve(points, hysteresis=2.5)
+
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "POST"
+        assert "/api/curves/validate" in call_args[0][1]
+        assert call_args[1]["json"] == {"points": points, "hysteresis": 2.5}
+
 
 class TestFansEndpoints:
     """Tests for fans endpoints."""
@@ -496,6 +515,82 @@ class TestFansEndpoints:
         assert call_args[1]["json"]["duration_seconds"] == 30
 
 
+class TestServiceEndpoints:
+    """Tests for service management endpoints."""
+
+    @patch("pysysfan.api.client.requests.request")
+    def test_get_service_status_sends_get(self, mock_request, mock_home_dir):
+        """Service status should send GET request."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"task_installed": True}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
+
+        with patch.object(Path, "home", return_value=mock_home_dir):
+            client = PySysFanClient(base_url="http://localhost:8765")
+            client.get_service_status()
+
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "GET"
+        assert "/api/service/status" in call_args[0][1]
+
+    @patch("pysysfan.api.client.requests.request")
+    def test_install_service_passes_optional_config_path(
+        self, mock_request, mock_home_dir
+    ):
+        """Service install should send the optional config path as query params."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"success": True}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
+
+        with patch.object(Path, "home", return_value=mock_home_dir):
+            client = PySysFanClient(base_url="http://localhost:8765")
+            client.install_service("/tmp/config.yaml")
+
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "POST"
+        assert "/api/service/install" in call_args[0][1]
+        assert call_args[1]["params"] == {"config_path": "/tmp/config.yaml"}
+
+    @patch("pysysfan.api.client.requests.request")
+    def test_stop_service_sends_post(self, mock_request, mock_home_dir):
+        """Service stop should send POST request."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"success": True, "method": "sigterm"}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
+
+        with patch.object(Path, "home", return_value=mock_home_dir):
+            client = PySysFanClient(base_url="http://localhost:8765")
+            client.stop_service()
+
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "POST"
+        assert "/api/service/stop" in call_args[0][1]
+
+    @patch("pysysfan.api.client.requests.request")
+    def test_get_service_logs_passes_line_count(self, mock_request, mock_home_dir):
+        """Service logs should send the requested line count as query params."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"logs": [], "total_lines": 0}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
+
+        with patch.object(Path, "home", return_value=mock_home_dir):
+            client = PySysFanClient(base_url="http://localhost:8765")
+            client.get_service_logs(250)
+
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "GET"
+        assert "/api/service/logs" in call_args[0][1]
+        assert call_args[1]["params"] == {"lines": 250}
+
+
 class TestClientBaseUrl:
     """Tests for base URL handling."""
 
@@ -503,3 +598,198 @@ class TestClientBaseUrl:
         """Trailing slash should be removed from base_url."""
         client = PySysFanClient(base_url="http://localhost:8765/", token="test")
         assert client.base_url == "http://localhost:8765"
+
+
+class TestAlertEndpoints:
+    """Tests for alert-rule client methods."""
+
+    @patch("pysysfan.api.client.requests.request")
+    def test_list_alert_rules_sends_get(self, mock_request, mock_home_dir):
+        """List alert rules should send GET request."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"rules": []}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
+
+        with patch.object(Path, "home", return_value=mock_home_dir):
+            client = PySysFanClient(base_url="http://localhost:8765")
+            client.list_alert_rules()
+
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "GET"
+        assert "/api/alerts/rules" in call_args[0][1]
+
+    @patch("pysysfan.api.client.requests.request")
+    def test_create_alert_rule_sends_post(self, mock_request, mock_home_dir):
+        """Create alert rule should send POST request with rule data."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"success": True}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
+
+        with patch.object(Path, "home", return_value=mock_home_dir):
+            client = PySysFanClient(base_url="http://localhost:8765")
+            client.create_alert_rule("cpu_temp", "high_temp", 80.0)
+
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "POST"
+        assert "/api/alerts/rules" in call_args[0][1]
+        assert call_args[1]["json"]["sensor_id"] == "cpu_temp"
+        assert call_args[1]["json"]["alert_type"] == "high_temp"
+
+    @patch("pysysfan.api.client.requests.request")
+    def test_update_alert_rule_sends_put(self, mock_request, mock_home_dir):
+        """Update alert rule should send PUT request to the rule endpoint."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"success": True}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
+
+        with patch.object(Path, "home", return_value=mock_home_dir):
+            client = PySysFanClient(base_url="http://localhost:8765")
+            client.update_alert_rule("cpu_temp:high_temp", threshold=85.0)
+
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "PUT"
+        assert "/api/alerts/rules/cpu_temp:high_temp" in call_args[0][1]
+        assert call_args[1]["json"] == {"threshold": 85.0}
+
+    @patch("pysysfan.api.client.requests.request")
+    def test_delete_alert_rule_sends_delete(self, mock_request, mock_home_dir):
+        """Delete alert rule should send DELETE request."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"success": True}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
+
+        with patch.object(Path, "home", return_value=mock_home_dir):
+            client = PySysFanClient(base_url="http://localhost:8765")
+            client.delete_alert_rule("cpu_temp:high_temp")
+
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "DELETE"
+        assert "/api/alerts/rules/cpu_temp:high_temp" in call_args[0][1]
+
+    @patch("pysysfan.api.client.requests.request")
+    def test_get_alert_history_sends_limit(self, mock_request, mock_home_dir):
+        """Alert history should send the requested limit as query params."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"alerts": [], "count": 0}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
+
+        with patch.object(Path, "home", return_value=mock_home_dir):
+            client = PySysFanClient(base_url="http://localhost:8765")
+            client.get_alert_history(25)
+
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "GET"
+        assert "/api/alerts/history" in call_args[0][1]
+        assert call_args[1]["params"] == {"limit": 25}
+
+    @patch("pysysfan.api.client.requests.request")
+    def test_clear_alert_history_sends_delete(self, mock_request, mock_home_dir):
+        """Clearing alert history should send DELETE request."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"success": True}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
+
+        with patch.object(Path, "home", return_value=mock_home_dir):
+            client = PySysFanClient(base_url="http://localhost:8765")
+            client.clear_alert_history()
+
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "DELETE"
+        assert "/api/alerts/history" in call_args[0][1]
+
+
+class TestProfileEndpoints:
+    """Tests for profile client methods."""
+
+    @patch("pysysfan.api.client.requests.request")
+    def test_list_profiles_sends_get(self, mock_request, mock_home_dir):
+        """Listing profiles should send GET request."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"profiles": [], "active": "default"}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
+
+        with patch.object(Path, "home", return_value=mock_home_dir):
+            client = PySysFanClient(base_url="http://localhost:8765")
+            client.list_profiles()
+
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "GET"
+        assert "/api/profiles" in call_args[0][1]
+
+    @patch("pysysfan.api.client.requests.request")
+    def test_activate_profile_sends_post(self, mock_request, mock_home_dir):
+        """Activating a profile should POST to the activate endpoint."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"success": True, "profile": "gaming"}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
+
+        with patch.object(Path, "home", return_value=mock_home_dir):
+            client = PySysFanClient(base_url="http://localhost:8765")
+            client.activate_profile("gaming")
+
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "POST"
+        assert "/api/profiles/gaming/activate" in call_args[0][1]
+
+    @patch("pysysfan.api.client.requests.request")
+    def test_create_profile_sends_profile_payload(self, mock_request, mock_home_dir):
+        """Creating a profile should send metadata in the request body."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"success": True}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
+
+        with patch.object(Path, "home", return_value=mock_home_dir):
+            client = PySysFanClient(base_url="http://localhost:8765")
+            client.create_profile(
+                "gaming",
+                display_name="Gaming",
+                description="High airflow",
+                copy_from="default",
+            )
+
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "POST"
+        assert "/api/profiles/gaming" in call_args[0][1]
+        assert call_args[1]["json"] == {
+            "display_name": "Gaming",
+            "description": "High airflow",
+            "copy_from": "default",
+        }
+
+    @patch("pysysfan.api.client.requests.request")
+    def test_update_profile_config_sends_put(self, mock_request, mock_home_dir):
+        """Updating a profile config should PUT the config payload."""
+        mock_response = MagicMock()
+        mock_response.json.return_value = {"success": True}
+        mock_response.raise_for_status.return_value = None
+        mock_request.return_value = mock_response
+
+        config = {"general": {"poll_interval": 3.0}, "fans": {}, "curves": {}}
+
+        with patch.object(Path, "home", return_value=mock_home_dir):
+            client = PySysFanClient(base_url="http://localhost:8765")
+            client.update_profile_config("gaming", config)
+
+        mock_request.assert_called_once()
+        call_args = mock_request.call_args
+        assert call_args[0][0] == "PUT"
+        assert "/api/profiles/gaming/config" in call_args[0][1]
+        assert call_args[1]["json"] == config

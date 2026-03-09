@@ -18,6 +18,7 @@ def main():
     except ImportError as e:
         print(f"Error: GUI dependencies not installed. {e}", file=sys.stderr)
         print("Install with: pip install pysysfan[gui]", file=sys.stderr)
+        print("The desktop GUI now uses PySide6.", file=sys.stderr)
         sys.exit(1)
     except Exception as e:
         print(f"Error launching GUI: {e}", file=sys.stderr)

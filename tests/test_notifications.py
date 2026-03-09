@@ -66,6 +66,7 @@ class TestNotificationManager:
         manager.add_rule(high_temp_rule)
         rules = manager.get_rules()
         assert len(rules) == 1
+        assert rules[0]["rule_id"] == "cpu_temp:high_temp"
         assert rules[0]["sensor_id"] == "cpu_temp"
 
     def test_add_invalid_alert_type(self, manager):
@@ -76,7 +77,7 @@ class TestNotificationManager:
     def test_remove_rule(self, manager, high_temp_rule):
         manager.add_rule(high_temp_rule)
         assert len(manager.get_rules()) == 1
-        removed = manager.remove_rule("cpu_temp")
+        removed = manager.remove_rule("cpu_temp:high_temp")
         assert removed is True
         assert len(manager.get_rules()) == 0
 
@@ -86,11 +87,44 @@ class TestNotificationManager:
 
     def test_update_rule(self, manager, high_temp_rule):
         manager.add_rule(high_temp_rule)
-        success = manager.update_rule("cpu_temp", threshold=85.0, enabled=False)
+        success = manager.update_rule(
+            "cpu_temp:high_temp", threshold=85.0, enabled=False
+        )
         assert success is True
         rules = manager.get_rules()
         assert rules[0]["threshold"] == 85.0
         assert rules[0]["enabled"] is False
+
+    def test_update_rule_rejects_invalid_alert_type(self, manager, high_temp_rule):
+        manager.add_rule(high_temp_rule)
+
+        with pytest.raises(ValueError, match="Invalid alert_type"):
+            manager.update_rule("cpu_temp:high_temp", alert_type="invalid")
+
+    def test_rule_id_supports_multiple_types_on_one_sensor(self, manager):
+        manager.add_rule(
+            AlertRule(sensor_id="cpu_temp", alert_type="high_temp", threshold=80.0)
+        )
+        manager.add_rule(
+            AlertRule(sensor_id="cpu_temp", alert_type="low_temp", threshold=10.0)
+        )
+
+        updated = manager.update_rule("cpu_temp:low_temp", threshold=8.0)
+        removed = manager.remove_rule("cpu_temp:high_temp")
+
+        assert updated is True
+        assert removed is True
+        rules = manager.get_rules()
+        assert rules == [
+            {
+                "rule_id": "cpu_temp:low_temp",
+                "sensor_id": "cpu_temp",
+                "alert_type": "low_temp",
+                "threshold": 8.0,
+                "enabled": True,
+                "cooldown_seconds": 60.0,
+            }
+        ]
 
     def test_update_nonexistent_rule(self, manager):
         success = manager.update_rule("nonexistent", threshold=50.0)

@@ -16,6 +16,8 @@ def mock_daemon():
     """Create a mock daemon for testing."""
     daemon = MagicMock()
     daemon.config_path = "/tmp/config.yaml"
+    daemon._api_host = "127.0.0.1"
+    daemon._api_port = 8765
     daemon._cfg = MagicMock()
     daemon._cfg.poll_interval = 2.0
     daemon._cfg.fans = {}
@@ -109,12 +111,14 @@ class TestServiceStatusEndpoint:
     @patch("pysysfan.api.server.windows_service.get_task_status")
     @patch("pysysfan.api.server.windows_service.get_task_details")
     @patch("pysysfan.api.server.find_daemon_process")
+    @patch("pysysfan.api.server.requests.get")
     def test_get_service_status_daemon_running(
-        self, mock_find, mock_details, mock_status, client, auth_headers
+        self, mock_get, mock_find, mock_details, mock_status, client, auth_headers
     ):
         """Should detect running daemon process."""
         mock_status.return_value = "Running"
         mock_details.return_value = {"Status": "Running"}
+        mock_get.return_value.status_code = 200
 
         mock_proc = MagicMock()
         mock_proc.pid = 1234
@@ -125,6 +129,35 @@ class TestServiceStatusEndpoint:
         data = response.json()
         assert data["daemon_running"] is True
         assert data["daemon_pid"] == 1234
+
+    @patch("pysysfan.api.server.windows_service.get_task_status")
+    @patch("pysysfan.api.server.windows_service.get_task_details")
+    @patch("pysysfan.api.server.find_daemon_process")
+    @patch("pysysfan.api.server.requests.get")
+    def test_get_service_status_uses_daemon_api_bind_settings(
+        self,
+        mock_get,
+        mock_find,
+        mock_details,
+        mock_status,
+        client,
+        auth_headers,
+        mock_daemon,
+    ):
+        """Health checks should use the daemon API bind settings."""
+        mock_status.return_value = "Running"
+        mock_details.return_value = {"Status": "Running"}
+        mock_get.return_value.status_code = 200
+        mock_find.return_value = MagicMock(pid=1234)
+        mock_daemon._api_host = "0.0.0.0"
+        mock_daemon._api_port = 9000
+
+        response = client.get("/api/service/status", headers=auth_headers)
+
+        assert response.status_code == 200
+        mock_get.assert_called_once_with(
+            "http://127.0.0.1:9000/api/health", timeout=2.0
+        )
 
     def test_get_service_status_requires_auth(self, client):
         """Status endpoint should require authentication."""
@@ -329,6 +362,23 @@ class TestServiceStopEndpoint:
         assert response.status_code == 200
         assert response.json()["success"] is True
         assert response.json()["method"] == "graceful_api"
+        assert mock_stop.call_args.kwargs == {"api_host": "127.0.0.1", "api_port": 8765}
+
+    @patch("pysysfan.api.server.stop_daemon_graceful")
+    def test_stop_service_uses_daemon_api_bind_settings(
+        self, mock_stop, client, auth_headers, mock_daemon
+    ):
+        """Stop should pass through the daemon API bind settings."""
+        from pysysfan.api.service_control import StopMethod
+
+        mock_daemon._api_host = "0.0.0.0"
+        mock_daemon._api_port = 9000
+        mock_stop.return_value = (True, StopMethod.GRACEFUL_API)
+
+        response = client.post("/api/service/stop", headers=auth_headers)
+
+        assert response.status_code == 200
+        assert mock_stop.call_args.kwargs == {"api_host": "0.0.0.0", "api_port": 9000}
 
     @patch("pysysfan.api.server.stop_daemon_graceful")
     def test_stop_service_failure(self, mock_stop, client, auth_headers):
@@ -360,7 +410,7 @@ class TestServiceRestartEndpoint:
         response = client.post("/api/service/restart", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["success"] is True
-        mock_stop.assert_called_once()
+        assert mock_stop.call_args.kwargs == {"api_host": "127.0.0.1", "api_port": 8765}
         mock_start.assert_called_once()
 
     @patch("pysysfan.api.server.stop_daemon_graceful")

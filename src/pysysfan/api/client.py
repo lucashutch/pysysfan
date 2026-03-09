@@ -267,6 +267,21 @@ class PySysFanClient:
         data = {"points": points, "temperature": temperature, "hysteresis": hysteresis}
         return self._request("POST", "/api/curves/preview", json=data)
 
+    def validate_curve(
+        self, points: list[list[float]], hysteresis: float = 3.0
+    ) -> dict[str, Any]:
+        """Validate a curve without saving it.
+
+        Args:
+            points: List of [temperature, speed] pairs.
+            hysteresis: Hysteresis in degrees Celsius.
+
+        Returns:
+            Validation response containing validity and errors.
+        """
+        data = {"points": points, "hysteresis": hysteresis}
+        return self._request("POST", "/api/curves/validate", json=data)
+
     # Fans
     def list_fans(self) -> dict[str, Any]:
         """List all configured fans.
@@ -338,6 +353,170 @@ class PySysFanClient:
         """
         data = {"speed_percent": speed_percent, "duration_seconds": duration_seconds}
         return self._request("POST", f"/api/fans/{name}/override", json=data)
+
+    # Service
+    def get_service_status(self) -> dict[str, Any]:
+        """Get the Windows service and daemon status snapshot.
+
+        Returns:
+            Service status dictionary.
+        """
+        return self._request("GET", "/api/service/status")
+
+    def install_service(self, config_path: str | None = None) -> dict[str, Any]:
+        """Install the scheduled task for pysysfan.
+
+        Args:
+            config_path: Optional config path to pass to the installer.
+
+        Returns:
+            Success response.
+        """
+        params = {"config_path": config_path} if config_path is not None else None
+        return self._request("POST", "/api/service/install", params=params)
+
+    def uninstall_service(self) -> dict[str, Any]:
+        """Uninstall the scheduled task.
+
+        Returns:
+            Success response.
+        """
+        return self._request("POST", "/api/service/uninstall")
+
+    def enable_service(self) -> dict[str, Any]:
+        """Enable the scheduled task.
+
+        Returns:
+            Success response.
+        """
+        return self._request("POST", "/api/service/enable")
+
+    def disable_service(self) -> dict[str, Any]:
+        """Disable the scheduled task.
+
+        Returns:
+            Success response.
+        """
+        return self._request("POST", "/api/service/disable")
+
+    def start_service(self) -> dict[str, Any]:
+        """Start the daemon via the service layer.
+
+        Returns:
+            Success response.
+        """
+        return self._request("POST", "/api/service/start")
+
+    def stop_service(self) -> dict[str, Any]:
+        """Stop the daemon via the service layer.
+
+        Returns:
+            Success response, including the stop method when available.
+        """
+        return self._request("POST", "/api/service/stop")
+
+    def restart_service(self) -> dict[str, Any]:
+        """Restart the daemon via the service layer.
+
+        Returns:
+            Success response.
+        """
+        return self._request("POST", "/api/service/restart")
+
+    def get_service_logs(self, lines: int = 100) -> dict[str, Any]:
+        """Fetch recent daemon log lines.
+
+        Args:
+            lines: Number of trailing log lines to request.
+
+        Returns:
+            Dictionary containing logs and total line count.
+        """
+        return self._request("GET", "/api/service/logs", params={"lines": lines})
+
+    # Profiles
+    def list_profiles(self) -> dict[str, Any]:
+        """List available daemon profiles."""
+        return self._request("GET", "/api/profiles")
+
+    def get_active_profile(self) -> dict[str, Any]:
+        """Get the currently active profile name."""
+        return self._request("GET", "/api/profiles/active")
+
+    def activate_profile(self, name: str) -> dict[str, Any]:
+        """Activate a profile and reload the daemon config."""
+        return self._request("POST", f"/api/profiles/{name}/activate")
+
+    def create_profile(
+        self,
+        name: str,
+        display_name: str | None = None,
+        description: str = "",
+        copy_from: str | None = None,
+    ) -> dict[str, Any]:
+        """Create a new profile."""
+        payload: dict[str, Any] = {"description": description}
+        if display_name is not None:
+            payload["display_name"] = display_name
+        if copy_from is not None:
+            payload["copy_from"] = copy_from
+        return self._request("POST", f"/api/profiles/{name}", json=payload)
+
+    def delete_profile(self, name: str) -> dict[str, Any]:
+        """Delete an existing profile."""
+        return self._request("DELETE", f"/api/profiles/{name}")
+
+    def get_profile_config(self, name: str) -> dict[str, Any]:
+        """Fetch a profile's stored configuration."""
+        return self._request("GET", f"/api/profiles/{name}/config")
+
+    def update_profile_config(
+        self, name: str, config: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update a profile configuration."""
+        return self._request("PUT", f"/api/profiles/{name}/config", json=config)
+
+    # Alerts
+    def list_alert_rules(self) -> dict[str, Any]:
+        """List configured alert rules."""
+        return self._request("GET", "/api/alerts/rules")
+
+    def create_alert_rule(
+        self,
+        sensor_id: str,
+        alert_type: str,
+        threshold: float,
+        enabled: bool = True,
+        cooldown_seconds: float = 60.0,
+    ) -> dict[str, Any]:
+        """Create a new alert rule."""
+        return self._request(
+            "POST",
+            "/api/alerts/rules",
+            json={
+                "sensor_id": sensor_id,
+                "alert_type": alert_type,
+                "threshold": threshold,
+                "enabled": enabled,
+                "cooldown_seconds": cooldown_seconds,
+            },
+        )
+
+    def update_alert_rule(self, rule_id: str, **updates: Any) -> dict[str, Any]:
+        """Update an existing alert rule."""
+        return self._request("PUT", f"/api/alerts/rules/{rule_id}", json=updates)
+
+    def delete_alert_rule(self, rule_id: str) -> dict[str, Any]:
+        """Delete an alert rule."""
+        return self._request("DELETE", f"/api/alerts/rules/{rule_id}")
+
+    def get_alert_history(self, limit: int = 50) -> dict[str, Any]:
+        """Get recent alert history."""
+        return self._request("GET", "/api/alerts/history", params={"limit": limit})
+
+    def clear_alert_history(self) -> dict[str, Any]:
+        """Clear alert history."""
+        return self._request("DELETE", "/api/alerts/history")
 
     # Streaming
     def stream_sensors(self) -> Iterator[dict[str, Any]]:

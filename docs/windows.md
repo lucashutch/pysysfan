@@ -27,7 +27,7 @@ This guide provides detailed instructions for setting up pysysfan on Windows sys
 
 ### Method 1: One-Click Installer (Recommended)
 
-1. Download [`install-pysysfan.bat`](../install-pysysfan.bat)
+1. Download [`scripts/install-pysysfan.bat`](../scripts/install-pysysfan.bat)
 2. Right-click and select "Run as Administrator"
 3. The installer will:
    - Install UV (Python package manager)
@@ -47,6 +47,9 @@ Download and install UV from [https://docs.astral.sh/uv/getting-started/installa
 ```powershell
 # In Administrator PowerShell
 uv tool install pysysfan
+
+# Optional: install the desktop GUI as well
+uv tool install pysysfan --extra gui
 ```
 
 #### Step 3: Download LibreHardwareMonitor
@@ -70,6 +73,12 @@ winget install PawnIO
 ```powershell
 pysysfan lhm info
 pysysfan --help
+
+# Optional desktop helper checks
+python -m pysysfan.gui.build check
+
+# Optional desktop launch
+pysysfan-gui
 ```
 
 ## Hardware Support
@@ -138,14 +147,18 @@ general:
 
 fans:
   cpu_fan:
-    sensor: "/motherboard/nct6791d/control/0"
-    curve: balanced
-    source: "/amdcpu/0/temperature/0"
-  
+      fan_id: "/motherboard/nct6791d/control/0"
+      temp_ids:
+         - "/amdcpu/0/temperature/0"
+      curve: balanced
+      aggregation: max
+
   case_fan:
-    sensor: "/motherboard/nct6791d/control/1"
+      fan_id: "/motherboard/nct6791d/control/1"
+      temp_ids:
+         - "/motherboard/nct6791d/temperature/0"
     curve: silent
-    source: "/motherboard/nct6791d/temperature/0"
+      aggregation: max
 
 curves:
   balanced:
@@ -155,7 +168,7 @@ curves:
       - [60, 60]
       - [75, 85]
       - [85, 100]
-  
+
   silent:
     hysteresis: 3
     points:
@@ -177,9 +190,17 @@ pysysfan config show
 # Validate config against hardware
 pysysfan config validate
 
+# Launch the PySide6 desktop client
+pysysfan-gui
+
 # Edit config directly
 notepad $env:USERPROFILE\.pysysfan\config.yaml
 ```
+
+In the desktop client, use:
+- Dashboard to confirm daemon connectivity, switch profiles, and inspect recent alerts
+- Curves to edit named curves and assign them to fans
+- Service to install, start, stop, restart, and inspect the scheduled task logs
 
 ## Service Setup
 
@@ -229,6 +250,9 @@ pysysfan run
 
 # Monitor live sensor values
 pysysfan monitor
+
+# Launch the optional desktop GUI
+pysysfan-gui
 ```
 
 ## Troubleshooting

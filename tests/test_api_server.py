@@ -9,6 +9,7 @@ with patch("pysysfan.api.auth.load_token", return_value="test-token-12345"):
     from fastapi.testclient import TestClient
     from pysysfan.api.server import create_app
     from pysysfan.api.state import StateManager
+    from pysysfan.notifications import AlertRule, NotificationManager
 
 
 @pytest.fixture
@@ -16,14 +17,18 @@ def mock_daemon():
     """Create a mock daemon for testing."""
     daemon = MagicMock()
     daemon.config_path = "/tmp/config.yaml"
+    daemon._api_host = "127.0.0.1"
+    daemon._api_port = 8765
     daemon._cfg = MagicMock()
     daemon._cfg.poll_interval = 2.0
     daemon._cfg.fans = {}
     daemon._cfg.curves = {}
+    daemon._cfg.update = MagicMock(auto_check=False, notify_only=True)
     daemon._hw = MagicMock()
     daemon._hw.get_temperatures.return_value = []
     daemon._hw.get_fans.return_value = []
     daemon._hw.get_controls.return_value = []
+    daemon.notification_manager = NotificationManager()
     return daemon
 
 
@@ -137,6 +142,9 @@ class TestStatusEndpoint:
             fans_configured=3,
             curves_configured=2,
             active_profile="default",
+            current_temps={"/cpu/0": 45.5},
+            current_fan_speeds={"/fan/0": 1200.0},
+            current_targets={"/fan/0/control": 55.0},
         )
 
         response = client.get("/api/status", headers=auth_headers)
@@ -145,6 +153,9 @@ class TestStatusEndpoint:
         assert data["pid"] == 1234
         assert data["running"] is True
         assert data["fans_configured"] == 3
+        assert data["current_temps"] == {"/cpu/0": 45.5}
+        assert data["current_fan_speeds"] == {"/fan/0": 1200.0}
+        assert data["current_targets"] == {"/fan/0/control": 55.0}
 
 
 class TestSensorsEndpoints:
@@ -195,6 +206,38 @@ class TestSensorsEndpoints:
 
         assert len(data["temperatures"]) == 1
         assert data["temperatures"][0]["value"] == 45.5
+        assert data["fans"][0]["control_percentage"] == 50.0
+        assert data["fans"][0]["controllable"] is True
+
+    def test_sensors_marks_fans_without_matching_control_as_read_only(
+        self, client, mock_daemon, auth_headers
+    ):
+        """Fans without matching control sensors should be reported as read-only."""
+        mock_daemon._hw.get_temperatures.return_value = []
+        mock_daemon._hw.get_fans.return_value = [
+            MagicMock(
+                identifier="/fan/0/rpm",
+                hardware_name="Motherboard",
+                sensor_name="CPU Fan",
+                value=1200,
+            )
+        ]
+        mock_daemon._hw.get_controls.return_value = [
+            MagicMock(
+                identifier="/fan/1/control",
+                hardware_name="Motherboard",
+                sensor_name="Case Fan Control",
+                current_value=35.0,
+                has_control=True,
+            )
+        ]
+
+        response = client.get("/api/sensors", headers=auth_headers)
+
+        assert response.status_code == 200
+        fan = response.json()["fans"][0]
+        assert fan["control_percentage"] is None
+        assert fan["controllable"] is False
 
     def test_sensors_returns_503_when_hardware_not_ready(
         self, client, mock_daemon, auth_headers
@@ -511,6 +554,26 @@ class TestConfigUpdateEndpoint:
         mock_config.save.assert_called_once()
         mock_daemon.reload_config.assert_called_once()
 
+    @patch("pysysfan.config.Config")
+    def test_config_update_preserves_existing_update_settings(
+        self, mock_config_cls, client, mock_daemon, auth_headers
+    ):
+        """Config PUT should preserve update settings when the payload omits them."""
+        mock_config = MagicMock()
+        mock_config_cls.return_value = mock_config
+        mock_daemon._cfg.update.auto_check = False
+        mock_daemon._cfg.update.notify_only = False
+
+        response = client.put(
+            "/api/config",
+            headers=auth_headers,
+            json={"general": {"poll_interval": 5.0}, "fans": {}, "curves": {}},
+        )
+
+        assert response.status_code == 200
+        assert mock_config_cls.call_args.kwargs["update"].auto_check is False
+        assert mock_config_cls.call_args.kwargs["update"].notify_only is False
+
     def test_config_update_invalid_data(self, client, mock_daemon, auth_headers):
         """Config update should return 400 for invalid data."""
         mock_daemon.reload_config.side_effect = Exception("Invalid config")
@@ -536,6 +599,8 @@ class TestCurveCreateUpdateEndpoint:
 
     def test_create_curve_success(self, client, mock_daemon, auth_headers):
         """Curve creation should update config and reload."""
+        from pysysfan.config import CurveConfig
+
         mock_daemon._cfg.curves = {}
         mock_daemon.reload_config.return_value = True
 
@@ -547,6 +612,11 @@ class TestCurveCreateUpdateEndpoint:
         assert response.status_code == 200
         assert response.json()["success"] is True
         assert response.json()["name"] == "new_curve"
+        assert isinstance(mock_daemon._cfg.curves["new_curve"], CurveConfig)
+        assert mock_daemon._cfg.curves["new_curve"].points == [
+            (30.0, 30.0),
+            (60.0, 60.0),
+        ]
 
     def test_create_curve_config_not_loaded(self, client, mock_daemon, auth_headers):
         """Curve creation should return 503 if config not loaded."""
@@ -636,6 +706,36 @@ class TestFanUpdateEndpoint:
         assert response.status_code == 200
         assert response.json()["success"] is True
 
+    def test_update_fan_preserves_existing_fields_when_omitted(
+        self, client, mock_daemon, auth_headers
+    ):
+        """Partial fan updates should merge with the existing fan config."""
+        from pysysfan.config import FanConfig
+
+        mock_daemon._cfg.fans = {
+            "cpu_fan": FanConfig(
+                fan_id="/fan/0",
+                curve="balanced",
+                temp_ids=["/cpu/0/temp"],
+                aggregation="avg",
+                allow_fan_off=False,
+            )
+        }
+
+        response = client.put(
+            "/api/fans/cpu_fan",
+            headers=auth_headers,
+            json={"curve": "performance"},
+        )
+
+        assert response.status_code == 200
+        updated_fan = mock_daemon._cfg.fans["cpu_fan"]
+        assert updated_fan.fan_id == "/fan/0"
+        assert updated_fan.curve == "performance"
+        assert updated_fan.temp_ids == ["/cpu/0/temp"]
+        assert updated_fan.aggregation == "avg"
+        assert updated_fan.allow_fan_off is False
+
     def test_update_fan_config_not_loaded(self, client, mock_daemon, auth_headers):
         """Fan update should return 503 if config not loaded."""
         mock_daemon._cfg = None
@@ -715,6 +815,172 @@ class TestSensorStreamEndpoint:
         """Stream endpoint should require authentication."""
         response = client.get("/api/stream")
         assert response.status_code == 401
+
+    def test_stream_helper_matches_sensor_contract(self):
+        """The shared serializer used by /api/stream should include control metadata."""
+        from pysysfan.api.server import _sensors_payload
+
+        payload = _sensors_payload(
+            temps=[
+                MagicMock(
+                    identifier="/cpu/0/temp",
+                    hardware_name="CPU",
+                    sensor_name="Core 0",
+                    value=45.5,
+                )
+            ],
+            fans=[
+                MagicMock(
+                    identifier="/fan/0/rpm",
+                    hardware_name="Motherboard",
+                    sensor_name="CPU Fan",
+                    value=1200,
+                )
+            ],
+            controls=[
+                MagicMock(
+                    identifier="/fan/0/control",
+                    hardware_name="Motherboard",
+                    sensor_name="CPU Fan Control",
+                    current_value=50.0,
+                    has_control=True,
+                )
+            ],
+        )
+
+        assert payload["fans"][0]["control_percentage"] == 50.0
+        assert payload["fans"][0]["controllable"] is True
+
+
+class TestAlertEndpoints:
+    """Tests for alert rule API endpoints."""
+
+    def test_create_and_list_alert_rules(self, client, mock_daemon, auth_headers):
+        response = client.post(
+            "/api/alerts/rules",
+            headers=auth_headers,
+            json={
+                "sensor_id": "cpu_temp",
+                "alert_type": "high_temp",
+                "threshold": 80.0,
+            },
+        )
+
+        assert response.status_code == 200
+        assert response.json()["rule"]["rule_id"] == "cpu_temp:high_temp"
+
+        listed = client.get("/api/alerts/rules", headers=auth_headers)
+        assert listed.status_code == 200
+        assert listed.json()["count"] == 1
+        assert listed.json()["rules"][0]["rule_id"] == "cpu_temp:high_temp"
+
+    def test_update_alert_rule_by_rule_id(self, client, mock_daemon, auth_headers):
+        mock_daemon.notification_manager.add_rule(
+            AlertRule(sensor_id="cpu_temp", alert_type="high_temp", threshold=80.0)
+        )
+        mock_daemon.notification_manager.add_rule(
+            AlertRule(sensor_id="cpu_temp", alert_type="low_temp", threshold=10.0)
+        )
+
+        response = client.put(
+            "/api/alerts/rules/cpu_temp:low_temp",
+            headers=auth_headers,
+            json={"threshold": 8.0},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["rule_id"] == "cpu_temp:low_temp"
+        rules = mock_daemon.notification_manager.get_rules()
+        assert rules[0]["threshold"] == 80.0
+        assert rules[1]["threshold"] == 8.0
+
+    def test_update_alert_rule_rejects_invalid_type(
+        self, client, mock_daemon, auth_headers
+    ):
+        mock_daemon.notification_manager.add_rule(
+            AlertRule(sensor_id="cpu_temp", alert_type="high_temp", threshold=80.0)
+        )
+
+        response = client.put(
+            "/api/alerts/rules/cpu_temp:high_temp",
+            headers=auth_headers,
+            json={"alert_type": "invalid"},
+        )
+
+        assert response.status_code == 400
+
+    def test_delete_alert_rule_by_rule_id(self, client, mock_daemon, auth_headers):
+        mock_daemon.notification_manager.add_rule(
+            AlertRule(sensor_id="cpu_temp", alert_type="high_temp", threshold=80.0)
+        )
+        mock_daemon.notification_manager.add_rule(
+            AlertRule(sensor_id="cpu_temp", alert_type="low_temp", threshold=10.0)
+        )
+
+        response = client.delete(
+            "/api/alerts/rules/cpu_temp:high_temp",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        assert response.json()["deleted"] == "cpu_temp:high_temp"
+        rules = mock_daemon.notification_manager.get_rules()
+        assert len(rules) == 1
+        assert rules[0]["rule_id"] == "cpu_temp:low_temp"
+
+
+class TestProfileEndpoints:
+    """Tests for profile API endpoints."""
+
+    @patch("pysysfan.api.server.ProfileManager")
+    def test_profiles_list_returns_profiles(
+        self, mock_profile_manager_cls, client, auth_headers
+    ):
+        """Profile listing should return profile metadata and the active name."""
+        mock_profile_manager = mock_profile_manager_cls.return_value
+        default_profile = MagicMock()
+        default_profile.to_dict.return_value = {
+            "name": "default",
+            "display_name": "Default",
+        }
+        gaming_profile = MagicMock()
+        gaming_profile.to_dict.return_value = {
+            "name": "gaming",
+            "display_name": "Gaming",
+        }
+        mock_profile_manager.list_profiles.return_value = [
+            default_profile,
+            gaming_profile,
+        ]
+        mock_profile_manager.get_active_profile.return_value = "default"
+
+        response = client.get("/api/profiles", headers=auth_headers)
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["active"] == "default"
+        assert data["count"] == 2
+        assert data["profiles"][1]["name"] == "gaming"
+
+    @patch("pysysfan.api.server.ProfileManager")
+    def test_activate_profile_switches_daemon_config(
+        self, mock_profile_manager_cls, client, mock_daemon, auth_headers
+    ):
+        """Activating a profile should update daemon config_path and reload it."""
+        mock_profile_manager = mock_profile_manager_cls.return_value
+        mock_profile_path = MagicMock()
+        mock_profile_path.exists.return_value = True
+        mock_profile_path.__str__.return_value = "/tmp/gaming.yaml"
+        mock_profile_manager.get_profile_config_path.return_value = mock_profile_path
+        mock_daemon.reload_config.return_value = True
+
+        response = client.post("/api/profiles/gaming/activate", headers=auth_headers)
+
+        assert response.status_code == 200
+        assert response.json()["profile"] == "gaming"
+        assert mock_daemon.config_path is mock_profile_path
+        mock_profile_manager.set_active_profile.assert_called_once_with("gaming")
+        mock_daemon.reload_config.assert_called_once()
 
 
 class TestConfigToDict:
