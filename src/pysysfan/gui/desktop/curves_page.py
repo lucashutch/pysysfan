@@ -441,9 +441,12 @@ class CurvesPage(QWidget):
         current = selected or self.curve_selector.currentText()
         self.curve_selector.blockSignals(True)
         self.curve_selector.clear()
-        self.curve_selector.addItems(sorted(self._config.curves))
+        # Populate selectors from the config's curve names (already
+        # normalized by the loader to string keys).
+        curve_keys = list(self._config.curves.keys())
+        self.curve_selector.addItems(sorted(curve_keys))
         self.fan_curve_selector.clear()
-        self.fan_curve_selector.addItems(sorted(self._config.curves))
+        self.fan_curve_selector.addItems(sorted(curve_keys))
         self.curve_selector.blockSignals(False)
 
         target = (

@@ -100,6 +100,27 @@ class Config:
                 hysteresis=curve_data.get("hysteresis", 2.0),
             )
 
+        # YAML can parse unquoted keys like 'on'/'off' as booleans. Normalize
+        # any boolean curve keys to the string 'on'/'off' to avoid mixed-type
+        # dict keys causing issues elsewhere.
+        normalized_curves: dict[str, CurveConfig] = {}
+        existing_names = set()
+        for key, cfg in curves.items():
+            if isinstance(key, bool):
+                new_key = "on" if key else "off"
+                # Ensure uniqueness if a string key already exists
+                if new_key in normalized_curves or new_key in curves:
+                    new_key = _generate_unique_name(
+                        new_key,
+                        set(list(normalized_curves.keys()) + list(curves.keys())),
+                    )
+            else:
+                new_key = str(key)
+            normalized_curves[new_key] = cfg
+            existing_names.add(new_key)
+
+        curves = normalized_curves
+
         # Basic presets
         if "silent" not in curves:
             curves["silent"] = CurveConfig([(30, 20), (50, 40), (80, 100)])
