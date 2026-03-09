@@ -14,6 +14,8 @@ from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
     QPushButton,
+    QTableWidget,
+    QTableWidgetItem,
     QVBoxLayout,
     QWidget,
 )
@@ -50,11 +52,17 @@ class DashboardPage(QWidget):
 
     def __init__(
         self,
-        client_factory: Callable[[], PySysFanClient] | None = None,
+        client_factory: Callable[[], PySysFanClient]
+        | type[PySysFanClient]
+        | None = None,
         parent: QWidget | None = None,
     ):
         super().__init__(parent)
-        self._client_factory = client_factory or PySysFanClient
+        # Handle both factory function and class reference
+        if isinstance(client_factory, type):
+            self._client_factory = client_factory
+        else:
+            self._client_factory = client_factory or PySysFanClient
         self._client: PySysFanClient | None = None
         self._stream_worker: SensorStreamWorker | None = None
 
@@ -151,8 +159,10 @@ class DashboardPage(QWidget):
         temps_heading = QLabel("Temperatures", self)
         temps_heading.setStyleSheet("font-weight: 600;")
         temps_column.addWidget(temps_heading)
-        self.temperatures_list = QListWidget(self)
+        self.temperatures_list = QTableWidget(0, 2, self)
         self.temperatures_list.setObjectName("temperaturesList")
+        self.temperatures_list.setHorizontalHeaderLabels(["Sensor", "Value"])
+        self.temperatures_list.horizontalHeader().setStretchLastSection(False)
         temps_column.addWidget(self.temperatures_list)
         sensor_layout.addLayout(temps_column)
 
@@ -160,8 +170,10 @@ class DashboardPage(QWidget):
         fans_heading = QLabel("Fans", self)
         fans_heading.setStyleSheet("font-weight: 600;")
         fans_column.addWidget(fans_heading)
-        self.fans_list = QListWidget(self)
+        self.fans_list = QTableWidget(0, 2, self)
         self.fans_list.setObjectName("fansList")
+        self.fans_list.setHorizontalHeaderLabels(["Fan", "Speed"])
+        self.fans_list.horizontalHeader().setStretchLastSection(False)
         fans_column.addWidget(self.fans_list)
         sensor_layout.addLayout(fans_column)
 
@@ -176,6 +188,15 @@ class DashboardPage(QWidget):
 
         layout.addLayout(sensor_layout)
         layout.addStretch(1)
+
+    def closeEvent(self, event: QCloseEvent) -> None:
+        """Stop streaming worker before closing."""
+        self.stop_live_updates()
+        super().closeEvent(event)
+
+    def __del__(self) -> None:
+        """Ensure worker is stopped on deletion."""
+        self.stop_live_updates()
 
     def refresh_data(self) -> None:
         """Refresh the dashboard using the latest daemon snapshot and sensors."""
@@ -261,11 +282,6 @@ class DashboardPage(QWidget):
         self._stream_worker = None
         self.live_updates_button.setText("Start Live Updates")
 
-    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
-        """Ensure the stream worker is shut down when the page closes."""
-        self.stop_live_updates()
-        super().closeEvent(event)
-
     def _get_client(self) -> PySysFanClient:
         if self._client is None:
             self._client = self._client_factory()
@@ -322,18 +338,45 @@ class DashboardPage(QWidget):
         self.clear_alert_history_button.setEnabled(bool(alerts))
 
     def _apply_sensor_payload(self, sensors: dict[str, Any]) -> None:
-        self.temperatures_list.clear()
-        for sensor in sensors.get("temperatures", []):
-            label = (
-                f"{sensor.get('sensor_name', 'Unknown')}: "
-                f"{sensor.get('value', 'N/A')} C"
-            )
-            self.temperatures_list.addItem(label)
+        # Update temperatures table
+        temps = sensors.get("temperatures", [])
+        self.temperatures_list.setRowCount(len(temps))
+        for row, sensor in enumerate(temps):
+            hw_name = sensor.get("hardware_name", "Unknown")
+            sensor_name = sensor.get("sensor_name", "Unknown")
+            value = sensor.get("value", "N/A")
 
-        self.fans_list.clear()
-        for fan in sensors.get("fans", []):
-            label = f"{fan.get('sensor_name', 'Unknown')}: {fan.get('rpm', 'N/A')} RPM"
-            self.fans_list.addItem(label)
+            # Name column
+            name_item = QTableWidgetItem(f"{hw_name} / {sensor_name}")
+            self.temperatures_list.setItem(row, 0, name_item)
+
+            # Value column
+            if isinstance(value, (int, float)):
+                value_text = f"{value:.1f}°C"
+            else:
+                value_text = str(value)
+            value_item = QTableWidgetItem(value_text)
+            self.temperatures_list.setItem(row, 1, value_item)
+
+        # Update fans table
+        fans = sensors.get("fans", [])
+        self.fans_list.setRowCount(len(fans))
+        for row, fan in enumerate(fans):
+            hw_name = fan.get("hardware_name", "Unknown")
+            sensor_name = fan.get("sensor_name", "Unknown")
+            rpm = fan.get("rpm", "N/A")
+
+            # Name column
+            name_item = QTableWidgetItem(f"{hw_name} / {sensor_name}")
+            self.fans_list.setItem(row, 0, name_item)
+
+            # Value column
+            if isinstance(rpm, (int, float)):
+                rpm_text = f"{int(round(rpm))} RPM"
+            else:
+                rpm_text = str(rpm)
+            value_item = QTableWidgetItem(rpm_text)
+            self.fans_list.setItem(row, 1, value_item)
 
     def _handle_stream_payload(self, sensors: dict[str, Any]) -> None:
         self.connection_label.setText("Connection: Connected")

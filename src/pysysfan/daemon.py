@@ -421,7 +421,7 @@ class FanDaemon:
         applied: dict[str, float] = {}
 
         temps = self._hw.get_temperatures()
-        fans = self._hw.get_fans()
+        fans = self._hw.get_fan_speeds()
         self._current_temps = {sensor.identifier: sensor.value for sensor in temps}
         self._current_fan_speeds = {sensor.identifier: sensor.value for sensor in fans}
         self._current_targets = {}

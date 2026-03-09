@@ -44,21 +44,45 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("PySysFan")
         self.resize(1100, 720)
 
+        # Create shared API client for all pages
+        from pysysfan.api.client import PySysFanClient
+
+        self._shared_client = PySysFanClient
+
         self.tab_widget = QTabWidget(self)
         self.tab_widget.setObjectName("mainTabs")
         self.setCentralWidget(self.tab_widget)
 
+        self.dashboard_page = DashboardPage(
+            client_factory=self._shared_client, parent=self
+        )
+        self.curves_page = CurvesPage(client_factory=self._shared_client, parent=self)
+        self.service_page = ServicePage(client_factory=self._shared_client, parent=self)
+
         self.tab_widget.addTab(
-            DashboardPage(parent=self),
+            self.dashboard_page,
             "Dashboard",
         )
         self.tab_widget.addTab(
-            CurvesPage(parent=self),
+            self.curves_page,
             "Curves",
         )
         self.tab_widget.addTab(
-            ServicePage(parent=self),
+            self.service_page,
             "Service",
         )
 
         self.statusBar().showMessage("PySide6 GUI migration scaffold ready")
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        """Auto-connect and refresh dashboard when window is first shown."""
+        super().showEvent(event) if event else None
+        # Only do this once on first show
+        if hasattr(self, "_first_show_done"):
+            return
+        self._first_show_done = True
+        # Auto-connect dashboard on startup
+        try:
+            self.dashboard_page.refresh_data()
+        except Exception:
+            pass  # Connection failed, user can try manually

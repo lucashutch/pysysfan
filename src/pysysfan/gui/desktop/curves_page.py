@@ -33,7 +33,11 @@ class CurvesPage(QWidget):
         parent: QWidget | None = None,
     ):
         super().__init__(parent)
-        self._client_factory = client_factory or PySysFanClient
+        # Accept either a factory or direct class reference
+        if isinstance(client_factory, type):
+            self._client_factory = client_factory
+        else:
+            self._client_factory = client_factory or PySysFanClient
         self._client: PySysFanClient | None = None
         self._curves: dict[str, dict[str, Any]] = {}
         self._fans: dict[str, dict[str, Any]] = {}
@@ -333,7 +337,11 @@ class CurvesPage(QWidget):
         current = selected or self.curve_selector.currentText()
         self.curve_selector.blockSignals(True)
         self.curve_selector.clear()
-        self.curve_selector.addItems(sorted(self._curves))
+        # Filter out boolean string values from curve names
+        curves_to_display = sorted(
+            [name for name in self._curves if name not in ("true", "false")]
+        )
+        self.curve_selector.addItems(curves_to_display)
         self.curve_selector.blockSignals(False)
 
         if self.curve_selector.count() == 0:

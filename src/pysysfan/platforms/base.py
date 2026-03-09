@@ -177,6 +177,15 @@ class BaseHardwareManager(ABC):
         pass
 
     @abstractmethod
+    def get_controls(self) -> list[ControlInfo]:
+        """Get all controllable fan outputs.
+
+        Returns:
+            List of ControlInfo objects
+        """
+        pass
+
+    @abstractmethod
     def set_fan_speed(
         self, control_identifier: str, percent: float, force_zero: bool = True
     ) -> None:

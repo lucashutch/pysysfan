@@ -74,7 +74,7 @@ def register_core_routes(
 
         return server_module._sensors_payload(
             daemon._hw.get_temperatures(),
-            daemon._hw.get_fans(),
+            daemon._hw.get_fan_speeds(),
             daemon._hw.get_controls(),
         )
 
@@ -117,7 +117,7 @@ def register_core_routes(
                     "sensor_name": sensor.sensor_name,
                     "rpm": sensor.value,
                 }
-                for sensor in daemon._hw.get_fans()
+                for sensor in daemon._hw.get_fan_speeds()
             ],
             "timestamp": time.time(),
         }
@@ -163,7 +163,7 @@ def register_core_routes(
 
                     sensors = server_module._sensors_payload(
                         daemon._hw.get_temperatures(),
-                        daemon._hw.get_fans(),
+                        daemon._hw.get_fan_speeds(),
                         daemon._hw.get_controls(),
                     )
                     yield {"event": "sensors", "data": json.dumps(sensors)}
