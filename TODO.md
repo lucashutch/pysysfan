@@ -1,5 +1,17 @@
 # pysysfan Roadmap
 
+## Simplify GUI / Remove HTTP API
+- **Status**: In progress
+- Replace the local FastAPI bridge with a local daemon state file
+- Have the GUI read daemon state directly from disk instead of HTTP
+- Keep config editing YAML-first with daemon auto-reload via file watching
+- Extend service commands so the GUI can drive install/start/stop/enable/disable flows through the existing CLI/service helpers
+- Current implementation focus:
+  - Phase 0: state file foundation
+  - Phase 1: daemon state snapshots
+  - Phase 2: remove HTTP API package and dependencies
+  - Phase 3: service/CLI alignment
+
 ## Platform Support
 - **Current**: Windows only
 - **Future**: Linux support may be revisited for systems with proper fan control interfaces
@@ -8,9 +20,9 @@
   - Desktop Linux systems with standard PWM controls may be supported in the future
 
 ## Graphical User Interface (GUI)
-- **Status**: Phase 7 (Service Management UI) - COMPLETED ✓
+- **Status**: Native PySide6 GUI in place; backend simplification in progress
 - Optional standalone GUI application
-- Native desktop client now built with PySide6 over the FastAPI daemon API
+- Native desktop client now built with PySide6
 - Features:
   - Visual fan curve editor (drag and drop points)
   - Live sensor graphs over time
@@ -21,7 +33,7 @@
   - Seamlessly updates the YAML config file used by the background daemon
 
 ## PySide6 migration
-- Replace the desktop launcher and top-level shell with PySide6 while keeping FastAPI as the runtime boundary
+- Replace the desktop launcher and top-level shell with PySide6 while simplifying the runtime boundary
 - Port the dashboard, service, and curve views in small validated slices
 - Remove the remaining legacy web/Tauri GUI after the native surface is fully in use
 
@@ -54,7 +66,6 @@
 - remove unity tests for downloader scripts as they are not critical to the core functionality of the project
 
 ## simplify the gui code and the way the frontend and backend communicate
-- Refactor the API communication layer to be more straightforward and maintainable
-- Use a consistent pattern for API calls, error handling, and data management
-- Repair API contract mismatches around daemon bind settings, live runtime state snapshots, and sensor controllability metadata
-- Keep the desktop dashboard aligned with the daemon API for profiles, alerts, and service state
+- Remove the local HTTP layer where it adds complexity without user value
+- Use a local daemon state file plus direct config/service integration instead
+- Keep the desktop dashboard aligned with daemon state snapshots, profiles, alerts, and service state
