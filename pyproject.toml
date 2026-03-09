@@ -12,10 +12,6 @@ dependencies = [
     "rich",
     "packaging",
     "watchdog>=3.0",
-    "fastapi",
-    "uvicorn[standard]",
-    "sse-starlette",
-    "psutil",
 ]
 
 [project.scripts]
@@ -25,7 +21,7 @@ pysysfan-install-pawnio = "pysysfan.install:install_pawnio"
 pysysfan-gui = "pysysfan.gui:main"
 
 [project.optional-dependencies]
-gui = ["PySide6>=6.8", "sseclient-py>=1.8.0"]
+gui = ["PySide6>=6.8"]
 
 [build-system]
 requires = ["hatchling", "hatch-vcs"]

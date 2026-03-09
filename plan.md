@@ -26,6 +26,8 @@ Status: completed.
 2. Remove API runtime options from the daemon and CLI.
 3. Remove API-only dependencies from project metadata.
 
+Status: completed.
+
 ### Phase 3 — Service/CLI alignment
 1. Add missing CLI service commands for start/stop/enable/disable/restart.
 2. Add stop support to the Windows service helper.

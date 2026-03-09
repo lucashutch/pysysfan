@@ -47,9 +47,6 @@ class FanDaemon:
         config_path: Path = DEFAULT_CONFIG_PATH,
         auto_reload: bool = True,
         cache_manager: HardwareCacheManager | None = None,
-        api_enabled: bool = True,
-        api_host: str = "127.0.0.1",
-        api_port: int = 8765,
         state_path: Path = DEFAULT_STATE_PATH,
     ):
         # Use active profile if no explicit config_path provided
@@ -72,13 +69,6 @@ class FanDaemon:
         self._unconfigured_fans: set[str] = set()
         self._update_thread: threading.Thread | None = None
         self.state_path = Path(state_path)
-
-        # API server settings
-        self._api_enabled = api_enabled
-        self._api_host = api_host
-        self._api_port = api_port
-        self._api_server = None
-        self._api_thread: threading.Thread | None = None
         self._start_time: float = 0.0
         self._current_temps: dict[str, float] = {}
         self._current_fan_speeds: dict[str, float] = {}
@@ -603,21 +593,6 @@ class FanDaemon:
 
         return applied
 
-    # ── API Server ────────────────────────────────────────────────────
-
-    def _start_api_server(self) -> None:
-        """Temporary compatibility shim while the HTTP API is being removed."""
-        if self._api_enabled:
-            logger.info(
-                "HTTP API startup skipped: daemon state is now written to %s",
-                self.state_path,
-            )
-
-    def _stop_api_server(self) -> None:
-        """Temporary compatibility shim while the HTTP API is being removed."""
-        self._api_server = None
-        self._api_thread = None
-
     def _update_state(self) -> None:
         """Persist the latest daemon runtime snapshot to disk."""
         write_state(self._build_state_snapshot(), self.state_path)
@@ -683,9 +658,6 @@ class FanDaemon:
         # Initialize hardware (runs in parallel with update check)
         self._hw = self._open_hardware()
 
-        # Start API server
-        self._start_api_server()
-
         try:
             scan_result = self._use_cached_scan()
             logger.info(
@@ -733,6 +705,5 @@ class FanDaemon:
             self._hw.restore_defaults()
             self._hw.close()
             self._hw = None
-            self._stop_api_server()
             delete_state(self.state_path)
             logger.info("Daemon stopped.")

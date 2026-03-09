@@ -732,31 +732,9 @@ def config_reload(ctx):
     envvar="PYSYSFAN_CONFIG",
     help="Path to config file. Default: ~/.pysysfan/config.yaml",
 )
-@click.option(
-    "--api/--no-api",
-    "api_enabled",
-    default=True,
-    help="Enable or disable the REST API server (default: enabled).",
-)
-@click.option(
-    "--api-port",
-    type=int,
-    default=8765,
-    envvar="PYSYSFAN_API_PORT",
-    help="Port for the API server (default: 8765).",
-)
-@click.option(
-    "--api-host",
-    default="127.0.0.1",
-    envvar="PYSYSFAN_API_HOST",
-    help="Host for the API server (default: 127.0.0.1).",
-)
 def run(
     once: bool,
     config_path: str | None,
-    api_enabled: bool,
-    api_port: int,
-    api_host: str,
 ):
     """Start the fan control daemon.
 
@@ -782,12 +760,7 @@ def run(
         )
         raise SystemExit(1)
 
-    daemon = FanDaemon(
-        config_path=cfg_path,
-        api_enabled=api_enabled,
-        api_host=api_host,
-        api_port=api_port,
-    )
+    daemon = FanDaemon(config_path=cfg_path)
 
     if once:
         console.print("[bold]Running single control pass...[/]")
