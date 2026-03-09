@@ -26,6 +26,7 @@ class SensorStreamWorker(QThread):
 
     sensors_received = Signal(dict)
     stream_failed = Signal(str)
+    stream_finished = Signal()
 
     def __init__(self, client: PySysFanClient):
         super().__init__()
@@ -37,6 +38,9 @@ class SensorStreamWorker(QThread):
                 if self.isInterruptionRequested():
                     return
                 self.sensors_received.emit(payload)
+            # Signal that the generator completed naturally so the UI can
+            # transition back to the stopped state deterministically.
+            self.stream_finished.emit()
         except Exception as exc:
             self.stream_failed.emit(str(exc))
 
@@ -241,6 +245,7 @@ class DashboardPage(QWidget):
 
         worker.sensors_received.connect(self._handle_stream_payload)
         worker.stream_failed.connect(self._handle_stream_failure)
+        worker.stream_finished.connect(self._handle_stream_finished)
         worker.finished.connect(self._handle_stream_finished)
         self._stream_worker = worker
         self.live_updates_button.setText("Stop Live Updates")
@@ -341,9 +346,13 @@ class DashboardPage(QWidget):
         self.stop_live_updates()
 
     def _handle_stream_finished(self) -> None:
-        if self._stream_worker is not None and not self._stream_worker.isRunning():
-            self._stream_worker = None
-            self.live_updates_button.setText("Start Live Updates")
+        # Regardless of thread running state, treat this as the end of
+        # the active stream and update UI immediately. This makes the
+        # behaviour deterministic across platforms and avoids races
+        # where the thread finishes slightly later than the payload
+        # delivery.
+        self._stream_worker = None
+        self.live_updates_button.setText("Start Live Updates")
 
     def _show_error(self, message: str) -> None:
         self.error_label.setStyleSheet("color: #b00020;")

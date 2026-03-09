@@ -146,6 +146,8 @@ def test_dashboard_live_updates_apply_stream_payload(qtbot) -> None:
 
     page.toggle_live_updates()
     qtbot.waitUntil(lambda: page.temperatures_list.count() == 1)
+    # Wait for the stream to finish and the button to reset
+    qtbot.waitUntil(lambda: page.live_updates_button.text() == "Start Live Updates")
 
     assert page.live_updates_button.text() == "Start Live Updates"
     assert page.temperatures_list.item(0).text() == "CPU Core: 50.0 C"
