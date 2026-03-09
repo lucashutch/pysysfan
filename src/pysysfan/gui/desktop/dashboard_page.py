@@ -16,10 +16,10 @@ from PySide6.QtWidgets import (
     QLabel,
     QMenu,
     QScrollArea,
-    QSplitter,
     QToolButton,
     QVBoxLayout,
     QWidget,
+    QSplitter,
 )
 
 from pysysfan.config import Config, FanConfig
@@ -78,11 +78,21 @@ class DashboardPage(QWidget):
         self._temperature_labels: dict[str, str] = {}
         self._fan_labels: dict[str, str] = {}
         self._target_labels: dict[str, str] = {}
+        self._fan_groups: dict[str, str] = {}
+        self._target_groups: dict[str, str] = {}
         self._fan_summary_cards: list[QWidget] = []
         self._daemon_indicator_tone = "warning"
         self._profile_badge_tone = "neutral"
         self._alerts_badge_tone = "neutral"
         self._recent_alerts: list[str] = []
+        self._active_config: Config | None = None
+        self._graph_controls: dict[str, dict[str, QWidget | QMenu]] = {}
+        self._graph_enabled_series: dict[str, set[str]] = {
+            "temperature": set(),
+            "fan_rpm": set(),
+            "fan_target": set(),
+        }
+        self._graph_defaults_initialized: set[str] = set()
 
         self.setObjectName("dashboardRoot")
         layout = QVBoxLayout(self)
@@ -243,6 +253,7 @@ class DashboardPage(QWidget):
         right_layout.addLayout(graph_header)
 
         self.temperature_plot = self._create_plot_widget(
+            "temperature",
             "Temperatures",
             "Seconds",
             "°C",
@@ -250,19 +261,22 @@ class DashboardPage(QWidget):
         self.temperature_plot.setMinimumHeight(320)
         right_layout.addWidget(self.temperature_plot)
 
-        lower_plot_row = QHBoxLayout()
-        lower_plot_row.setSpacing(16)
-        self.fan_rpm_plot = self._create_plot_widget("Fan RPM", "Seconds", "RPM")
+        self.fan_rpm_plot = self._create_plot_widget(
+            "fan_rpm",
+            "Fan RPM",
+            "Seconds",
+            "RPM",
+        )
         self.fan_target_plot = self._create_plot_widget(
+            "fan_target",
             "Target PWM",
             "Seconds",
             "%",
         )
         self.fan_rpm_plot.setMinimumHeight(240)
         self.fan_target_plot.setMinimumHeight(240)
-        lower_plot_row.addWidget(self.fan_rpm_plot)
-        lower_plot_row.addWidget(self.fan_target_plot)
-        right_layout.addLayout(lower_plot_row)
+        right_layout.addWidget(self.fan_rpm_plot)
+        right_layout.addWidget(self.fan_target_plot)
         right_layout.addStretch(1)
 
         self.main_splitter.addWidget(self.left_panel)
@@ -298,6 +312,7 @@ class DashboardPage(QWidget):
         self._apply_alerts(state)
         self._record_live_labels(state)
         self._append_history(state)
+        self._refresh_graph_controls()
         self._refresh_plots()
 
     def start_service(self) -> None:
@@ -344,8 +359,10 @@ class DashboardPage(QWidget):
             "Open the Config tab to review mappings, then start the service from the Service tab if needed."
         )
         self.profile_mapping_label.setText("No fan mappings available.")
+        self._active_config = None
         self._rebuild_fan_summary_cards(None, None)
         self._apply_alert_menu([])
+        self._refresh_graph_controls()
         self._style_status_widgets()
         if installed:
             self._show_message(
@@ -373,6 +390,7 @@ class DashboardPage(QWidget):
             else state.curves_configured
         )
         sensor_count = self._sensor_count(active_config)
+        self._active_config = active_config
 
         self._daemon_indicator_tone = "critical" if state.config_error else "success"
         self.daemon_indicator.setToolTip(
@@ -427,7 +445,11 @@ class DashboardPage(QWidget):
         self._style_status_widgets()
 
     def _record_live_labels(self, state: DaemonStateFile) -> None:
+        self._fan_groups.clear()
+        self._target_groups.clear()
         for sensor in state.temperatures:
+            if not self._is_relevant_temperature(sensor):
+                continue
             self._temperature_labels[sensor.identifier] = (
                 f"{sensor.hardware_name} / {sensor.sensor_name}"
             )
@@ -435,8 +457,10 @@ class DashboardPage(QWidget):
         for fan in state.fan_speeds:
             label = f"{fan.hardware_name} / {fan.sensor_name}"
             self._fan_labels[fan.identifier] = label
+            self._fan_groups[fan.identifier] = fan.hardware_name
             target_label = fan.control_identifier or fan.identifier
             self._target_labels[target_label] = label
+            self._target_groups[target_label] = fan.hardware_name
 
     def _append_history(self, state: DaemonStateFile) -> None:
         if self._last_state_timestamp == state.timestamp:
@@ -444,7 +468,7 @@ class DashboardPage(QWidget):
 
         self._last_state_timestamp = state.timestamp
         for sensor in state.temperatures:
-            if sensor.value is not None:
+            if sensor.value is not None and self._is_relevant_temperature(sensor):
                 self._temperature_history[sensor.identifier].append(
                     (state.timestamp, sensor.value)
                 )
@@ -481,7 +505,13 @@ class DashboardPage(QWidget):
             self._trim_history(self._last_state_timestamp)
         self._refresh_plots()
 
-    def _create_plot_widget(self, title: str, x_label: str, y_label: str) -> QWidget:
+    def _create_plot_widget(
+        self,
+        graph_key: str,
+        title: str,
+        x_label: str,
+        y_label: str,
+    ) -> QWidget:
         if pg is None:
             fallback = QLabel(
                 f"Install pyqtgraph to enable the {title.lower()} graph.",
@@ -494,9 +524,37 @@ class DashboardPage(QWidget):
         plot_widget.setLabel("bottom", x_label)
         plot_widget.setLabel("left", y_label)
         plot_widget.showGrid(x=True, y=True, alpha=0.25)
-        plot_widget.addLegend(offset=(12, 12))
         self._apply_plot_theme(plot_widget)
-        return self._wrap_widget(title, plot_widget)
+
+        plot_group = QGroupBox(title, self.right_panel)
+        group_layout = QVBoxLayout(plot_group)
+        group_layout.setContentsMargins(12, 12, 12, 12)
+        group_layout.setSpacing(10)
+
+        controls_row = QHBoxLayout()
+        controls_row.setSpacing(8)
+        subtitle = QLabel("Choose which series are visible.", plot_group)
+        subtitle.setProperty("sectionRole", "subtitle")
+        controls_row.addWidget(subtitle)
+        controls_row.addStretch(1)
+
+        series_button = QToolButton(plot_group)
+        series_button.setObjectName(f"{graph_key}SeriesButton")
+        series_button.setText("Series")
+        series_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        series_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        series_menu = QMenu(series_button)
+        series_button.setMenu(series_menu)
+        controls_row.addWidget(series_button)
+        group_layout.addLayout(controls_row)
+        group_layout.addWidget(plot_widget)
+
+        self._graph_controls[graph_key] = {
+            "group": plot_group,
+            "menu": series_menu,
+            "button": series_button,
+        }
+        return plot_group
 
     def _apply_plot_theme(self, plot_container: QWidget) -> None:
         if pg is None:
@@ -516,11 +574,6 @@ class DashboardPage(QWidget):
         plot_item.getAxis("top").setPen(colors["muted"])
         plot_item.getAxis("right").setPen(colors["muted"])
         plot_item.showGrid(x=True, y=True, alpha=0.25)
-        if plot_item.legend is not None:
-            plot_item.legend.setBrush(colors["background"])
-            plot_item.legend.setPen(colors["grid"])
-            for sample, label in plot_item.legend.items:
-                label.setAttr("color", colors["foreground"])
 
     def _refresh_plots(self) -> None:
         if pg is None:
@@ -555,19 +608,19 @@ class DashboardPage(QWidget):
         self._apply_plot_theme(plot_container)
         plot_item = plot_widget.getPlotItem()
         plot_item.clear()
-        if plot_item.legend is None:
-            plot_item.addLegend(offset=(12, 12))
-        else:
-            plot_item.legend.clear()
-        if not history_map:
+        filtered_history = self._filtered_history_map(
+            self._graph_key_for_plot(plot_container),
+            history_map,
+        )
+        if not filtered_history:
             return
 
         latest_timestamp = max(
-            series[-1][0] for series in history_map.values() if series
+            series[-1][0] for series in filtered_history.values() if series
         )
         colors = plot_theme(self.palette())
         series_colors = colors["series"]
-        for index, (sensor_id, series) in enumerate(sorted(history_map.items())):
+        for index, (sensor_id, series) in enumerate(sorted(filtered_history.items())):
             if not series:
                 continue
             xs = [point[0] - latest_timestamp for point in series]
@@ -580,6 +633,223 @@ class DashboardPage(QWidget):
                 name=labels.get(sensor_id, sensor_id),
                 antialias=True,
             )
+
+    def _refresh_graph_controls(self) -> None:
+        catalogs = {
+            "temperature": self._build_temperature_catalog(),
+            "fan_rpm": self._build_grouped_catalog(
+                self._fan_rpm_history,
+                self._fan_labels,
+                self._fan_groups,
+                singular_prefix="Fan",
+            ),
+            "fan_target": self._build_grouped_catalog(
+                self._fan_target_history,
+                self._target_labels,
+                self._target_groups,
+                singular_prefix="Target",
+            ),
+        }
+        for graph_key, catalog in catalogs.items():
+            self._sync_graph_selection(graph_key, catalog)
+            self._populate_graph_menu(graph_key, catalog)
+
+    def _build_temperature_catalog(self) -> dict[str, str]:
+        return {
+            sensor_id: self._temperature_labels.get(sensor_id, sensor_id)
+            for sensor_id, series in sorted(self._temperature_history.items())
+            if series
+        }
+
+    def _build_grouped_catalog(
+        self,
+        history_map: dict[str, deque[tuple[float, float]]],
+        labels: dict[str, str],
+        group_map: dict[str, str],
+        *,
+        singular_prefix: str,
+    ) -> dict[str, str]:
+        catalog: dict[str, str] = {}
+        groups = sorted({group for group in group_map.values() if group})
+        for group in groups:
+            catalog[f"group::{group}"] = group
+        for series_id, series in sorted(history_map.items()):
+            if not series:
+                continue
+            catalog[f"series::{series_id}"] = (
+                f"{singular_prefix} · {labels.get(series_id, series_id)}"
+            )
+        return catalog
+
+    def _sync_graph_selection(
+        self,
+        graph_key: str,
+        catalog: dict[str, str],
+    ) -> None:
+        if not catalog:
+            self._graph_enabled_series[graph_key] = set()
+            return
+
+        enabled = self._graph_enabled_series[graph_key]
+        if graph_key not in self._graph_defaults_initialized:
+            self._graph_enabled_series[graph_key] = self._default_graph_selection(
+                graph_key,
+                catalog,
+            )
+            self._graph_defaults_initialized.add(graph_key)
+            return
+
+        available = set(catalog)
+        filtered = {series_id for series_id in enabled if series_id in available}
+        if enabled and not filtered and catalog:
+            filtered = self._default_graph_selection(graph_key, catalog)
+        self._graph_enabled_series[graph_key] = filtered
+
+    def _default_graph_selection(
+        self,
+        graph_key: str,
+        catalog: dict[str, str],
+    ) -> set[str]:
+        if not catalog:
+            return set()
+
+        if graph_key == "temperature":
+            controlled_ids = []
+            if self._active_config is not None:
+                for fan in self._active_config.fans.values():
+                    controlled_ids.extend(fan.temp_ids)
+            defaults = [
+                sensor_id for sensor_id in controlled_ids if sensor_id in catalog
+            ]
+            return set(defaults or list(catalog)[:3])
+
+        group_defaults = [
+            series_id for series_id in catalog if series_id.startswith("group::")
+        ]
+        return set(group_defaults or list(catalog)[:1])
+
+    def _populate_graph_menu(
+        self,
+        graph_key: str,
+        catalog: dict[str, str],
+    ) -> None:
+        controls = self._graph_controls.get(graph_key)
+        if not controls:
+            return
+        menu = controls["menu"]
+        button = controls["button"]
+        if not isinstance(menu, QMenu) or not isinstance(button, QToolButton):
+            return
+
+        menu.clear()
+        if not catalog:
+            empty_action = QAction("No series available", menu)
+            empty_action.setEnabled(False)
+            menu.addAction(empty_action)
+            button.setText("Series")
+            return
+
+        enabled_count = 0
+        for series_id, label in catalog.items():
+            action = QAction(label, menu)
+            action.setCheckable(True)
+            checked = series_id in self._graph_enabled_series[graph_key]
+            action.setChecked(checked)
+            if checked:
+                enabled_count += 1
+            action.toggled.connect(
+                lambda checked, g=graph_key, s=series_id: self._toggle_graph_series(
+                    g,
+                    s,
+                    checked,
+                )
+            )
+            menu.addAction(action)
+
+        button.setText(f"Series ({enabled_count})")
+
+    def _toggle_graph_series(
+        self,
+        graph_key: str,
+        series_id: str,
+        checked: bool,
+    ) -> None:
+        enabled = self._graph_enabled_series[graph_key]
+        if checked:
+            enabled.add(series_id)
+        else:
+            enabled.discard(series_id)
+        self._refresh_graph_controls()
+        self._refresh_plots()
+
+    def _filtered_history_map(
+        self,
+        graph_key: str,
+        history_map: dict[str, deque[tuple[float, float]]],
+    ) -> dict[str, list[tuple[float, float]]]:
+        enabled = self._graph_enabled_series.get(graph_key, set())
+        if not enabled:
+            return {}
+
+        if graph_key == "temperature":
+            return {
+                sensor_id: list(series)
+                for sensor_id, series in history_map.items()
+                if sensor_id in enabled and series
+            }
+
+        group_map = self._fan_groups if graph_key == "fan_rpm" else self._target_groups
+        labels = self._fan_labels if graph_key == "fan_rpm" else self._target_labels
+        grouped_history = self._build_grouped_history(history_map, group_map)
+        filtered: dict[str, list[tuple[float, float]]] = {}
+        for series_id in enabled:
+            if series_id.startswith("group::"):
+                group = series_id.split("::", 1)[1]
+                if group in grouped_history:
+                    filtered[series_id] = grouped_history[group]
+                    if graph_key == "fan_rpm":
+                        self._fan_labels[series_id] = group
+                    else:
+                        self._target_labels[series_id] = group
+                continue
+
+            raw_id = series_id.split("::", 1)[1] if "::" in series_id else series_id
+            series = history_map.get(raw_id)
+            if series:
+                filtered[series_id] = list(series)
+                if graph_key == "fan_rpm":
+                    self._fan_labels[series_id] = labels.get(raw_id, raw_id)
+                else:
+                    self._target_labels[series_id] = labels.get(raw_id, raw_id)
+        return filtered
+
+    def _build_grouped_history(
+        self,
+        history_map: dict[str, deque[tuple[float, float]]],
+        group_map: dict[str, str],
+    ) -> dict[str, list[tuple[float, float]]]:
+        grouped_points: dict[str, dict[float, list[float]]] = defaultdict(dict)
+        for series_id, series in history_map.items():
+            group = group_map.get(series_id)
+            if not group:
+                continue
+            bucket = grouped_points.setdefault(group, {})
+            for timestamp, value in series:
+                bucket.setdefault(timestamp, []).append(value)
+
+        return {
+            group: [
+                (timestamp, sum(values) / len(values))
+                for timestamp, values in sorted(points.items())
+            ]
+            for group, points in grouped_points.items()
+        }
+
+    def _graph_key_for_plot(self, plot_container: QWidget) -> str:
+        for graph_key, controls in self._graph_controls.items():
+            if controls.get("group") is plot_container:
+                return graph_key
+        return ""
 
     def _load_active_config(self, state: DaemonStateFile) -> Config | None:
         config_path = Path(state.config_path)
@@ -763,6 +1033,14 @@ class DashboardPage(QWidget):
         return resolved or ["No sensors configured"]
 
     @staticmethod
+    def _is_relevant_temperature(sensor) -> bool:
+        combined = (
+            f"{sensor.hardware_name} {sensor.sensor_name} {sensor.identifier}"
+        ).lower()
+        blocked_terms = ("alarm", "limit")
+        return not any(term in combined for term in blocked_terms)
+
+    @staticmethod
     def _compact_identifier(identifier: str) -> str:
         trimmed = identifier.strip("/")
         if not trimmed:
@@ -784,9 +1062,10 @@ class DashboardPage(QWidget):
             return widget
         if widget.layout() is None or widget.layout().count() == 0:
             return None
-        child = widget.layout().itemAt(0).widget()
-        if isinstance(child, DashboardPlotWidget):
-            return child
+        for index in range(widget.layout().count()):
+            child = widget.layout().itemAt(index).widget()
+            if isinstance(child, DashboardPlotWidget):
+                return child
         return None
 
     def _show_message(self, message: str, *, is_error: bool) -> None:
