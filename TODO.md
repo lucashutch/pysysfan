@@ -41,6 +41,7 @@
 - Integration tests for API endpoints
 - End-to-end tests simulating user interactions with the GUI
 - Use Qt widget tests for the desktop GUI and pytest for the FastAPI daemon
+- Keep CI installing the `gui` extra so Qt widget tests run under `pytest-qt`
 - Keep API stream, alert-rule, and config-persistence contracts covered as the desktop client evolves
 - Keep the desktop helper entry points and prerequisite checks covered so GUI packaging regressions are caught early
 - Cover profile switching, alert summaries/history, and richer service interactions in the PySide6 desktop tests

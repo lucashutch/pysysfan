@@ -23,7 +23,7 @@ jobs:
 
   test:
     runs-on: windows-latest
-    timeout-minutes: 2
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - name: Install uv
@@ -33,12 +33,21 @@ jobs:
           version: "latest"
 
       - name: Install dependencies
-        run: uv sync
+        run: uv sync --extra gui
       - name: Run tests
         run: |
-          uv run pytest | Tee-Object -FilePath pytest_output.txt
-          echo "## Coverage Summary" >> $env:GITHUB_STEP_SUMMARY
-          echo '```text' >> $env:GITHUB_STEP_SUMMARY
-          Select-String -Path pytest_output.txt -Pattern '^Name.*Stmts','^TOTAL' | ForEach-Object { $_.Line } >> $env:GITHUB_STEP_SUMMARY
-          echo '```' >> $env:GITHUB_STEP_SUMMARY
+          $pytestOutput = "pytest_output.txt"
+          uv run pytest tests/ 2>&1 | Tee-Object -FilePath $pytestOutput
+          $pytestExitCode = $LASTEXITCODE
+
+          if (Test-Path $pytestOutput) {
+            echo "## Coverage Summary" >> $env:GITHUB_STEP_SUMMARY
+            echo '```text' >> $env:GITHUB_STEP_SUMMARY
+            Select-String -Path $pytestOutput -Pattern '^Name.*Stmts','^TOTAL' | ForEach-Object { $_.Line } >> $env:GITHUB_STEP_SUMMARY
+            echo '```' >> $env:GITHUB_STEP_SUMMARY
+          }
+
+          if ($pytestExitCode -ne 0) {
+            exit $pytestExitCode
+          }
         shell: pwsh
