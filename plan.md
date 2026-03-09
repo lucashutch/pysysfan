@@ -1,5 +1,18 @@
 # Simplify GUI / Remove HTTP API Plan
 
+## Active Work — Dashboard Stat Implementation
+
+### Goal
+
+Improve the dashboard stat section so the GUI highlights the active profile, fan targets, and controlling sensors with clearer visual hierarchy.
+
+### Current slice
+1. Add planning and tracking artifacts for the dashboard stat refresh.
+2. Implement a first-pass dashboard stat redesign with shared QSS styling.
+3. Update dashboard GUI tests and run targeted validation.
+
+Status: in progress.
+
 ## Goal
 
 Replace the local HTTP API with a lightweight local state-file model so the daemon, CLI, and future GUI can share runtime state without FastAPI.

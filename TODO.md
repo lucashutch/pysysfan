@@ -1,23 +1,5 @@
 # pysysfan Roadmap
 
-## Simplify GUI / Remove HTTP API
-- **Status**: Completed
-- Replace the local FastAPI bridge with a local daemon state file
-- Have the GUI read daemon state directly from disk instead of HTTP
-- Keep config editing YAML-first with daemon auto-reload via file watching
-- Extend service commands so the GUI can drive install/start/stop/enable/disable flows through the existing CLI/service helpers
-- Completed implementation:
-  - Phase 0: state file foundation ✓
-  - Phase 1: daemon state snapshots ✓
-  - Phase 2: remove HTTP API package and dependencies ✓
-  - Phase 3: service/CLI alignment ✓
-  - Phase 4: desktop local backend helpers ✓
-  - Phase 5: dashboard state-file rewrite ✓
-  - Phase 6: direct YAML/profile curve editor rewrite ✓
-  - Phase 7: service page local helper rewrite ✓
-  - Phase 8: GUI dependency and test refresh ✓
-  - Phase 9: final validation and cleanup ✓
-
 ## Platform Support
 - **Current**: Windows only
 - **Future**: Linux support may be revisited for systems with proper fan control interfaces
@@ -63,7 +45,7 @@
 - Keep the desktop helper entry points and prerequisite checks covered so GUI packaging regressions are caught early
 - Cover profile switching, alert summaries/history, and richer service interactions in the PySide6 desktop tests
 
-- Refine UI visuals: add icons, colored status badges, improved card styling, and small UX polish to stat cards and plots
+
 
 ## move downloader helpers scripts to separate scripts dir
 - Create a `scripts/` directory for all helper scripts
@@ -72,8 +54,13 @@
 - Ensure all scripts are well-documented and have clear usage instructions
 - remove unity tests for downloader scripts as they are not critical to the core functionality of the project
 
-## simplify the gui code and the way the frontend and backend communicate
-- Status: complete for the current PySide6 desktop surface
-- Remove the local HTTP layer where it adds complexity without user value
-- Use a local daemon state file plus direct config/service integration instead
-- Keep the desktop dashboard aligned with daemon state snapshots, profiles, alerts, and service state
+## - Refine UI visuals: 
+- status: dashboard stat-card implementation in progress
+- add icons, colored status badges, improved card styling, and small UX polish to stat cards and plots
+- fix the curve plotting, it is very basic and doesnt look good and on all screens it isnt scaled well.
+- the chosen card items at the top of the dashboard look very basic and could use some styling and polish to make them more visually appealing and easier to read at a glance.
+- add icons to the stat cards to visually represent the different sensor types (CPU, GPU, etc.) and alert statuses (normal, warning, critical).
+- the items in the cards dont make sense. It should more show the collection of sensor that are currently being used to control the fans, and the current target speeds for each fan. The current profile should be more prominent and ideally there should be a way to see at a glance which sensors are controlling which fans and what the current targets are.
+- the curve plotting is very basic and could use some improvements to make it more visually appealing and easier to read. This could include adding grid lines, improving the color scheme, and making sure the plot scales well on different screen sizes.
+- the overall styling of the dashboard could be improved to make it more visually appealing and easier to read. This could include using a more modern design, improving the layout, and adding some visual hierarchy to make it easier to find important information at a glance.
+- the fan config section could be improved to make it more user-friendly and visually appealing. This could include adding icons to represent different fan types, improving the layout of the controls, and making it easier to see which fans are currently active and what their target speeds are. it should also include the option to select temps from a ddrop down by common name rather than path and easily be able to add multiple and delete them. It should also be clear which fans are assigned to which curves and which sensors are controlling them.
