@@ -270,7 +270,7 @@ def _generate_example_config(config_path):
 # Run 'pysysfan scan' to discover sensor identifiers for your hardware.
 
 general:
-  poll_interval: 2  # seconds between control updates
+    poll_interval: 1  # seconds between control updates
 
 fans:
   # Example: map a fan header to temperature sources and curve
@@ -392,7 +392,7 @@ def _generate_auto_config(config_path):
 # All fans mapped to CPU temperature sensor(s)
 
 general:
-  poll_interval: 2
+    poll_interval: 1
 
 fans:
 """
@@ -732,31 +732,9 @@ def config_reload(ctx):
     envvar="PYSYSFAN_CONFIG",
     help="Path to config file. Default: ~/.pysysfan/config.yaml",
 )
-@click.option(
-    "--api/--no-api",
-    "api_enabled",
-    default=True,
-    help="Enable or disable the REST API server (default: enabled).",
-)
-@click.option(
-    "--api-port",
-    type=int,
-    default=8765,
-    envvar="PYSYSFAN_API_PORT",
-    help="Port for the API server (default: 8765).",
-)
-@click.option(
-    "--api-host",
-    default="127.0.0.1",
-    envvar="PYSYSFAN_API_HOST",
-    help="Host for the API server (default: 127.0.0.1).",
-)
 def run(
     once: bool,
     config_path: str | None,
-    api_enabled: bool,
-    api_port: int,
-    api_host: str,
 ):
     """Start the fan control daemon.
 
@@ -782,12 +760,7 @@ def run(
         )
         raise SystemExit(1)
 
-    daemon = FanDaemon(
-        config_path=cfg_path,
-        api_enabled=api_enabled,
-        api_host=api_host,
-        api_port=api_port,
-    )
+    daemon = FanDaemon(config_path=cfg_path)
 
     if once:
         console.print("[bold]Running single control pass...[/]")
@@ -824,6 +797,15 @@ def service():
     pass
 
 
+def _require_service_admin(action: str) -> None:
+    """Exit when a service action requires Administrator privileges."""
+    if check_admin():
+        return
+
+    console.print(f"[red]Error:[/] {action} requires Administrator privileges.")
+    raise SystemExit(1)
+
+
 @service.command("install")
 @click.option(
     "--config",
@@ -840,11 +822,7 @@ def service_install(config_path: str | None):
     """
     from pysysfan.platforms import windows_service
 
-    if not check_admin():
-        console.print(
-            "[red]Error:[/] Installing a startup service requires Administrator privileges."
-        )
-        raise SystemExit(1)
+    _require_service_admin("Installing a startup service")
 
     try:
         windows_service.install_task(config_path=config_path)
@@ -861,17 +839,91 @@ def service_uninstall():
     """Remove the pysysfan startup service."""
     from pysysfan.platforms import windows_service
 
-    if not check_admin():
-        console.print(
-            "[red]Error:[/] Removing a startup service requires Administrator privileges."
-        )
-        raise SystemExit(1)
+    _require_service_admin("Removing a startup service")
 
     try:
         windows_service.uninstall_task()
         console.print("[bold green]✓ Startup service removed.[/]")
     except Exception as e:
         console.print(f"[red]Failed to remove service:[/] {e}")
+        raise SystemExit(1)
+
+
+@service.command("enable")
+def service_enable():
+    """Enable the pysysfan startup service."""
+    from pysysfan.platforms import windows_service
+
+    _require_service_admin("Enabling the startup service")
+
+    try:
+        windows_service.enable_task()
+        console.print("[bold green]✓ Startup service enabled.[/]")
+    except Exception as e:
+        console.print(f"[red]Failed to enable service:[/] {e}")
+        raise SystemExit(1)
+
+
+@service.command("disable")
+def service_disable():
+    """Disable the pysysfan startup service."""
+    from pysysfan.platforms import windows_service
+
+    _require_service_admin("Disabling the startup service")
+
+    try:
+        windows_service.disable_task()
+        console.print("[bold green]✓ Startup service disabled.[/]")
+    except Exception as e:
+        console.print(f"[red]Failed to disable service:[/] {e}")
+        raise SystemExit(1)
+
+
+@service.command("start")
+def service_start():
+    """Start the pysysfan startup service immediately."""
+    from pysysfan.platforms import windows_service
+
+    _require_service_admin("Starting the startup service")
+
+    try:
+        windows_service.start_task()
+        console.print("[bold green]✓ Startup service started.[/]")
+    except Exception as e:
+        console.print(f"[red]Failed to start service:[/] {e}")
+        raise SystemExit(1)
+
+
+@service.command("stop")
+def service_stop():
+    """Stop the pysysfan startup service if it is running."""
+    from pysysfan.platforms import windows_service
+
+    _require_service_admin("Stopping the startup service")
+
+    try:
+        windows_service.stop_task()
+        console.print("[bold green]✓ Startup service stopped.[/]")
+    except Exception as e:
+        console.print(f"[red]Failed to stop service:[/] {e}")
+        raise SystemExit(1)
+
+
+@service.command("restart")
+def service_restart():
+    """Restart the pysysfan startup service."""
+    import time
+    from pysysfan.platforms import windows_service
+
+    _require_service_admin("Restarting the startup service")
+
+    try:
+        windows_service.stop_task()
+        time.sleep(1.0)
+        windows_service.start_task()
+        console.print("[bold green]✓ Startup service restarted.[/]")
+    except Exception as e:
+        console.print(f"[red]Failed to restart service:[/] {e}")
         raise SystemExit(1)
 
 
@@ -1096,7 +1148,7 @@ def status():
     "--interval",
     "-i",
     type=float,
-    default=2.0,
+    default=1.0,
     show_default=True,
     help="Refresh interval in seconds.",
 )

@@ -8,6 +8,7 @@ import pytest
 from pysysfan.config import Config, FanConfig, CurveConfig, UpdateConfig
 from pysysfan.curves import FanCurve
 from pysysfan.daemon import FanDaemon
+from pysysfan.state_file import read_state
 
 
 # ── Fixtures ──────────────────────────────────────────────────────────
@@ -669,14 +670,10 @@ class TestDaemonInitOptions:
         daemon = FanDaemon(
             config_path=tmp_path / "c.yaml",
             cache_manager=cache_mgr,
-            api_enabled=False,
-            api_host="0.0.0.0",
-            api_port=9000,
+            state_path=tmp_path / "daemon_state.json",
         )
         assert daemon._cache_manager is cache_mgr
-        assert daemon._api_enabled is False
-        assert daemon._api_host == "0.0.0.0"
-        assert daemon._api_port == 9000
+        assert daemon.state_path == tmp_path / "daemon_state.json"
 
     def test_init_uses_default_cache_manager(self, tmp_path):
         """Should use default cache manager when not provided."""
@@ -745,9 +742,10 @@ class TestDaemonStatePopulation:
         mock_hw.get_temperatures.return_value = [
             MagicMock(identifier="/cpu/temp/0", value=60.0)
         ]
-        mock_hw.get_fans.return_value = [
+        mock_hw.get_fan_speeds.return_value = [
             MagicMock(identifier="/fan/0/rpm", value=1350.0)
         ]
+        mock_hw.get_controls.return_value = []
         daemon._hw = mock_hw
 
         speeds = daemon._run_once(cfg)
@@ -759,21 +757,47 @@ class TestDaemonStatePopulation:
 
     def test_update_state_uses_runtime_state_maps(self, tmp_path):
         """State snapshots should include the latest runtime maps."""
-        daemon = FanDaemon(config_path=tmp_path / "c.yaml")
+        state_path = tmp_path / "daemon_state.json"
+        daemon = FanDaemon(config_path=tmp_path / "c.yaml", state_path=state_path)
         daemon._cfg = _sample_config()
         daemon._start_time = 100.0
         daemon._running = True
-        daemon._current_temps = {"/cpu/temp/0": 55.0}
-        daemon._current_fan_speeds = {"/fan/0/rpm": 1200.0}
+        daemon._latest_temperatures = [
+            MagicMock(
+                identifier="/cpu/temp/0",
+                hardware_name="CPU",
+                sensor_name="Package",
+                value=55.0,
+            )
+        ]
+        daemon._latest_fan_speeds = [
+            MagicMock(
+                identifier="/fan/0/rpm",
+                hardware_name="Board",
+                sensor_name="CPU Fan",
+                value=1200.0,
+            )
+        ]
+        daemon._latest_controls = [
+            MagicMock(
+                identifier="/mb/control/0",
+                current_value=50.0,
+                has_control=True,
+            )
+        ]
         daemon._current_targets = {"/mb/control/0": 50.0}
 
         daemon._update_state()
-        snapshot = daemon._state_manager.get_snapshot()
+        snapshot = read_state(state_path)
 
         assert snapshot is not None
-        assert snapshot.current_temps == {"/cpu/temp/0": 55.0}
-        assert snapshot.current_fan_speeds == {"/fan/0/rpm": 1200.0}
-        assert snapshot.current_targets == {"/mb/control/0": 50.0}
+        assert snapshot.fan_targets == {"/mb/control/0": 50.0}
+        assert {item.identifier: item.value for item in snapshot.temperatures} == {
+            "/cpu/temp/0": 55.0
+        }
+        assert {item.identifier: item.rpm for item in snapshot.fan_speeds} == {
+            "/fan/0/rpm": 1200.0
+        }
 
 
 class TestGetCurve:
@@ -926,81 +950,61 @@ class TestUpdateState:
 
     def test_updates_all_fields(self, tmp_path):
         """Should update all state fields."""
-        daemon = FanDaemon(config_path=tmp_path / "c.yaml")
+        state_path = tmp_path / "daemon_state.json"
+        daemon = FanDaemon(config_path=tmp_path / "c.yaml", state_path=state_path)
         cfg = _sample_config()
         daemon._cfg = cfg
         daemon._start_time = 1000.0
         daemon._running = True
 
-        with patch.object(daemon._state_manager, "update_state") as mock_update:
-            daemon._update_state()
-            mock_update.assert_called_once()
-            call_kwargs = mock_update.call_args.kwargs
-            assert call_kwargs["pid"] == os.getpid()
-            assert call_kwargs["config_path"] == str(daemon.config_path)
-            assert call_kwargs["running"] is True
-            assert call_kwargs["fans_configured"] == 1
-            assert call_kwargs["curves_configured"] == 1
+        daemon._update_state()
+        snapshot = read_state(state_path)
+
+        assert snapshot is not None
+        assert snapshot.pid == os.getpid()
+        assert snapshot.config_path == str(daemon.config_path)
+        assert snapshot.running is True
+        assert snapshot.fans_configured == 1
+        assert snapshot.curves_configured == 1
 
     def test_with_no_config(self, tmp_path):
         """Should handle when _cfg is None."""
-        daemon = FanDaemon(config_path=tmp_path / "c.yaml")
+        state_path = tmp_path / "daemon_state.json"
+        daemon = FanDaemon(config_path=tmp_path / "c.yaml", state_path=state_path)
         daemon._cfg = None
         daemon._start_time = 1000.0
 
-        with patch.object(daemon._state_manager, "update_state") as mock_update:
-            daemon._update_state()
-            call_kwargs = mock_update.call_args.kwargs
-            assert call_kwargs["fans_configured"] == 0
-            assert call_kwargs["curves_configured"] == 0
-            assert call_kwargs["poll_interval"] == 2.0
+        daemon._update_state()
+        snapshot = read_state(state_path)
+
+        assert snapshot is not None
+        assert snapshot.fans_configured == 0
+        assert snapshot.curves_configured == 0
+        assert snapshot.poll_interval == 1.0
 
     def test_with_config_error(self, tmp_path):
         """Should include config error in state."""
-        daemon = FanDaemon(config_path=tmp_path / "c.yaml")
+        state_path = tmp_path / "daemon_state.json"
+        daemon = FanDaemon(config_path=tmp_path / "c.yaml", state_path=state_path)
         daemon._config_error = ValueError("Test error")
 
-        with patch.object(daemon._state_manager, "update_state") as mock_update:
-            daemon._update_state()
-            call_kwargs = mock_update.call_args.kwargs
-            assert "Test error" in call_kwargs["last_error"]
+        daemon._update_state()
+        snapshot = read_state(state_path)
+
+        assert snapshot is not None
+        assert snapshot.config_error is not None
+        assert "Test error" in snapshot.config_error
 
 
-class TestAPIServer:
-    """Tests for API server methods."""
+class TestStateFileConfig:
+    """Tests for daemon state-file configuration."""
 
-    def test_start_api_server_disabled(self, tmp_path):
-        """Should not start API server when disabled."""
-        daemon = FanDaemon(config_path=tmp_path / "c.yaml", api_enabled=False)
-        daemon._start_api_server()
-        assert daemon._api_server is None
+    def test_state_path_defaults_to_json_snapshot(self, tmp_path):
+        """The daemon should expose the configured state-file path."""
+        state_path = tmp_path / "daemon_state.json"
+        daemon = FanDaemon(config_path=tmp_path / "c.yaml", state_path=state_path)
 
-    def test_stop_api_server_when_none(self, tmp_path):
-        """Should handle stop when server is None."""
-        daemon = FanDaemon(config_path=tmp_path / "c.yaml")
-        daemon._api_server = None
-        daemon._stop_api_server()  # Should not raise
-
-    def test_stop_api_server(self, tmp_path):
-        """Should stop API server gracefully."""
-        daemon = FanDaemon(config_path=tmp_path / "c.yaml")
-        mock_server = MagicMock()
-        mock_thread = MagicMock()
-        daemon._api_server = mock_server
-        daemon._api_thread = mock_thread
-
-        daemon._stop_api_server()
-
-        assert mock_server.should_exit is True
-        mock_thread.join.assert_called_once_with(timeout=5.0)
-        assert daemon._api_server is None
-        assert daemon._api_thread is None
-
-    def test_api_server_enabled_by_default(self, tmp_path):
-        """Should have API enabled by default."""
-        daemon = FanDaemon(config_path=tmp_path / "c.yaml")
-        assert daemon._api_enabled is True
-        assert daemon._api_port == 8765
+        assert daemon.state_path == state_path
 
 
 class TestReloadConfigEdgeCases:

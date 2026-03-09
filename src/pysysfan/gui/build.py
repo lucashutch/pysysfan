@@ -14,7 +14,7 @@ def _module_available(name: str) -> bool:
 def check_prerequisites() -> int:
     """Validate the Python desktop GUI dependencies are installed."""
     missing = [
-        module for module in ("PySide6", "sseclient") if not _module_available(module)
+        module for module in ("PySide6", "pyqtgraph") if not _module_available(module)
     ]
     if missing:
         print("Missing GUI dependencies:")

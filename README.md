@@ -27,14 +27,21 @@ uv tool install pysysfan
 ### Optional Desktop GUI
 
 ```powershell
-# Install the GUI extra when using uv tools
-uv tool install pysysfan --extra gui
+# Install GUI dependencies into the uv-managed environment
+uv sync --extra gui
 
-# Launch the desktop client
-pysysfan-gui
+# Launch the desktop client inside the uv-managed venv
+uv run pysysfan-gui
 ```
 
 For a source checkout, install the GUI dependencies with `uv sync --extra gui`, then run `python -m pysysfan.gui.build check` to validate the desktop prerequisites before launching the GUI.
+
+Note: run the `check` and `launch` commands through `uv run` so they execute in the same uv-managed virtual environment where dependencies were installed. For example:
+
+```powershell
+uv run python -m pysysfan.gui.build check
+uv run python -m pysysfan.gui.build launch
+```
 
 The PySide6 desktop client currently provides:
 - Dashboard: daemon status, live sensors, active profile, and recent alerts

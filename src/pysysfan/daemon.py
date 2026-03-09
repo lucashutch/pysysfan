@@ -10,13 +10,20 @@ import threading
 import time
 from pathlib import Path
 
-from pysysfan.api.auth import get_or_create_token
-from pysysfan.api.state import StateManager
 from pysysfan.cache import HardwareCacheManager, get_default_cache_manager
 from pysysfan.config import Config, DEFAULT_CONFIG_PATH
 from pysysfan.curves import FanCurve, StaticCurve, parse_curve, InvalidCurveError
 from pysysfan.notifications import NotificationManager
 from pysysfan.profiles import ProfileManager, DEFAULT_PROFILE_NAME
+from pysysfan.state_file import (
+    AlertState,
+    DaemonStateFile,
+    FanSpeedState,
+    TemperatureState,
+    DEFAULT_STATE_PATH,
+    delete_state,
+    write_state,
+)
 from pysysfan.temperature import lookup_and_aggregate, get_valid_aggregation_methods
 from pysysfan.watcher import ConfigWatcher
 
@@ -40,9 +47,7 @@ class FanDaemon:
         config_path: Path = DEFAULT_CONFIG_PATH,
         auto_reload: bool = True,
         cache_manager: HardwareCacheManager | None = None,
-        api_enabled: bool = True,
-        api_host: str = "127.0.0.1",
-        api_port: int = 8765,
+        state_path: Path = DEFAULT_STATE_PATH,
     ):
         # Use active profile if no explicit config_path provided
         config_path = Path(config_path) if config_path else DEFAULT_CONFIG_PATH
@@ -63,18 +68,14 @@ class FanDaemon:
         self._cache_manager = cache_manager or get_default_cache_manager()
         self._unconfigured_fans: set[str] = set()
         self._update_thread: threading.Thread | None = None
-
-        # API server settings
-        self._api_enabled = api_enabled
-        self._api_host = api_host
-        self._api_port = api_port
-        self._api_server = None
-        self._api_thread: threading.Thread | None = None
-        self._state_manager = StateManager()
+        self.state_path = Path(state_path)
         self._start_time: float = 0.0
         self._current_temps: dict[str, float] = {}
         self._current_fan_speeds: dict[str, float] = {}
         self._current_targets: dict[str, float] = {}
+        self._latest_temperatures: list = []
+        self._latest_fan_speeds: list = []
+        self._latest_controls: list = []
 
         # Notification manager
         self._notification_manager = NotificationManager()
@@ -85,7 +86,7 @@ class FanDaemon:
         This method sets the running flag to False, which will cause
         the main loop to exit and cleanup to occur.
         """
-        logger.info("Stopping daemon via API request...")
+        logger.info("Stopping daemon...")
         self._running = False
 
     @property
@@ -416,12 +417,123 @@ class FanDaemon:
         for alert in alerts:
             logger.warning(f"ALERT: {alert.message}")
 
+    @staticmethod
+    def _build_control_map(controls: list) -> dict[str, object]:
+        """Map control indices to control objects for fan/control pairing."""
+        control_map: dict[str, object] = {}
+
+        for control in controls:
+            parts = control.identifier.split("/")
+            try:
+                control_idx = parts.index("control")
+            except ValueError:
+                continue
+
+            if control_idx + 1 < len(parts):
+                control_map[parts[control_idx + 1]] = control
+
+        return control_map
+
+    @classmethod
+    def _match_fans_with_controls(cls, fans: list, controls: list) -> list[tuple]:
+        """Match fan RPM sensors with their corresponding controls."""
+        control_map = cls._build_control_map(controls)
+        matched: list[tuple] = []
+
+        for fan in fans:
+            parts = fan.identifier.split("/")
+            try:
+                fan_idx = parts.index("fan")
+            except ValueError:
+                matched.append((fan, None))
+                continue
+
+            if fan_idx + 1 < len(parts):
+                matched.append((fan, control_map.get(parts[fan_idx + 1])))
+            else:
+                matched.append((fan, None))
+
+        return matched
+
+    def _build_state_snapshot(self) -> DaemonStateFile:
+        """Build the persisted daemon runtime snapshot."""
+        try:
+            pm = ProfileManager()
+            active_profile = pm.get_active_profile()
+        except Exception:
+            active_profile = DEFAULT_PROFILE_NAME
+
+        temperatures = [
+            TemperatureState(
+                identifier=sensor.identifier,
+                hardware_name=sensor.hardware_name,
+                sensor_name=sensor.sensor_name,
+                value=sensor.value,
+            )
+            for sensor in self._latest_temperatures
+        ]
+
+        fan_speeds = [
+            FanSpeedState(
+                identifier=fan.identifier,
+                control_identifier=(
+                    control.identifier if control is not None else None
+                ),
+                hardware_name=fan.hardware_name,
+                sensor_name=fan.sensor_name,
+                rpm=fan.value,
+                current_control_pct=(
+                    control.current_value if control is not None else None
+                ),
+                controllable=bool(control and control.has_control),
+            )
+            for fan, control in self._match_fans_with_controls(
+                self._latest_fan_speeds, self._latest_controls
+            )
+        ]
+
+        alerts = [
+            AlertState(
+                rule_id=alert.rule_id,
+                sensor_id=alert.sensor_id,
+                alert_type=alert.alert_type,
+                message=alert.message,
+                value=alert.value,
+                threshold=alert.threshold,
+                timestamp=alert.timestamp,
+            )
+            for alert in self._notification_manager.get_recent_alerts(limit=50)
+        ]
+
+        return DaemonStateFile(
+            timestamp=time.time(),
+            pid=os.getpid(),
+            running=self._running,
+            uptime_seconds=(time.time() - self._start_time)
+            if self._start_time
+            else 0.0,
+            active_profile=active_profile,
+            poll_interval=self._cfg.poll_interval if self._cfg else 1.0,
+            config_path=str(self.config_path),
+            config_error=str(self._config_error) if self._config_error else None,
+            fans_configured=len(self._cfg.fans) if self._cfg else 0,
+            curves_configured=len(self._cfg.curves) if self._cfg else 0,
+            temperatures=temperatures,
+            fan_speeds=fan_speeds,
+            fan_targets=dict(self._current_targets),
+            recent_alerts=alerts,
+        )
+
     def _run_once(self, cfg: Config) -> dict[str, float]:
         """Perform a single control pass. Returns {fan_name: speed_percent}."""
         applied: dict[str, float] = {}
 
         temps = self._hw.get_temperatures()
-        fans = self._hw.get_fans()
+        fans = self._hw.get_fan_speeds()
+        controls = self._hw.get_controls()
+        self._latest_temperatures = list(temps)
+        self._latest_fan_speeds = list(fans)
+        self._latest_controls = list(controls)
         self._current_temps = {sensor.identifier: sensor.value for sensor in temps}
         self._current_fan_speeds = {sensor.identifier: sensor.value for sensor in fans}
         self._current_targets = {}
@@ -484,78 +596,9 @@ class FanDaemon:
 
         return applied
 
-    # ── API Server ────────────────────────────────────────────────────
-
-    def _start_api_server(self) -> None:
-        """Start FastAPI server in background thread."""
-        if not self._api_enabled:
-            return
-
-        # Initialize API token
-        token = get_or_create_token()
-        logger.info(f"API token: {token[:8]}...{token[-8:]}")
-
-        from pysysfan.api.server import create_app
-        import uvicorn
-
-        app = create_app(daemon=self, state=self._state_manager)
-
-        config = uvicorn.Config(
-            app,
-            host=self._api_host,
-            port=self._api_port,
-            log_level="warning",
-            access_log=False,
-        )
-
-        self._api_server = uvicorn.Server(config)
-        self._api_thread = threading.Thread(
-            target=self._api_server.run,
-            daemon=True,
-            name="APIServer",
-        )
-        self._api_thread.start()
-
-        logger.info(f"API server started on http://{self._api_host}:{self._api_port}")
-
-    def _stop_api_server(self) -> None:
-        """Stop the API server."""
-        if self._api_server is not None:
-            logger.info("Stopping API server...")
-            self._api_server.should_exit = True
-            if self._api_thread and self._api_thread.is_alive():
-                self._api_thread.join(timeout=5.0)
-            self._api_server = None
-            self._api_thread = None
-
     def _update_state(self) -> None:
-        """Update state manager with current daemon state."""
-        # Get active profile name
-        try:
-            pm = ProfileManager()
-            active_profile = pm.get_active_profile()
-        except Exception:
-            active_profile = DEFAULT_PROFILE_NAME
-
-        self._state_manager.update_state(
-            pid=os.getpid(),
-            config_path=str(self.config_path),
-            started_at=self._start_time,
-            running=self._running,
-            uptime_seconds=time.time() - self._start_time,
-            last_poll_time=time.time(),
-            last_error=str(self._config_error) if self._config_error else None,
-            poll_interval=self._cfg.poll_interval if self._cfg else 2.0,
-            fans_configured=len(self._cfg.fans) if self._cfg else 0,
-            curves_configured=len(self._cfg.curves) if self._cfg else 0,
-            active_profile=active_profile,
-            current_temps=self._current_temps,
-            current_fan_speeds=self._current_fan_speeds,
-            current_targets=self._current_targets,
-            auto_reload_enabled=self._auto_reload,
-            api_enabled=self._api_enabled,
-            api_port=self._api_port,
-        )
+        """Persist the latest daemon runtime snapshot to disk."""
+        write_state(self._build_state_snapshot(), self.state_path)
 
     # ── Public API ────────────────────────────────────────────────────
 
@@ -592,10 +635,12 @@ class FanDaemon:
 
         startup_t0 = time.perf_counter()
         self._start_time = time.time()
+        delete_state(self.state_path)
 
         # Initial config load
         if not self.reload_config():
             logger.error("Failed to load initial configuration, aborting")
+            delete_state(self.state_path)
             return
 
         cfg = self._cfg
@@ -615,9 +660,6 @@ class FanDaemon:
 
         # Initialize hardware (runs in parallel with update check)
         self._hw = self._open_hardware()
-
-        # Start API server
-        self._start_api_server()
 
         try:
             scan_result = self._use_cached_scan()
@@ -666,5 +708,5 @@ class FanDaemon:
             self._hw.restore_defaults()
             self._hw.close()
             self._hw = None
-            self._stop_api_server()
+            delete_state(self.state_path)
             logger.info("Daemon stopped.")

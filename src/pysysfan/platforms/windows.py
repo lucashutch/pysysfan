@@ -221,6 +221,35 @@ class WindowsHardwareManager(BaseHardwareManager):
                 )
         return fans
 
+    def get_controls(self) -> list[ControlInfo]:
+        """Get all controllable fan outputs.
+
+        Returns:
+            List of ControlInfo objects for fan controls.
+        """
+        self._update_all()
+        controls = []
+        for hw, sensor in self._iter_sensors():
+            if int(sensor.SensorType) == SensorKind.CONTROL:
+                try:
+                    current_val = None
+                    if hasattr(sensor, "Control") and sensor.Control is not None:
+                        if hasattr(sensor.Control, "SoftwareValue"):
+                            current_val = float(sensor.Control.SoftwareValue)
+
+                    controls.append(
+                        ControlInfo(
+                            hardware_name=str(hw.Name),
+                            sensor_name=str(sensor.Name),
+                            identifier=str(sensor.Identifier),
+                            current_value=current_val,
+                            has_control=True,
+                        )
+                    )
+                except Exception as e:
+                    logger.debug(f"Error reading control {sensor.Identifier}: {e}")
+        return controls
+
     def set_fan_speed(
         self, control_identifier: str, percent: float, force_zero: bool = True
     ) -> None:

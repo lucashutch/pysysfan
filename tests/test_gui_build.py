@@ -44,12 +44,13 @@ class TestCheckPrerequisites:
         self, mock_print, mock_module_available
     ):
         """The helper should report each missing GUI dependency."""
-        mock_module_available.side_effect = [False, True]
+        mock_module_available.side_effect = [False, False]
 
         assert build.check_prerequisites() == 1
         assert mock_print.call_args_list[0].args == ("Missing GUI dependencies:",)
         assert mock_print.call_args_list[1].args == ("- PySide6",)
-        assert mock_print.call_args_list[2].args == (
+        assert mock_print.call_args_list[2].args == ("- pyqtgraph",)
+        assert mock_print.call_args_list[3].args == (
             "Install them with: uv sync --extra gui",
         )
 
