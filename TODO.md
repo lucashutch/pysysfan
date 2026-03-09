@@ -36,17 +36,6 @@
 - Add type annotations to all functions and classes
 - Ensure 100% type coverage across the codebase
 
-## add tests for UI
-- Unit tests for all UI components
-- End-to-end tests simulating user interactions with the GUI
-- Use Qt widget tests for the desktop GUI and pytest for the local daemon/runtime helpers
-- Keep CI installing the `gui` extra so Qt widget tests run under `pytest-qt`
-- Keep state-file, alert-rule, and config-persistence contracts covered as the desktop client evolves
-- Keep the desktop helper entry points and prerequisite checks covered so GUI packaging regressions are caught early
-- Cover profile switching, alert summaries/history, and richer service interactions in the PySide6 desktop tests
-
-
-
 ## move downloader helpers scripts to separate scripts dir
 - Create a `scripts/` directory for all helper scripts
 - Move existing downloader scripts to this new directory
@@ -55,7 +44,7 @@
 - remove unity tests for downloader scripts as they are not critical to the core functionality of the project
 
 ## - Refine UI visuals: 
-- status: dashboard stat-card implementation in progress
+- status: dashboard layout, theming, and graph refresh in progress
 - add icons, colored status badges, improved card styling, and small UX polish to stat cards and plots
 - fix the curve plotting, it is very basic and doesnt look good and on all screens it isnt scaled well.
 - the chosen card items at the top of the dashboard look very basic and could use some styling and polish to make them more visually appealing and easier to read at a glance.
