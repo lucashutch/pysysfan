@@ -7,8 +7,8 @@
 - Keep config editing YAML-first with daemon auto-reload via file watching
 - Extend service commands so the GUI can drive install/start/stop/enable/disable flows through the existing CLI/service helpers
 - Current implementation focus:
-  - Phase 0: state file foundation
-  - Phase 1: daemon state snapshots
+  - Phase 0: state file foundation ✓
+  - Phase 1: daemon state snapshots ✓
   - Phase 2: remove HTTP API package and dependencies
   - Phase 3: service/CLI alignment
 

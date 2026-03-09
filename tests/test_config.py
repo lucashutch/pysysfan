@@ -21,6 +21,16 @@ from pysysfan.platforms.base import (
 # ── Load / save roundtrip ─────────────────────────────────────────────
 
 
+def test_default_poll_interval_is_one_second(tmp_path):
+    """Loading a config without general.poll_interval should default to 1 second."""
+    cfg_file = tmp_path / "config.yaml"
+    cfg_file.write_text("fans: {}\ncurves: {}\n")
+
+    cfg = Config.load(cfg_file)
+
+    assert cfg.poll_interval == 1.0
+
+
 def test_load_valid_config(tmp_path):
     """Loading a well-formed YAML config should produce a correct Config object."""
     cfg_file = tmp_path / "config.yaml"

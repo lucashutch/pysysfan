@@ -46,7 +46,7 @@ class UpdateConfig:
 
 @dataclass
 class Config:
-    poll_interval: float = 2.0
+    poll_interval: float = 1.0
     fans: dict[str, FanConfig] = field(default_factory=dict)
     curves: dict[str, CurveConfig] = field(default_factory=dict)
     update: UpdateConfig = field(default_factory=UpdateConfig)
@@ -60,7 +60,7 @@ class Config:
         with open(path, "r") as f:
             data = yaml.safe_load(f) or {}
 
-        poll_interval = data.get("general", {}).get("poll_interval", 2.0)
+        poll_interval = data.get("general", {}).get("poll_interval", 1.0)
 
         fans = {}
         for name, fan_data in data.get("fans", {}).items():

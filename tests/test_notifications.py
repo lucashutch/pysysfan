@@ -258,5 +258,15 @@ class TestAlertHistory:
         readings = {"cpu_temp": 85.0}
         manager.check(readings, current_time=1000.0)
         assert len(manager.get_history()) == 1
+
+    def test_get_recent_alerts_returns_alert_objects(self, manager, high_temp_rule):
+        manager.add_rule(high_temp_rule)
+        manager.check({"cpu_temp": 85.0}, current_time=1000.0)
+
+        alerts = manager.get_recent_alerts(limit=10)
+
+        assert len(alerts) == 1
+        assert alerts[0].sensor_id == "cpu_temp"
+        assert alerts[0].alert_type == "high_temp"
         manager.clear_history()
         assert len(manager.get_history()) == 0

@@ -244,6 +244,10 @@ class NotificationManager:
             for a in recent
         ]
 
+    def get_recent_alerts(self, limit: int = 50) -> list[Alert]:
+        """Get recent alert objects for internal runtime consumers."""
+        return list(self._alert_history[-limit:])
+
     def clear_history(self) -> None:
         """Clear alert history."""
         self._alert_history.clear()

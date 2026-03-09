@@ -11,11 +11,15 @@ Replace the local HTTP API with a lightweight local state-file model so the daem
 2. Support atomic writes and safe reads.
 3. Add tests for stale, missing, and corrupt state files.
 
+Status: completed.
+
 ### Phase 1 — Daemon state snapshots
 1. Have the daemon write runtime snapshots to disk every control pass.
 2. Include active profile, current sensors, fan targets, and recent alerts.
 3. Remove in-process API state tracking from the daemon.
 4. Lower the default poll interval to 1 second.
+
+Status: completed.
 
 ### Phase 2 — Remove HTTP API layer
 1. Delete the FastAPI server/client package and API-only tests.
