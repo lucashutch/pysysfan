@@ -33,6 +33,8 @@ Status: completed.
 2. Add stop support to the Windows service helper.
 3. Change `monitor` default refresh interval to 1 second.
 
+Status: completed.
+
 ## Notes
 - The GUI rewrite to consume the state file lands in later phases.
 - During phases 0-3, the focus is core daemon/service refactoring and dependency cleanup.

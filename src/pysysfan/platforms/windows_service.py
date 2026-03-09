@@ -185,6 +185,31 @@ def start_task() -> None:
     logger.info(f"Task '{TASK_NAME}' started.")
 
 
+def stop_task() -> None:
+    """Stop the pysysfan scheduled task if it is currently running.
+
+    Raises:
+        FileNotFoundError: If the task is not installed
+        RuntimeError: If the stop operation fails
+    """
+    result = subprocess.run(
+        ["schtasks", "/End", "/TN", TASK_NAME],
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0:
+        stderr = result.stderr.lower()
+        if "cannot find" in stderr or "does not exist" in stderr:
+            raise FileNotFoundError(f"Task '{TASK_NAME}' is not installed.")
+        raise RuntimeError(
+            f"schtasks /End failed (exit {result.returncode}):\n"
+            f"{result.stdout}\n{result.stderr}"
+        )
+
+    logger.info(f"Task '{TASK_NAME}' stopped.")
+
+
 @dataclass
 class ServiceStatus:
     """Combined status of scheduled task and daemon process.

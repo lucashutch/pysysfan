@@ -10,7 +10,7 @@
   - Phase 0: state file foundation ✓
   - Phase 1: daemon state snapshots ✓
   - Phase 2: remove HTTP API package and dependencies ✓
-  - Phase 3: service/CLI alignment
+  - Phase 3: service/CLI alignment ✓
 
 ## Platform Support
 - **Current**: Windows only
