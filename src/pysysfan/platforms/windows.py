@@ -236,7 +236,7 @@ class WindowsHardwareManager(BaseHardwareManager):
                     if hasattr(sensor, "Control") and sensor.Control is not None:
                         if hasattr(sensor.Control, "SoftwareValue"):
                             current_val = float(sensor.Control.SoftwareValue)
-                    
+
                     controls.append(
                         ControlInfo(
                             hardware_name=str(hw.Name),

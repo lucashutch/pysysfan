@@ -63,6 +63,8 @@
 - Keep the desktop helper entry points and prerequisite checks covered so GUI packaging regressions are caught early
 - Cover profile switching, alert summaries/history, and richer service interactions in the PySide6 desktop tests
 
+- Refine UI visuals: add icons, colored status badges, improved card styling, and small UX polish to stat cards and plots
+
 ## move downloader helpers scripts to separate scripts dir
 - Create a `scripts/` directory for all helper scripts
 - Move existing downloader scripts to this new directory

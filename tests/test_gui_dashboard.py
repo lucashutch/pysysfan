@@ -90,17 +90,23 @@ def test_dashboard_refresh_populates_snapshot(qtbot, tmp_path) -> None:
     page.refresh_data()
 
     assert page.connection_label.text() == "Daemon: Connected"
-    assert page.active_profile_label.text() == "Active profile: gaming"
-    assert page.uptime_label.text() == "Uptime: 25.0s"
-    assert page.poll_interval_label.text() == "Poll interval: 1.0s"
-    assert page.fans_configured_label.text() == "Configured fans: 2"
-    assert page.curves_configured_label.text() == "Configured curves: 3"
+    assert page.daemon_status_label.text() == "Connected"
+    assert page.active_profile_label.text() == "gaming"
+    assert page.uptime_label.text() == "25.0s"
+    assert page.poll_interval_label.text() == "1.0s"
+    assert page.hottest_temp_label.text() == "61.5°C"
+    assert page.target_pwm_label.text() == "60.0%"
+    assert page.fans_configured_label.text() == "2"
+    assert page.curves_configured_label.text() == "3"
     assert page.temperatures_table.rowCount() == 1
     assert page.temperatures_table.item(0, 1).text() == "Package"
     assert page.fans_table.rowCount() == 1
     assert page.fans_table.item(0, 2).text() == "1325"
     assert page.fans_table.item(0, 4).text() == "60.0%"
     assert page.alerts_list.item(0).text().startswith("/cpu/temp/0 [high_temp]")
+    assert page.temperature_plot.minimumHeight() >= 320
+    assert page.fan_rpm_plot.minimumHeight() >= 260
+    assert page.fan_target_plot.minimumHeight() >= 260
 
 
 def test_dashboard_shows_offline_message_without_state(qtbot, tmp_path) -> None:
@@ -114,6 +120,7 @@ def test_dashboard_shows_offline_message_without_state(qtbot, tmp_path) -> None:
     page.refresh_data()
 
     assert page.connection_label.text() == "Daemon: Not running"
+    assert page.daemon_status_label.text() == "Not running"
     assert page.start_service_button.isEnabled() is True
     assert "Start the service" in page.message_label.text()
 

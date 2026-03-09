@@ -16,7 +16,7 @@ class MainWindow(QMainWindow):
         super().__init__(parent)
         self.setObjectName("mainWindow")
         self.setWindowTitle("PySysFan")
-        self.resize(1320, 860)
+        self.resize(1520, 980)
 
         self.tab_widget = QTabWidget(self)
         self.tab_widget.setObjectName("mainTabs")

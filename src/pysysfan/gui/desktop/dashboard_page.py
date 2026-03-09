@@ -8,6 +8,7 @@ from pathlib import Path
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import (
     QComboBox,
+    QFrame,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
@@ -76,6 +77,11 @@ class DashboardPage(QWidget):
         self._temperature_labels: dict[str, str] = {}
         self._fan_labels: dict[str, str] = {}
         self._target_labels: dict[str, str] = {}
+        self._card_value_style = "font-size: 24px; font-weight: 700; color: #0f172a;"
+        self._card_title_style = (
+            "font-size: 11px; font-weight: 600; text-transform: uppercase; "
+            "letter-spacing: 0.08em; color: #64748b;"
+        )
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
@@ -119,57 +125,88 @@ class DashboardPage(QWidget):
         self.message_label.hide()
         layout.addWidget(self.message_label)
 
-        summary_group = QGroupBox("Daemon Summary", self)
-        summary_layout = QGridLayout(summary_group)
-        summary_layout.setHorizontalSpacing(24)
-        summary_layout.setVerticalSpacing(8)
+        summary_layout = QGridLayout()
+        summary_layout.setHorizontalSpacing(16)
+        summary_layout.setVerticalSpacing(16)
 
-        self.active_profile_label = QLabel("Active profile: N/A", self)
-        self.uptime_label = QLabel("Uptime: N/A", self)
-        self.poll_interval_label = QLabel("Poll interval: N/A", self)
-        self.fans_configured_label = QLabel("Configured fans: N/A", self)
-        self.curves_configured_label = QLabel("Configured curves: N/A", self)
+        daemon_card, self.daemon_status_label = self._create_stat_card(
+            "Daemon status",
+            "Waiting",
+            "Looking for the local state snapshot",
+            accent="#2563eb",
+        )
+        profile_card, self.active_profile_label = self._create_stat_card(
+            "Active profile",
+            "N/A",
+            "Current config profile",
+            accent="#7c3aed",
+        )
+        uptime_card, self.uptime_label = self._create_stat_card(
+            "Uptime",
+            "N/A",
+            "Daemon runtime",
+            accent="#0891b2",
+        )
+        poll_card, self.poll_interval_label = self._create_stat_card(
+            "Poll interval",
+            "N/A",
+            "Control loop cadence",
+            accent="#0f766e",
+        )
+        hottest_card, self.hottest_temp_label = self._create_stat_card(
+            "Hottest temp",
+            "N/A",
+            "Highest live sensor reading",
+            accent="#dc2626",
+        )
+        target_card, self.target_pwm_label = self._create_stat_card(
+            "Target PWM",
+            "N/A",
+            "Highest current fan target",
+            accent="#ea580c",
+        )
+        fans_card, self.fans_configured_label = self._create_stat_card(
+            "Configured fans",
+            "N/A",
+            "Fan rules in the active config",
+            accent="#2563eb",
+        )
+        curves_card, self.curves_configured_label = self._create_stat_card(
+            "Configured curves",
+            "N/A",
+            "Saved named curve definitions",
+            accent="#4f46e5",
+        )
+
+        cards = [
+            daemon_card,
+            profile_card,
+            uptime_card,
+            poll_card,
+            hottest_card,
+            target_card,
+            fans_card,
+            curves_card,
+        ]
+        for index, card in enumerate(cards):
+            summary_layout.addWidget(card, index // 4, index % 4)
+
+        layout.addLayout(summary_layout)
+
+        details_group = QGroupBox("Config Details", self)
+        details_layout = QGridLayout(details_group)
+        details_layout.setHorizontalSpacing(24)
+        details_layout.setVerticalSpacing(8)
+
         self.config_path_label = QLabel("Config path: N/A", self)
         self.config_path_label.setWordWrap(True)
         self.config_error_label = QLabel("Config error: none", self)
         self.config_error_label.setWordWrap(True)
+        self.config_error_label.setStyleSheet("color: #1d6f42; font-weight: 600;")
 
-        summary_layout.addWidget(self.active_profile_label, 0, 0)
-        summary_layout.addWidget(self.uptime_label, 0, 1)
-        summary_layout.addWidget(self.poll_interval_label, 1, 0)
-        summary_layout.addWidget(self.fans_configured_label, 1, 1)
-        summary_layout.addWidget(self.curves_configured_label, 2, 0)
-        summary_layout.addWidget(self.config_path_label, 2, 1)
-        summary_layout.addWidget(self.config_error_label, 3, 0, 1, 2)
-        layout.addWidget(summary_group)
-
-        tables_layout = QHBoxLayout()
-        tables_layout.setSpacing(16)
-
-        self.temperatures_table = QTableWidget(0, 3, self)
-        self.temperatures_table.setObjectName("temperaturesTable")
-        self.temperatures_table.setHorizontalHeaderLabels(
-            ["Hardware", "Sensor", "Value"]
-        )
-        self.temperatures_table.horizontalHeader().setStretchLastSection(True)
-        temps_group = self._wrap_widget("Temperatures", self.temperatures_table)
-        tables_layout.addWidget(temps_group, 2)
-
-        self.fans_table = QTableWidget(0, 5, self)
-        self.fans_table.setObjectName("fansTable")
-        self.fans_table.setHorizontalHeaderLabels(
-            ["Hardware", "Fan", "RPM", "Actual PWM", "Target PWM"]
-        )
-        self.fans_table.horizontalHeader().setStretchLastSection(True)
-        fans_group = self._wrap_widget("Fans", self.fans_table)
-        tables_layout.addWidget(fans_group, 3)
-
-        self.alerts_list = QListWidget(self)
-        self.alerts_list.setObjectName("alertsList")
-        alerts_group = self._wrap_widget("Recent Alerts", self.alerts_list)
-        tables_layout.addWidget(alerts_group, 2)
-
-        layout.addLayout(tables_layout)
+        details_layout.addWidget(self.config_path_label, 0, 0)
+        details_layout.addWidget(self.config_error_label, 1, 0)
+        layout.addWidget(details_group)
 
         plots_layout = QGridLayout()
         plots_layout.setHorizontalSpacing(16)
@@ -181,10 +218,45 @@ class DashboardPage(QWidget):
         self.fan_rpm_plot = self._create_plot_widget("Fan RPM", "Seconds", "RPM")
         self.fan_target_plot = self._create_plot_widget("Target PWM", "Seconds", "%")
 
-        plots_layout.addWidget(self.temperature_plot, 0, 0)
-        plots_layout.addWidget(self.fan_rpm_plot, 0, 1)
-        plots_layout.addWidget(self.fan_target_plot, 1, 0, 1, 2)
-        layout.addLayout(plots_layout)
+        self.temperature_plot.setMinimumHeight(320)
+        self.fan_rpm_plot.setMinimumHeight(260)
+        self.fan_target_plot.setMinimumHeight(260)
+
+        plots_layout.addWidget(self.temperature_plot, 0, 0, 1, 2)
+        plots_layout.addWidget(self.fan_rpm_plot, 1, 0)
+        plots_layout.addWidget(self.fan_target_plot, 1, 1)
+        layout.addLayout(plots_layout, 3)
+
+        tables_layout = QHBoxLayout()
+        tables_layout.setSpacing(16)
+
+        self.temperatures_table = QTableWidget(0, 3, self)
+        self.temperatures_table.setObjectName("temperaturesTable")
+        self.temperatures_table.setHorizontalHeaderLabels(
+            ["Hardware", "Sensor", "Value"]
+        )
+        self.temperatures_table.horizontalHeader().setStretchLastSection(True)
+        self.temperatures_table.setMinimumHeight(220)
+        temps_group = self._wrap_widget("Temperatures", self.temperatures_table)
+        tables_layout.addWidget(temps_group, 2)
+
+        self.fans_table = QTableWidget(0, 5, self)
+        self.fans_table.setObjectName("fansTable")
+        self.fans_table.setHorizontalHeaderLabels(
+            ["Hardware", "Fan", "RPM", "Actual PWM", "Target PWM"]
+        )
+        self.fans_table.horizontalHeader().setStretchLastSection(True)
+        self.fans_table.setMinimumHeight(220)
+        fans_group = self._wrap_widget("Fans", self.fans_table)
+        tables_layout.addWidget(fans_group, 3)
+
+        self.alerts_list = QListWidget(self)
+        self.alerts_list.setObjectName("alertsList")
+        self.alerts_list.setMinimumHeight(220)
+        alerts_group = self._wrap_widget("Recent Alerts", self.alerts_list)
+        tables_layout.addWidget(alerts_group, 2)
+
+        layout.addLayout(tables_layout, 2)
         layout.addStretch(1)
 
         self._refresh_timer = QTimer(self)
@@ -222,6 +294,7 @@ class DashboardPage(QWidget):
 
     def _apply_offline_state(self, service_status) -> None:
         self.connection_label.setText("Daemon: Not running")
+        self.daemon_status_label.setText("Not running")
         installed = bool(getattr(service_status, "task_installed", False))
         self.start_service_button.setEnabled(installed)
         if installed:
@@ -235,13 +308,16 @@ class DashboardPage(QWidget):
                 is_error=True,
             )
 
-        self.active_profile_label.setText("Active profile: N/A")
-        self.uptime_label.setText("Uptime: N/A")
-        self.poll_interval_label.setText("Poll interval: N/A")
-        self.fans_configured_label.setText("Configured fans: N/A")
-        self.curves_configured_label.setText("Configured curves: N/A")
+        self.active_profile_label.setText("N/A")
+        self.uptime_label.setText("N/A")
+        self.poll_interval_label.setText("N/A")
+        self.hottest_temp_label.setText("N/A")
+        self.target_pwm_label.setText("N/A")
+        self.fans_configured_label.setText("N/A")
+        self.curves_configured_label.setText("N/A")
         self.config_path_label.setText("Config path: N/A")
         self.config_error_label.setText("Config error: N/A")
+        self.config_error_label.setStyleSheet("color: #b00020; font-weight: 600;")
         self.temperatures_table.setRowCount(0)
         self.fans_table.setRowCount(0)
         self.alerts_list.clear()
@@ -249,18 +325,31 @@ class DashboardPage(QWidget):
         self._refresh_plots()
 
     def _apply_summary(self, state: DaemonStateFile) -> None:
-        self.active_profile_label.setText(f"Active profile: {state.active_profile}")
-        self.uptime_label.setText(f"Uptime: {state.uptime_seconds:.1f}s")
-        self.poll_interval_label.setText(f"Poll interval: {state.poll_interval:.1f}s")
-        self.fans_configured_label.setText(f"Configured fans: {state.fans_configured}")
-        self.curves_configured_label.setText(
-            f"Configured curves: {state.curves_configured}"
+        hottest_temp = max(
+            (sensor.value for sensor in state.temperatures if sensor.value is not None),
+            default=None,
         )
+        max_target = max(state.fan_targets.values(), default=None)
+
+        self.daemon_status_label.setText("Connected")
+        self.active_profile_label.setText(state.active_profile)
+        self.uptime_label.setText(f"{state.uptime_seconds:.1f}s")
+        self.poll_interval_label.setText(f"{state.poll_interval:.1f}s")
+        self.hottest_temp_label.setText(
+            "N/A" if hottest_temp is None else f"{hottest_temp:.1f}°C"
+        )
+        self.target_pwm_label.setText(
+            "N/A" if max_target is None else f"{max_target:.1f}%"
+        )
+        self.fans_configured_label.setText(str(state.fans_configured))
+        self.curves_configured_label.setText(str(state.curves_configured))
         self.config_path_label.setText(f"Config path: {state.config_path}")
         if state.config_error:
             self.config_error_label.setText(f"Config error: {state.config_error}")
+            self.config_error_label.setStyleSheet("color: #b00020; font-weight: 600;")
         else:
             self.config_error_label.setText("Config error: none")
+            self.config_error_label.setStyleSheet("color: #1d6f42; font-weight: 600;")
 
     def _apply_temperatures(self, state: DaemonStateFile) -> None:
         self.temperatures_table.setRowCount(len(state.temperatures))
@@ -427,6 +516,47 @@ class DashboardPage(QWidget):
                 pen=pg.mkPen(color=color, width=2),
                 name=labels.get(sensor_id, sensor_id),
             )
+
+    def _create_stat_card(
+        self,
+        title: str,
+        initial_value: str,
+        subtitle: str,
+        *,
+        accent: str,
+    ) -> tuple[QFrame, QLabel]:
+        card = QFrame(self)
+        card.setObjectName(title.lower().replace(" ", "") + "Card")
+        card.setStyleSheet(
+            "QFrame {"
+            "background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #ffffff, stop:1 #f8fafc);"
+            "border: 1px solid #dbe4f0;"
+            "border-radius: 14px;"
+            "}"
+        )
+
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(16, 14, 16, 14)
+        card_layout.setSpacing(6)
+
+        title_label = QLabel(title, card)
+        title_label.setStyleSheet(self._card_title_style)
+        card_layout.addWidget(title_label)
+
+        value_label = QLabel(initial_value, card)
+        value_label.setStyleSheet(
+            self._card_value_style
+            + f" border-left: 4px solid {accent}; padding-left: 10px;"
+        )
+        card_layout.addWidget(value_label)
+
+        subtitle_label = QLabel(subtitle, card)
+        subtitle_label.setWordWrap(True)
+        subtitle_label.setStyleSheet("font-size: 12px; color: #475569;")
+        card_layout.addWidget(subtitle_label)
+        card_layout.addStretch(1)
+
+        return card, value_label
 
     @staticmethod
     def _wrap_widget(title: str, widget: QWidget) -> QGroupBox:
