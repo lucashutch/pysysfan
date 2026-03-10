@@ -1,10 +1,12 @@
 """Tests for pysysfan.platforms.windows_service — Windows Task Scheduler integration."""
 
+from pathlib import Path
 from unittest.mock import patch, MagicMock
 
 import pytest
 
 from pysysfan.platforms.windows_service import (
+    _build_task_command,
     _hidden_process_kwargs,
     _pysysfan_exe,
     get_service_status,
@@ -75,6 +77,8 @@ class TestInstallTask:
         tr_idx = args.index("/TR")
         cmd_str = args[tr_idx + 1]
         assert "--config" in cmd_str
+        assert "USERPROFILE=" in cmd_str
+        assert "cmd.exe /d /c" in cmd_str
 
     @patch("pysysfan.platforms.windows_service.subprocess.run")
     @patch(
@@ -88,6 +92,30 @@ class TestInstallTask:
         )
         with pytest.raises(RuntimeError, match="schtasks /Create failed"):
             install_task()
+
+
+class TestBuildTaskCommand:
+    """Tests for the scheduled-task command wrapper."""
+
+    @patch(
+        "pysysfan.platforms.windows_service._pysysfan_exe",
+        return_value=r"C:\tools\pysysfan.exe",
+    )
+    def test_wraps_user_home_environment(self, _mock_exe):
+        command = _build_task_command(
+            Path(r"C:\Users\lucas\.pysysfan\config.yaml"),
+            user_home=Path(r"C:\Users\lucas"),
+        )
+
+        assert command.startswith("cmd.exe /d /c")
+        assert "USERPROFILE=C:\\Users\\lucas" in command
+        assert "HOME=C:\\Users\\lucas" in command
+        assert "HOMEDRIVE=C:" in command
+        assert "HOMEPATH=\\Users\\lucas" in command
+        assert (
+            '"C:\\tools\\pysysfan.exe" run --config "C:\\Users\\lucas\\.pysysfan\\config.yaml"'
+            in command
+        )
 
 
 class TestUninstallTask:

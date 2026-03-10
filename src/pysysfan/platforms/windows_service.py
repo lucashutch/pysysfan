@@ -48,6 +48,31 @@ def _pysysfan_exe() -> str:
     )
 
 
+def _build_task_command(config_path: Path, *, user_home: Path | None = None) -> str:
+    """Build the scheduled-task command line for the daemon."""
+    exe = _pysysfan_exe()
+    home = (user_home or Path.home()).resolve()
+    home_drive = home.drive or ""
+    home_tail = home.as_posix().replace("/", "\\")
+    if home_drive and home_tail.lower().startswith(home_drive.lower()):
+        home_path = home_tail[len(home_drive) :]
+    else:
+        home_path = home_tail
+
+    escaped_home = str(home)
+    escaped_exe = str(exe)
+    escaped_config = str(config_path)
+
+    return (
+        "cmd.exe /d /c "
+        f'"set USERPROFILE={escaped_home} && '
+        f"set HOME={escaped_home} && "
+        f"set HOMEDRIVE={home_drive} && "
+        f"set HOMEPATH={home_path} && "
+        f'"{escaped_exe}" run --config "{escaped_config}""'
+    )
+
+
 def install_task(config_path: Path | str | None = None) -> None:
     """Create a Windows Task Scheduler task to run pysysfan at system startup.
 
@@ -65,9 +90,7 @@ def install_task(config_path: Path | str | None = None) -> None:
 
     config_path = Path(config_path).resolve()
 
-    exe = _pysysfan_exe()
-
-    cmd_args = f'"{exe}" run --config "{config_path}"'
+    cmd_args = _build_task_command(config_path)
 
     result = subprocess.run(
         [

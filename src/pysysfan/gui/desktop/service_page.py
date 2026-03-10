@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from pysysfan.gui.desktop.local_backend import (
+    ELEVATION_REQUESTED_SENTINEL,
     read_daemon_state,
     run_installer_command,
     run_service_command,
@@ -63,6 +64,7 @@ class ServicePage(QWidget):
         self._installer_runner = installer_runner or run_installer_command
         self._minimize_to_tray_getter = minimize_to_tray_getter or get_minimize_to_tray
         self._minimize_to_tray_setter = minimize_to_tray_setter or set_minimize_to_tray
+        self._task_installed = False
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
@@ -119,7 +121,7 @@ class ServicePage(QWidget):
 
         actions_row = QHBoxLayout()
         actions_row.setSpacing(8)
-        self.install_button = QPushButton("Install", self)
+        self.install_button = QPushButton("Install / Repair", self)
         self.install_button.clicked.connect(lambda: self._run_action("install"))
         actions_row.addWidget(self.install_button)
 
@@ -249,16 +251,25 @@ class ServicePage(QWidget):
         self._apply_diagnostics(task_details, daemon_state)
 
     def _run_action(self, action: str, confirm_message: str | None = None) -> None:
+        if action == "install" and self._task_installed and confirm_message is None:
+            confirm_message = (
+                "Reinstall the scheduled task with the latest service settings?\n\n"
+                "This repairs older installs that could not report daemon status "
+                "correctly to the desktop app."
+            )
+
         if confirm_message and not self._confirm(confirm_message):
             return
 
         success, message = self._command_runner(action)
         self.refresh_data()
         self._show_message(message, is_error=not success)
+        self._maybe_show_elevation_guidance(success, message)
 
     def _run_installer(self, executable_name: str) -> None:
         success, message = self._installer_runner(executable_name)
         self._show_message(message, is_error=not success)
+        self._maybe_show_elevation_guidance(success, message)
 
     def _set_minimize_to_tray_preference(self, enabled: bool) -> None:
         self._minimize_to_tray_setter(enabled)
@@ -269,6 +280,7 @@ class ServicePage(QWidget):
         task_enabled = bool(getattr(service_status, "task_enabled", False))
         daemon_running = bool(getattr(service_status, "daemon_running", False))
         daemon_healthy = bool(getattr(service_status, "daemon_healthy", False))
+        self._task_installed = task_installed
 
         self.task_installed_label.setText(
             f"Task installed: {self._format_bool(task_installed)}"
@@ -303,7 +315,7 @@ class ServicePage(QWidget):
             self.daemon_profile_label.setText("Daemon profile: N/A")
             self.daemon_config_label.setText("Daemon config: N/A")
 
-        self.install_button.setEnabled(not task_installed)
+        self.install_button.setEnabled(True)
         self.uninstall_button.setEnabled(task_installed)
         self.enable_button.setEnabled(task_installed and not task_enabled)
         self.disable_button.setEnabled(task_installed and task_enabled)
@@ -363,6 +375,17 @@ class ServicePage(QWidget):
         self.message_label.setStyleSheet(f"color: {color};")
         self.message_label.setText(message)
         self.message_label.show()
+
+    def _maybe_show_elevation_guidance(self, success: bool, message: str) -> None:
+        """Show a clear modal prompt when Windows elevation is required."""
+        if not success or ELEVATION_REQUESTED_SENTINEL not in message:
+            return
+
+        QMessageBox.information(
+            self,
+            "Administrator Permission Needed",
+            message,
+        )
 
     @staticmethod
     def _format_bool(value: Any) -> str:
