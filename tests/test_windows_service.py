@@ -6,6 +6,8 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from pysysfan.platforms.windows_service import (
+    SERVICE_LAUNCHER_NAME,
+    _build_service_launcher,
     _build_task_command,
     _hidden_process_kwargs,
     _pysysfan_exe,
@@ -50,13 +52,17 @@ class TestHiddenProcessKwargs:
 class TestInstallTask:
     """Tests for install_task()."""
 
+    @patch("pysysfan.platforms.windows_service._write_service_launcher")
     @patch("pysysfan.platforms.windows_service.subprocess.run")
     @patch(
         "pysysfan.platforms.windows_service._pysysfan_exe",
         return_value=r"C:\tools\pysysfan.exe",
     )
-    def test_success(self, mock_exe, mock_run):
+    def test_success(self, mock_exe, mock_run, mock_write_launcher):
         """Should call schtasks /Create without errors."""
+        mock_write_launcher.return_value = Path(
+            r"C:\Users\lucas\.pysysfan\pysysfan-service.cmd"
+        )
         mock_run.return_value = MagicMock(returncode=0)
         install_task()
         mock_run.assert_called_once()
@@ -64,29 +70,36 @@ class TestInstallTask:
         assert "schtasks" in args
         assert "/Create" in args
 
+    @patch("pysysfan.platforms.windows_service._write_service_launcher")
     @patch("pysysfan.platforms.windows_service.subprocess.run")
     @patch(
         "pysysfan.platforms.windows_service._pysysfan_exe",
         return_value=r"C:\tools\pysysfan.exe",
     )
-    def test_with_config_path(self, mock_exe, mock_run):
-        """Should include --config in the task command when provided."""
+    def test_with_config_path(self, mock_exe, mock_run, mock_write_launcher):
+        """Should point schtasks at a short launcher command when provided."""
+        launcher_path = Path(r"C:\Users\lucas\.pysysfan\pysysfan-service.cmd")
+        mock_write_launcher.return_value = launcher_path
         mock_run.return_value = MagicMock(returncode=0)
         install_task(config_path=r"C:\cfg\config.yaml")
         args = mock_run.call_args[0][0]
         tr_idx = args.index("/TR")
         cmd_str = args[tr_idx + 1]
-        assert "--config" in cmd_str
-        assert "USERPROFILE=" in cmd_str
         assert "cmd.exe /d /c" in cmd_str
+        assert str(launcher_path) in cmd_str
+        assert len(cmd_str) < 261
 
+    @patch("pysysfan.platforms.windows_service._write_service_launcher")
     @patch("pysysfan.platforms.windows_service.subprocess.run")
     @patch(
         "pysysfan.platforms.windows_service._pysysfan_exe",
         return_value=r"C:\tools\pysysfan.exe",
     )
-    def test_failure_raises(self, mock_exe, mock_run):
+    def test_failure_raises(self, mock_exe, mock_run, mock_write_launcher):
         """Should raise RuntimeError when schtasks fails."""
+        mock_write_launcher.return_value = Path(
+            r"C:\Users\lucas\.pysysfan\pysysfan-service.cmd"
+        )
         mock_run.return_value = MagicMock(
             returncode=1, stdout="error", stderr="access denied"
         )
@@ -94,28 +107,56 @@ class TestInstallTask:
             install_task()
 
 
-class TestBuildTaskCommand:
-    """Tests for the scheduled-task command wrapper."""
+class TestServiceLauncher:
+    """Tests for the generated service launcher script."""
 
     @patch(
         "pysysfan.platforms.windows_service._pysysfan_exe",
         return_value=r"C:\tools\pysysfan.exe",
     )
-    def test_wraps_user_home_environment(self, _mock_exe):
-        command = _build_task_command(
+    def test_builds_launcher_with_user_home_environment(self, _mock_exe):
+        launcher = _build_service_launcher(
             Path(r"C:\Users\lucas\.pysysfan\config.yaml"),
             user_home=Path(r"C:\Users\lucas"),
         )
 
-        assert command.startswith("cmd.exe /d /c")
-        assert "USERPROFILE=C:\\Users\\lucas" in command
-        assert "HOME=C:\\Users\\lucas" in command
-        assert "HOMEDRIVE=C:" in command
-        assert "HOMEPATH=\\Users\\lucas" in command
+        assert launcher.startswith("@echo off")
+        assert 'set "USERPROFILE=C:\\Users\\lucas"' in launcher
+        assert 'set "HOME=C:\\Users\\lucas"' in launcher
+        assert 'set "HOMEDRIVE=C:"' in launcher
+        assert 'set "HOMEPATH=\\Users\\lucas"' in launcher
         assert (
-            '"C:\\tools\\pysysfan.exe" run --config "C:\\Users\\lucas\\.pysysfan\\config.yaml"'
-            in command
+            'call "C:\\tools\\pysysfan.exe" run --config "C:\\Users\\lucas\\.pysysfan\\config.yaml"'
+            in launcher
         )
+
+    def test_build_task_command_points_to_launcher(self):
+        launcher_path = Path(r"C:\Users\lucas\.pysysfan\pysysfan-service.cmd")
+
+        command = _build_task_command(launcher_path)
+
+        assert command == f'cmd.exe /d /c "{launcher_path}"'
+        assert len(command) < 261
+
+    @patch(
+        "pysysfan.platforms.windows_service._pysysfan_exe",
+        return_value=r"C:\tools\pysysfan.exe",
+    )
+    def test_install_writes_expected_launcher_file(self, _mock_exe, tmp_path):
+        from pysysfan.platforms.windows_service import (
+            _service_launcher_path,
+            _write_service_launcher,
+        )
+
+        user_home = tmp_path / "home"
+        config_path = user_home / ".pysysfan" / "config.yaml"
+        launcher_path = _write_service_launcher(config_path, user_home=user_home)
+
+        assert launcher_path == _service_launcher_path(user_home)
+        assert launcher_path.name == SERVICE_LAUNCHER_NAME
+        launcher_text = launcher_path.read_text(encoding="utf-8")
+        assert 'set "USERPROFILE=' in launcher_text
+        assert 'call "C:\\tools\\pysysfan.exe" run --config ' in launcher_text
 
 
 class TestUninstallTask:
