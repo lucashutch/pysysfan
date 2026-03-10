@@ -2,6 +2,7 @@
 
 ## Recently completed
 
+- [x] 2026-03-10 — Stop the dashboard page from polling while hidden so Qt GUI tests do not accumulate background refresh timers and intermittently time out in CI.
 - [x] 2026-03-10 — Replace the Windows scheduled-task inline command with a generated launcher script so service install stays below the Task Scheduler `/TR` length limit.
 - [x] 2026-03-10 — Repair the Windows Service tab flow so GUI-triggered service actions request elevation clearly and scheduled tasks run with the installing user's home-directory context.
 - [x] 2026-03-10 — Refresh the Windows installer to support daemon-only or GUI installs, create a Start Menu app shortcut, and remove the obsolete Linux installer script.
@@ -23,6 +24,7 @@
 - [ ] Review whether future standalone GUI packaging should ship a generated `.ico` and bundled third-party notice set.
 - [ ] Keep installer scripts aligned with the public installation story.
 - [ ] Revisit any remaining legacy GUI or packaging paths and remove them once fully superseded.
+- [ ] Consider splitting CI into separate core and GUI pytest invocations so Qt-related failures are isolated, easier to triage, and reset with a fresh Python process.
 
 ## Improve Daemon and GUI idle resource usage
 - [ ] Profile the daemon and desktop app to identify any remaining CPU or memory usage optimizations, especially around idle periods.
