@@ -17,6 +17,23 @@ logger = logging.getLogger(__name__)
 TASK_NAME = "pysysfan"
 
 
+def _hidden_process_kwargs() -> dict[str, object]:
+    """Return subprocess kwargs that suppress console windows on Windows."""
+    if subprocess.os.name != "nt":
+        return {}
+
+    kwargs: dict[str, object] = {
+        "creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    }
+    startupinfo_factory = getattr(subprocess, "STARTUPINFO", None)
+    if startupinfo_factory is not None:
+        startupinfo = startupinfo_factory()
+        startupinfo.dwFlags |= getattr(subprocess, "STARTF_USESHOWWINDOW", 0)
+        startupinfo.wShowWindow = getattr(subprocess, "SW_HIDE", 0)
+        kwargs["startupinfo"] = startupinfo
+    return kwargs
+
+
 def _pysysfan_exe() -> str:
     """Find the pysysfan executable in PATH."""
     exe = shutil.which("pysysfan")
@@ -70,6 +87,7 @@ def install_task(config_path: Path | str | None = None) -> None:
         ],
         capture_output=True,
         text=True,
+        **_hidden_process_kwargs(),
     )
 
     if result.returncode != 0:
@@ -87,6 +105,7 @@ def uninstall_task() -> None:
         ["schtasks", "/Delete", "/TN", TASK_NAME, "/F"],
         capture_output=True,
         text=True,
+        **_hidden_process_kwargs(),
     )
 
     if result.returncode != 0:
@@ -114,6 +133,7 @@ def enable_task() -> None:
         ["schtasks", "/Change", "/TN", TASK_NAME, "/ENABLE"],
         capture_output=True,
         text=True,
+        **_hidden_process_kwargs(),
     )
 
     if result.returncode != 0:
@@ -143,6 +163,7 @@ def disable_task() -> None:
         ["schtasks", "/Change", "/TN", TASK_NAME, "/DISABLE"],
         capture_output=True,
         text=True,
+        **_hidden_process_kwargs(),
     )
 
     if result.returncode != 0:
@@ -170,6 +191,7 @@ def start_task() -> None:
         ["schtasks", "/Run", "/TN", TASK_NAME],
         capture_output=True,
         text=True,
+        **_hidden_process_kwargs(),
     )
 
     if result.returncode != 0:
@@ -197,6 +219,7 @@ def stop_task() -> None:
         ["schtasks", "/End", "/TN", TASK_NAME],
         capture_output=True,
         text=True,
+        **_hidden_process_kwargs(),
     )
 
     if result.returncode != 0:
@@ -244,6 +267,7 @@ def get_task_status() -> str | None:
         ["schtasks", "/Query", "/TN", TASK_NAME, "/FO", "LIST"],
         capture_output=True,
         text=True,
+        **_hidden_process_kwargs(),
     )
 
     if result.returncode != 0:
@@ -273,6 +297,7 @@ def get_service_status() -> ServiceStatus:
             ["schtasks", "/Query", "/TN", TASK_NAME, "/FO", "LIST", "/V"],
             capture_output=True,
             text=True,
+            **_hidden_process_kwargs(),
         )
 
         if result.returncode == 0:
@@ -316,6 +341,7 @@ def get_task_details() -> dict[str, str] | None:
         ["schtasks", "/Query", "/TN", TASK_NAME, "/FO", "LIST", "/V"],
         capture_output=True,
         text=True,
+        **_hidden_process_kwargs(),
     )
 
     if result.returncode != 0:

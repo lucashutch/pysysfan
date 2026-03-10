@@ -25,6 +25,23 @@ from pysysfan.state_file import DEFAULT_STATE_PATH, DaemonStateFile, read_state
 from pysysfan.temperature import get_valid_aggregation_methods
 
 
+def _hidden_process_kwargs() -> dict[str, object]:
+    """Return subprocess kwargs that suppress console windows on Windows."""
+    if sys.platform != "win32":
+        return {}
+
+    kwargs: dict[str, object] = {
+        "creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    }
+    startupinfo_factory = getattr(subprocess, "STARTUPINFO", None)
+    if startupinfo_factory is not None:
+        startupinfo = startupinfo_factory()
+        startupinfo.dwFlags |= getattr(subprocess, "STARTF_USESHOWWINDOW", 0)
+        startupinfo.wShowWindow = getattr(subprocess, "SW_HIDE", 0)
+        kwargs["startupinfo"] = startupinfo
+    return kwargs
+
+
 def check_admin() -> bool:
     """Return whether the current process has Administrator privileges."""
     try:
@@ -157,6 +174,7 @@ def run_installer_command(executable_name: str) -> tuple[bool, str]:
         [executable],
         capture_output=True,
         text=True,
+        **_hidden_process_kwargs(),
     )
     output = (completed.stdout or completed.stderr).strip()
     if completed.returncode == 0:
@@ -194,6 +212,7 @@ def run_python_module(
         [sys.executable, *full_args],
         capture_output=True,
         text=True,
+        **_hidden_process_kwargs(),
     )
     output = (completed.stdout or completed.stderr).strip()
     if completed.returncode == 0:
