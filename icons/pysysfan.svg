@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="256" height="256">
+  <defs>
+    <linearGradient id="curveGradient" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#3498db" />   <stop offset="60%" stop-color="#2ecc71" />  <stop offset="100%" stop-color="#e74c3c" /> </linearGradient>
+    
+    <radialGradient id="fanGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+      <stop offset="0%" stop-color="#5a5a5a" />   <stop offset="75%" stop-color="#2a2a2a" />  <stop offset="100%" stop-color="#14161b" /> </radialGradient>
+    
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="1" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+
+  <polygon points="5,25 25,5 75,5 95,25 95,75 75,95 25,95 5,75" fill="#14161b" stroke="#333" stroke-width="2"/>
+
+  <g transform="translate(50 50)" opacity="0.85"> <path d="M 0 0 C -15 -10 -20 -30 -10 -37 A 38 38 0 0 1 27 -27 Q 15 -15 0 0 Z" fill="url(#fanGradient)" stroke="#333" stroke-width="0.5" transform="rotate(0)"/>
+    <path d="M 0 0 C -15 -10 -20 -30 -10 -37 A 38 38 0 0 1 27 -27 Q 15 -15 0 0 Z" fill="url(#fanGradient)" stroke="#333" stroke-width="0.5" transform="rotate(72)"/>
+    <path d="M 0 0 C -15 -10 -20 -30 -10 -37 A 38 38 0 0 1 27 -27 Q 15 -15 0 0 Z" fill="url(#fanGradient)" stroke="#333" stroke-width="0.5" transform="rotate(144)"/>
+    <path d="M 0 0 C -15 -10 -20 -30 -10 -37 A 38 38 0 0 1 27 -27 Q 15 -15 0 0 Z" fill="url(#fanGradient)" stroke="#333" stroke-width="0.5" transform="rotate(216)"/>
+    <path d="M 0 0 C -15 -10 -20 -30 -10 -37 A 38 38 0 0 1 27 -27 Q 15 -15 0 0 Z" fill="url(#fanGradient)" stroke="#333" stroke-width="0.5" transform="rotate(288)"/>
+  </g>
+
+  <g stroke="#333" stroke-width="0.75" opacity="0.5">
+    <line x1="20" y1="15" x2="20" y2="85" />
+    <line x1="43" y1="15" x2="43" y2="85" />
+    <line x1="66" y1="15" x2="66" y2="85" />
+    <line x1="90" y1="15" x2="90" y2="85" />
+    <line x1="10" y1="20" x2="80" y2="20" />
+    <line x1="10" y1="42" x2="80" y2="42" />
+    <line x1="10" y1="64" x2="80" y2="64" />
+    <line x1="10" y1="85" x2="80" y2="85" />
+  </g>
+  
+  <circle cx="50" cy="50" r="12" fill="#1e1e1e" stroke="#555" stroke-width="2"/>
+  <circle cx="50" cy="50" r="4" fill="#666"/>
+
+  <path d="M 10 80 C 35 75 45 45 60 40 C 75 35 80 20 95 15" fill="none" stroke="url(#curveGradient)" stroke-width="5" stroke-linecap="round" filter="url(#glow)" />
+</svg>

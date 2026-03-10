@@ -1,472 +1,240 @@
 # Windows Setup Guide
 
-This guide provides detailed instructions for setting up pysysfan on Windows systems.
+This guide covers installation, hardware prerequisites, service setup, and the optional desktop GUI on Windows.
 
-## Table of Contents
+## Supported platforms
 
-- [Requirements](#requirements)
-- [Installation](#installation)
-- [Hardware Support](#hardware-support)
-- [Configuration](#configuration)
-- [Service Setup](#service-setup)
-- [Troubleshooting](#troubleshooting)
+- Windows 10
+- Windows 11
 
-## Requirements
+Administrator privileges are strongly recommended for setup and usually required for hardware access.
 
-### System Requirements
-- Windows 10 or Windows 11
-- Administrator privileges (required for hardware access)
-- .NET Framework 4.7.2 or later (pre-installed on Windows 10/11)
+## What PySysFan needs on Windows
 
-### Required Components
+PySysFan depends on these pieces:
 
-- **LibreHardwareMonitorLib.dll** - Hardware monitoring library
-- **PawnIO Driver** - Ring0 driver for SuperIO chip access
+- **PySysFan** itself
+- **LibreHardwareMonitor** for sensor and control access
+- **PawnIO** for low-level hardware/driver support on supported boards
 
-## Installation
+## Installation paths
 
-### Method 1: One-Click Installer (Recommended)
+### Recommended: one-click installer
 
-1. Download [`scripts/install-pysysfan.bat`](../scripts/install-pysysfan.bat)
-2. Right-click and select "Run as Administrator"
-3. The installer will:
-   - Install UV (Python package manager)
-   - Install pysysfan
-   - Download LibreHardwareMonitor
-   - Install PawnIO driver
-   - Create initial configuration
+Run [../scripts/install-pysysfan.bat](../scripts/install-pysysfan.bat) as Administrator.
 
-### Method 2: Manual Installation
+It is intended to:
 
-#### Step 1: Install UV
+1. install `uv` if needed
+2. install PySysFan
+3. download LibreHardwareMonitor
+4. launch the PawnIO installer flow
 
-Download and install UV from [https://docs.astral.sh/uv/getting-started/installation/](https://docs.astral.sh/uv/getting-started/installation/)
-
-#### Step 2: Install pysysfan
+### Manual installation with `uv`
 
 ```powershell
-# In Administrator PowerShell
 uv tool install pysysfan
-
-# Optional: install the desktop GUI as well
-uv tool install pysysfan --extra gui
 ```
 
-#### Step 3: Download LibreHardwareMonitor
+Optional GUI:
+
+```powershell
+uv tool install "pysysfan[gui]"
+```
+
+Then complete the Windows-specific setup:
 
 ```powershell
 pysysfan lhm download
+pysysfan-install-pawnio
 ```
 
-#### Step 4: Install PawnIO Driver
+## Verify the install
 
 ```powershell
-# Install PawnIO via winget
-winget install PawnIO
-
-# Or manually download from GitHub
-# https://github.com/namazso/PawnIO.Setup/releases
-```
-
-#### Step 5: Verify Installation
-
-```powershell
-pysysfan lhm info
 pysysfan --help
-
-# Optional desktop helper checks
-python -m pysysfan.gui.build check
-
-# Optional desktop launch
-pysysfan-gui
-```
-
-## Hardware Support
-
-### Compatible Hardware
-
-pysysfan on Windows supports motherboards with SuperIO chips accessible via LibreHardwareMonitor:
-
-- **Nuvoton** NCT6775F, NCT6776F, NCT6791D, NCT6792D, NCT6793D, etc.
-- **ITE** IT8620E, IT8686E, IT8688E, IT8689E, etc.
-- **Fintek** F71882FG, F71889ED, etc.
-
-### Laptops
-
-Most laptops have limited fan control support due to proprietary EC firmware:
-- **Lenovo ThinkPad** - Limited support (may need specific EC firmware)
-- **Dell** - Limited support
-- **HP** - Limited support
-
-For laptops, consider using manufacturer-specific tools first.
-
-### Verifying Compatibility
-
-Run a hardware scan to check if your system is supported:
-
-```powershell
-# Must run as Administrator
+pysysfan lhm info
 pysysfan scan
 ```
 
-Look for "Fan Controls" with `controllable: true` in the output.
-
-## Configuration
-
-### Sensor Identifiers
-
-Windows uses LibreHardwareMonitor identifiers:
-
-**Examples:**
-- `/amdcpu/0/temperature/0` - AMD CPU temperature
-- `/intelcpu/0/temperature/0` - Intel CPU temperature
-- `/motherboard/nct6791d/temperature/0` - Motherboard temperature
-- `/motherboard/nct6791d/control/0` - Fan control
-- `/motherboard/nct6791d/fan/0` - Fan RPM sensor
-
-### Finding Your Sensors
+Optional desktop GUI checks from a source checkout:
 
 ```powershell
-# Scan all sensors
-pysysfan scan
+uv run python -m pysysfan.gui.build check
+uv run pysysfan-gui
+```
 
-# Filter by type
+The desktop GUI uses the project icon in the window title bar, taskbar, and notification area.
+
+## Hardware compatibility
+
+PySysFan works best when LibreHardwareMonitor exposes writable fan controls.
+
+Typical supported desktop hardware includes boards using common Super I/O families such as:
+
+- Nuvoton
+- ITE
+- Fintek
+
+### Important laptop note
+
+Many laptops expose temperatures but **do not expose writable fan controls** through generic motherboard interfaces. On those systems, PySysFan may monitor successfully while fan control remains unavailable.
+
+## Discover your sensors
+
+Run a hardware scan from an elevated PowerShell session:
+
+```powershell
+pysysfan scan
+```
+
+Useful variants:
+
+```powershell
 pysysfan scan --type temp
-pysysfan scan --type fan
 pysysfan scan --type control
-
-# Output as JSON
-pysysfan scan --json > sensors.json
+pysysfan scan --json
 ```
 
-### Example Configuration
+Look for control entries that are actually writable.
+
+## First-time configuration
+
+```powershell
+pysysfan config init
+pysysfan config validate
+pysysfan run --once
+```
+
+You can then either:
+
+- edit `%USERPROFILE%\.pysysfan\config.yaml` manually, or
+- launch `pysysfan-gui` and use the native desktop editor
+
+Example fan entry:
 
 ```yaml
-general:
-  poll_interval: 2
-
 fans:
   cpu_fan:
-      fan_id: "/motherboard/nct6791d/control/0"
-      temp_ids:
-         - "/amdcpu/0/temperature/0"
-      curve: balanced
-      aggregation: max
-
-  case_fan:
-      fan_id: "/motherboard/nct6791d/control/1"
-      temp_ids:
-         - "/motherboard/nct6791d/temperature/0"
-    curve: silent
-      aggregation: max
-
-curves:
-  balanced:
-    hysteresis: 3
-    points:
-      - [30, 30]
-      - [60, 60]
-      - [75, 85]
-      - [85, 100]
-
-  silent:
-    hysteresis: 3
-    points:
-      - [30, 20]
-      - [50, 40]
-      - [70, 70]
-      - [85, 100]
+    fan_id: "/motherboard/nct6791d/control/0"
+    temp_ids:
+      - "/amdcpu/0/temperature/0"
+    aggregation: "max"
+    curve: "balanced"
+    header: "CPU Fan"
 ```
 
-### Configuration Commands
+For the full schema, see [config.md](config.md) and [config-schema.md](config-schema.md).
+
+## Running the daemon manually
 
 ```powershell
-# Generate initial config
-pysysfan config init
-
-# Show current config
-pysysfan config show
-
-# Validate config against hardware
-pysysfan config validate
-
-# Launch the PySide6 desktop client
-pysysfan-gui
-
-# Edit config directly
-notepad $env:USERPROFILE\.pysysfan\config.yaml
+pysysfan run --once
+pysysfan run
+pysysfan status
+pysysfan monitor
 ```
 
-In the desktop client, use:
-- Dashboard to confirm daemon connectivity, switch profiles, and inspect recent alerts
-- Curves to edit named curves and assign them to fans
-- Service to install, start, stop, restart, and inspect the scheduled task logs
+Use `--once` first when validating new config changes.
 
-## Service Setup
+## Installing the startup service
 
-### Installing as Windows Service
+PySysFan uses **Windows Task Scheduler**, not the Windows Services MMC stack.
 
-pysysfan uses Windows Task Scheduler to run at boot:
+Install it from an elevated shell:
 
 ```powershell
-# Must run as Administrator
 pysysfan service install
+```
 
-# Check status
+Useful follow-up commands:
+
+```powershell
 pysysfan service status
-
-# Remove service
+pysysfan service start
+pysysfan service stop
+pysysfan service restart
+pysysfan service disable
+pysysfan service enable
 pysysfan service uninstall
 ```
 
-The service:
-- Runs as SYSTEM account
-- Starts automatically at boot
-- Has highest privileges for hardware access
-- Continues running even when no user is logged in
+The scheduled task is created to run at startup with high privileges so the daemon can access sensors before user login.
 
-### Viewing Service Logs
+## Optional desktop GUI
 
-Windows Task Scheduler doesn't have traditional logs, but you can check:
+Launch the native GUI with:
 
 ```powershell
-# View Task Scheduler history
-taskschd.msc
-
-# Check if task is running
-schtasks /Query /TN pysysfan /FO LIST
-```
-
-### Running Manually
-
-For testing, you can run pysysfan manually:
-
-```powershell
-# Run once (good for testing)
-pysysfan run --once
-
-# Run continuously (Ctrl+C to stop)
-pysysfan run
-
-# Monitor live sensor values
-pysysfan monitor
-
-# Launch the optional desktop GUI
 pysysfan-gui
 ```
 
+Main areas:
+
+- **Dashboard** for daemon health, sensor values, alerts, and recent history
+- **Config** for curves, fan assignments, and profile-oriented edits
+- **Service** for scheduled-task management and diagnostics
+
+When the Windows notification area is available, closing the window minimizes the app to the tray instead of fully exiting it.
+
 ## Troubleshooting
 
-### "LibreHardwareMonitorLib.dll not found"
+### `LibreHardwareMonitorLib.dll not found`
 
-**Problem:**
-```
-FileNotFoundError: LibreHardwareMonitorLib.dll not found
-```
-
-**Solution:**
 ```powershell
-# Download the DLL
 pysysfan lhm download
-
-# Verify installation
 pysysfan lhm info
 ```
 
-### "Access Denied" or "Permission Denied"
+### Access denied / permission errors
 
-**Problem:**
-Hardware access fails with permission errors.
+Run PowerShell as Administrator.
 
-**Solution:**
-Run PowerShell as Administrator:
-1. Press Win+X
-2. Select "Windows PowerShell (Admin)" or "Terminal (Admin)"
-3. Run commands from there
+On newer Windows builds you may also use:
 
-Alternatively, on Windows 11 24H2+:
 ```powershell
 sudo pysysfan scan
 ```
 
-### PawnIO Driver Not Installed
+### PawnIO not installed or not available
 
-**Problem:**
-```
-Hardware access failed: PawnIO driver not found
-```
+Try the upstream install flow again:
 
-**Solution:**
 ```powershell
-# Check if PawnIO service exists
-sc query PawnIO
-
-# Install via winget
-winget install PawnIO
-
-# Or manually from GitHub
-# https://github.com/namazso/PawnIO.Setup/releases
+pysysfan-install-pawnio
 ```
 
-### No Controllable Fans Found
+If needed, inspect the upstream project:
 
-**Problem:**
+- https://github.com/namazso/PawnIO.Setup
+
+### No controllable fan headers found
+
+Common causes:
+
+1. not elevated
+2. unsupported motherboard or EC path
+3. BIOS/firmware fan policy still owns the header
+4. laptop hardware does not expose writable fan controls
+
+### Service installed but not running correctly
+
+Check the task status first:
+
 ```powershell
-pysysfan scan
-# Shows 0 controllable outputs
+pysysfan service status
+schtasks /Query /TN pysysfan /FO LIST /V
 ```
 
-**Possible Causes:**
-1. Not running as Administrator
-2. Motherboard SuperIO chip not supported
-3. BIOS has fan control locked
+Then validate the config and test a manual single run:
 
-**Solutions:**
-1. Run as Administrator
-2. Check BIOS settings for "Smart Fan" or "Fan Control Mode"
-3. Try disabling "Q-Fan Control" or similar in BIOS
-4. Check if motherboard is in [LHM supported list](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor#motherboards)
-
-### Fan Speed Not Changing
-
-**Problem:**
-Config appears valid but fan speed doesn't change.
-
-**Possible Causes:**
-1. BIOS overriding OS control
-2. Wrong control sensor identifier
-3. Minimum PWM value too low
-
-**Solutions:**
-1. Check BIOS fan settings
-2. Verify sensor identifier: `pysysfan scan --type control`
-3. Try higher minimum speed in curve (e.g., 30% instead of 20%)
-
-### Configuration Validation Fails
-
-**Problem:**
 ```powershell
 pysysfan config validate
-# Shows errors about sensors not found
-```
-
-**Solution:**
-1. Run hardware scan to get correct identifiers:
-   ```powershell
-   pysysfan scan --json | ConvertFrom-Json
-   ```
-2. Update config with correct sensor IDs
-3. Re-validate
-
-### Service Won't Start
-
-**Problem:**
-Service installed but doesn't start automatically.
-
-**Solution:**
-```powershell
-# Check task status
-schtasks /Query /TN pysysfan
-
-# Recreate task
-pysysfan service uninstall
-pysysfan service install
-
-# Test manually first
 pysysfan run --once
 ```
 
-### .NET Framework Errors
+## Related docs
 
-**Problem:**
-```
-RuntimeError: Failed to load .NET runtime
-```
-
-**Solution:**
-Windows 10/11 should have .NET Framework 4.7.2+ pre-installed.
-If missing:
-
-1. Download from Microsoft:
-   https://dotnet.microsoft.com/download/dotnet-framework
-
-2. Or enable via Windows Features:
-   - Open "Turn Windows features on or off"
-   - Check ".NET Framework 3.5" and ".NET Framework 4.8 Advanced Services"
-   - Click OK
-
-### "pysysfan" Command Not Found
-
-**Problem:**
-After installation, `pysysfan` command is not recognized.
-
-**Solution:**
-```powershell
-# Check if UV tool path is in PATH
-$env:PATH -split ";" | Select-String "uv"
-
-# Add to PATH if missing
-[Environment]::SetEnvironmentVariable(
-    "Path",
-    [Environment]::GetEnvironmentVariable("Path", "User") + ";$env:USERPROFILE\.local\bin",
-    "User"
-)
-
-# Restart PowerShell
-```
-
-## Testing Your Setup
-
-### Initial Test
-
-```powershell
-# 1. Verify hardware detection
-pysysfan scan
-
-# 2. Create config
-pysysfan config init
-
-# 3. Validate config
-pysysfan config validate
-
-# 4. Test single run
-pysysfan run --once
-
-# 5. Monitor live
-pysysfan monitor
-```
-
-### Stress Testing
-
-Use a stress test tool to verify cooling:
-
-```powershell
-# Install Prime95 or similar stress tool
-# https://www.mersenne.org/download/
-
-# Run stress test
-# In another PowerShell window:
-pysysfan monitor
-
-# Watch temperatures and fan speeds
-```
-
-## Getting Help
-
-If you encounter issues not covered here:
-
-1. Check [GitHub Issues](https://github.com/anomalyco/pysysfan/issues)
-2. Include output of:
-   ```powershell
-   pysysfan scan --json
-   pysysfan lhm info
-   pysysfan config show
-   ```
-3. Check LibreHardwareMonitor compatibility:
-   - https://github.com/LibreHardwareMonitor/LibreHardwareMonitor
-
-## Additional Resources
-
-- [LibreHardwareMonitor GitHub](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor)
-- [PawnIO Driver](https://github.com/namazso/PawnIO)
-- [LibreHardwareMonitor Supported Hardware](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor#supported-hardware)
+- [Configuration guide](config.md)
+- [Configuration schema reference](config-schema.md)
+- [README](../README.md)

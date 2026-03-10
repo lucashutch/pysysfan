@@ -89,7 +89,7 @@ class Config:
                 curve=curve_value,
                 temp_ids=temp_ids,
                 aggregation=fan_data.get("aggregation", "max"),
-                header_name=fan_data.get("header"),
+                header_name=fan_data.get("header", fan_data.get("header_name")),
                 allow_fan_off=fan_data.get("allow_fan_off", True),
             )
 
@@ -123,11 +123,13 @@ class Config:
 
         # Basic presets
         if "silent" not in curves:
-            curves["silent"] = CurveConfig([(30, 20), (50, 40), (80, 100)])
+            curves["silent"] = CurveConfig([(30, 20), (50, 40), (70, 70), (85, 100)])
         if "balanced" not in curves:
-            curves["balanced"] = CurveConfig([(30, 30), (60, 60), (85, 100)])
+            curves["balanced"] = CurveConfig([(30, 30), (60, 60), (75, 85), (85, 100)])
         if "performance" not in curves:
-            curves["performance"] = CurveConfig([(30, 50), (50, 80), (75, 100)])
+            curves["performance"] = CurveConfig(
+                [(30, 50), (50, 70), (65, 90), (75, 100)]
+            )
 
         # Update settings
         update_data = data.get("update", {})

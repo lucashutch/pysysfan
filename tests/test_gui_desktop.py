@@ -19,6 +19,7 @@ def test_get_or_create_application_reuses_instance() -> None:
 
     assert app_one is app_two
     assert app_one.applicationName() == "PySysFan"
+    assert app_one.windowIcon().isNull() is False
 
 
 def test_main_window_has_expected_tabs(qtbot) -> None:
@@ -33,6 +34,7 @@ def test_main_window_has_expected_tabs(qtbot) -> None:
         "Config",
         "Service",
     ]
+    assert window.windowIcon().isNull() is False
     assert (
         window.tab_widget.cornerWidget(Qt.Corner.TopRightCorner)
         is window.dashboard_page.status_corner_widget

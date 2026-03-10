@@ -1,256 +1,159 @@
-# Contributing to pysysfan
+# Contributing to PySysFan
 
-Thank you for your interest in contributing to pysysfan! This guide covers the development setup and workflow.
+Thanks for contributing.
 
-## Development Setup
+This repository is actively evolving around a **Windows-first** hardware control workflow, so changes should stay practical, tested, and easy to audit.
 
-### Prerequisites
+## Supported development environment
 
-- Python 3.8+
-- `uv` (recommended) or `pip`
-- Git
+- Python **3.11+**
+- `uv`
+- Windows 10/11 for hardware-facing work
+- Optional GUI dependencies for desktop changes
 
-### Clone and Install
+Most unit tests run cross-platform, but hardware integration and service validation are Windows-specific.
 
-```bash
-# Clone the repository
-git clone https://github.com/anomalyco/pysysfan.git
+## Getting started
+
+```powershell
+git clone https://github.com/lucashutch/pysysfan.git
 cd pysysfan
-
-# Install with development dependencies
-uv pip install -e ".[dev]"
-# or
-pip install -e ".[dev]"
+uv sync --extra gui --group dev
 ```
 
-## Project Structure
+If you only need the default CLI/runtime dependencies:
 
-```
-pysysfan/
-├── src/pysysfan/          # Main source code
-│   ├── cli.py             # CLI entry point (Click commands)
-│   ├── daemon.py          # Fan control loop
-│   ├── curves.py          # Fan curve logic
-│   ├── config.py          # YAML configuration
-│   ├── hardware.py        # Hardware abstraction
-│   ├── updater.py         # Self-update logic
-│   ├── lhm/               # LibreHardwareMonitor integration
-│   ├── pawnio/            # PawnIO driver management
-│   └── platforms/         # Platform-specific code
-│       ├── windows.py     # Windows implementation
-│       └── linux.py       # Linux implementation
-├── tests/                 # Test suite
-├── docs/                  # Documentation
-└── pyproject.toml         # Project configuration
+```powershell
+uv sync --group dev
 ```
 
-## Development Workflow
+## Required workflow
 
-### Making Changes
+Before making code changes:
 
-1. Create a feature branch:
-   ```bash
-   git checkout -b feature/my-feature
-   ```
+1. Create a feature branch. Do not work directly on `main`.
+2. Create a new plan file in `.plans/` for the task.
+3. Update the top-level `plan.md` with the current work.
+4. Keep `TODO.md` in sync as phases are completed.
 
-2. Make your changes following the coding standards below
+Expected branch naming examples:
 
-3. Run tests and linting:
-   ```bash
-   # Run all tests
-   uv run pytest tests/
-   
-   # Run linting
-   uv run ruff check --fix
-   
-   # Format code
-   uv run ruff format
-   ```
+- `feature/gui-icon-refresh`
+- `fix/windows-service-status`
+- `docs/readme-cleanup`
 
-4. Commit with a descriptive message
+## Repository map
 
-## Coding Standards
+Key paths in the current codebase:
 
-### Style Guidelines
+- `src/pysysfan/cli.py` — main CLI entry point
+- `src/pysysfan/config.py` — YAML config load/save and defaults
+- `src/pysysfan/curves.py` — interpolation and static curve parsing
+- `src/pysysfan/daemon.py` — control loop
+- `src/pysysfan/platforms/windows.py` — Windows hardware implementation
+- `src/pysysfan/platforms/windows_service.py` — Task Scheduler integration
+- `src/pysysfan/gui/desktop/` — native PySide6 desktop app
+- `src/pysysfan/lhm/` — LibreHardwareMonitor download and bootstrap helpers
+- `src/pysysfan/pawnio/` — PawnIO download and elevation helpers
+- `tests/` — pytest suite
+- `docs/` — end-user documentation
 
-- Follow **PEP 8**
-- Use **type hints** for all function signatures
-- Add **docstrings** to all public functions and classes
-- Keep functions focused and small
-- Use meaningful variable names
+## Coding expectations
 
-### Example
+Please keep changes:
 
-```python
-def parse_curve(name: str) -> StaticCurve | None:
-    """Parse a curve name and return StaticCurve for special values.
+- modular
+- type-hinted
+- commented where behavior is non-obvious
+- consistent with existing naming and structure
+- focused on the smallest viable change set
 
-    Special names (case-insensitive):
-    - "off" → StaticCurve(0%)
-    - "on" → StaticCurve(100%)
-    - numeric (e.g., "50", "75%") → StaticCurve(%) with that value
+General rules:
 
-    Args:
-        name: The curve name to parse.
+- follow PEP 8
+- prefer explicit, testable helpers over deeply nested logic
+- keep public docs and user-facing messages aligned with actual behavior
+- add or update tests for new features and regressions
+- update `pyproject.toml` if dependencies or packaging behavior change
 
-    Returns:
-        StaticCurve instance for special curves, or None.
+## Documentation expectations
 
-    Raises:
-        InvalidCurveError: If a numeric value is outside the 0-100 range.
-    """
-    # Implementation here
+Update documentation whenever behavior changes materially.
+
+That includes, when relevant:
+
+- `README.md`
+- files in `docs/`
+- `THIRD_PARTY_LICENSES.md`
+- `CONTRIBUTING.md`
+- `TODO.md`
+- `plan.md`
+- the task plan under `.plans/`
+
+## Validation commands
+
+Run these before opening a pull request:
+
+```powershell
+uv run ruff check --fix
+uv run ruff format
+uv run pytest tests/
 ```
 
-### Type Hints
+For GUI-focused work, also run targeted tests while iterating.
 
-Use Python 3.10+ union syntax:
-```python
-# Good
-def func() -> str | None:
-    ...
+Examples:
 
-# Avoid
-def func() -> Optional[str]:
-    ...
+```powershell
+uv run python -m pytest --no-cov tests/test_gui_desktop.py tests/test_gui_dashboard.py
+uv run python -m pytest --no-cov tests/test_windows_service.py
 ```
 
-### Imports
+## Testing guidance
 
-- Group imports: stdlib, third-party, local
-- Use `from __future__ import annotations` for forward references
-- Sort imports with `ruff` (runs automatically on format)
+- Put new tests in `tests/`
+- Use descriptive test names
+- Mock hardware or OS-specific boundaries when possible
+- Avoid requiring real hardware for unit tests
+- Keep tests deterministic and isolated
 
-## Testing
+For GUI changes:
 
-### Writing Tests
+- prefer widget-level tests with `pytest-qt`
+- verify user-visible behavior, not only implementation details
+- keep the desktop app import boundary lazy unless GUI entry points are explicitly used
 
-Tests are located in `tests/` and use **pytest**:
+## Pull requests
 
-```python
-# tests/test_my_feature.py
-import pytest
-from pysysfan.curves import parse_curve
+A good pull request should:
 
+- explain the problem being solved
+- describe the user-facing effect
+- mention documentation changes
+- mention test coverage and validation run
+- stay scoped to one change set when practical
 
-def test_parse_curve_off():
-    """Should parse 'off' to 0%."""
-    result = parse_curve("off")
-    assert result.speed == 0.0
-```
+Checklist:
 
-### Test Guidelines
+- [ ] feature branch used
+- [ ] `.plans/`, `plan.md`, and `TODO.md` updated
+- [ ] code formatted and linted
+- [ ] tests added or updated as needed
+- [ ] docs refreshed
+- [ ] no unrelated refactors slipped in
 
-- Name tests descriptively: `test_<function>_<scenario>`
-- Use pytest fixtures for shared setup
-- Test edge cases and error conditions
-- Keep tests independent (no shared state)
+## Licensing and third-party components
 
-### Running Tests
+If your change adds or changes dependencies, also update [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).
 
-```bash
-# Run all tests
-pytest tests/
+Be careful with anything that bundles or redistributes third-party binaries, especially:
 
-# Run specific test file
-pytest tests/test_curves.py
+- LibreHardwareMonitor
+- PySide6 / Qt
+- PawnIO
 
-# Run with coverage
-pytest tests/ --cov=pysysfan
+If redistribution terms are unclear, keep the component external and document the decision.
 
-# Run in verbose mode
-pytest tests/ -v
-```
+## Questions
 
-### Mocking Hardware
-
-When testing hardware-dependent code, use mocks:
-
-```python
-from unittest.mock import MagicMock, patch
-
-@patch('pysysfan.hardware.HardwareManager')
-def test_daemon(mock_hw_class):
-    mock_hw = MagicMock()
-    mock_hw_class.return_value = mock_hw
-    # Test with mocked hardware
-```
-
-## Documentation
-
-### Code Documentation
-
-- Add docstrings to all public APIs
-- Use Google-style docstrings (as shown above)
-- Include type information in docstrings when helpful
-
-### User Documentation
-
-- Update `docs/` for feature changes
-- Keep `README.md` end-user focused
-- Add examples for new features
-
-## Pull Request Process
-
-1. Ensure all tests pass
-2. Run linting and formatting
-3. Update documentation if needed
-4. Create a PR with a clear description
-5. Link to any related issues
-
-## Release Process
-
-Releases are automated via GitHub Actions when a tag is pushed:
-
-```bash
-# Version bump (example: patch)
-git tag v1.2.3
-git push origin v1.2.3
-```
-
-## Platform-Specific Development
-
-### Windows Development
-
-- Requires Windows 10/11
-- Administrator privileges needed for hardware access
-- LibreHardwareMonitor DLL auto-downloads on first run
-
-### Linux Development
-
-- Tested on Ubuntu, Fedora, Arch
-- Install lm-sensors: `sudo apt install lm-sensors libsensors-dev`
-- Run as root or set up udev rules for non-root testing
-
-## Debugging
-
-### Enable Debug Logging
-
-```python
-import logging
-logging.basicConfig(level=logging.DEBUG)
-```
-
-Or set environment variable:
-```bash
-export PYSYSFAN_DEBUG=1
-```
-
-### Common Issues
-
-**Import errors on Linux**: Install the Linux extras:
-```bash
-pip install -e ".[linux]"
-```
-
-**Permission errors**: Ensure you're running as Administrator (Windows) or root (Linux) when accessing hardware.
-
-## Questions?
-
-- Open an issue for bugs or feature requests
-- Join discussions in existing issues
-- Check existing tests and code for examples
-
-## License
-
-By contributing, you agree that your contributions will be licensed under the MIT License.
+If a change touches packaging, Windows hardware behavior, or GUI runtime boundaries, keep the PR especially explicit about the reasoning and validation steps.
