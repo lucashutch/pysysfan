@@ -49,6 +49,8 @@ from pysysfan.state_file import DEFAULT_STATE_PATH, DaemonStateFile
 class DashboardPage(QWidget):
     """Desktop dashboard backed by the local daemon state file."""
 
+    REFRESH_INTERVAL_MS = 1000
+
     HISTORY_WINDOWS = {
         "60 s": 60,
         "5 min": 300,
@@ -283,12 +285,22 @@ class DashboardPage(QWidget):
         self.main_splitter.setSizes([470, 980])
 
         self._refresh_timer = QTimer(self)
-        self._refresh_timer.setInterval(1000)
+        self._refresh_timer.setInterval(self.REFRESH_INTERVAL_MS)
         self._refresh_timer.timeout.connect(self.refresh_data)
-        self._refresh_timer.start()
 
         self._apply_theme()
         self._apply_offline_state(None)
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        """Refresh and poll only while the dashboard page is visible."""
+        super().showEvent(event)
+        self.refresh_data()
+        self._refresh_timer.start()
+
+    def hideEvent(self, event) -> None:  # noqa: N802
+        """Stop periodic polling when the dashboard page is hidden."""
+        self._refresh_timer.stop()
+        super().hideEvent(event)
 
     def refresh_data(self) -> None:
         """Refresh the dashboard using the latest local daemon state."""

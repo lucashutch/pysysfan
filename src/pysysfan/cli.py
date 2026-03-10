@@ -10,6 +10,20 @@ from rich.text import Text
 
 from pysysfan import __version__
 
+# Ensure stdout/stderr use UTF-8 with a replace policy where supported so
+# printing Unicode glyphs (e.g. check marks) does not raise a
+# UnicodeEncodeError on consoles using legacy encodings (common on Windows).
+import sys
+
+try:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except Exception:
+    # Best-effort only; if reconfigure isn't available or fails, fall back.
+    pass
+
 console = Console()
 
 

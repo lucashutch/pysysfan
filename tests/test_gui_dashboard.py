@@ -264,6 +264,24 @@ def test_dashboard_shows_offline_message_without_state(qtbot, tmp_path) -> None:
     assert page.fan_summary_empty_label.isVisible() is True
 
 
+def test_dashboard_only_polls_while_visible(qtbot, tmp_path) -> None:
+    """The dashboard page should only run its refresh timer while visible."""
+    page = DashboardPage(
+        state_path=tmp_path / "missing.json",
+        history_path=tmp_path / "daemon_history.ndjson",
+        service_status_getter=lambda: _task_status(installed=True),
+    )
+    qtbot.addWidget(page)
+
+    assert page._refresh_timer.isActive() is False
+
+    page.show()
+    qtbot.waitUntil(page._refresh_timer.isActive)
+
+    page.hide()
+    qtbot.waitUntil(lambda: not page._refresh_timer.isActive())
+
+
 def test_dashboard_start_service_uses_runner(qtbot, tmp_path) -> None:
     """Starting the service from the dashboard should use the injected runner."""
     calls: list[str] = []
