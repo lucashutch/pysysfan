@@ -2,6 +2,7 @@
 
 ## Recently completed
 
+- [x] 2026-03-10 — Replace the Windows scheduled-task inline command with a generated launcher script so service install stays below the Task Scheduler `/TR` length limit.
 - [x] 2026-03-10 — Repair the Windows Service tab flow so GUI-triggered service actions request elevation clearly and scheduled tasks run with the installing user's home-directory context.
 - [x] 2026-03-10 — Refresh the Windows installer to support daemon-only or GUI installs, create a Start Menu app shortcut, and remove the obsolete Linux installer script.
 - [x] 2026-03-10 — Add a desktop GUI minimize-to-tray preference on the Service page and cover it with targeted GUI tests.

@@ -15,6 +15,7 @@ from pysysfan.state_file import read_state
 logger = logging.getLogger(__name__)
 
 TASK_NAME = "pysysfan"
+SERVICE_LAUNCHER_NAME = "pysysfan-service.cmd"
 
 
 def _hidden_process_kwargs() -> dict[str, object]:
@@ -48,9 +49,20 @@ def _pysysfan_exe() -> str:
     )
 
 
-def _build_task_command(config_path: Path, *, user_home: Path | None = None) -> str:
-    """Build the scheduled-task command line for the daemon."""
-    exe = _pysysfan_exe()
+def _service_launcher_path(user_home: Path | None = None) -> Path:
+    """Return the launcher script path used by the scheduled task."""
+    home = (user_home or Path.home()).resolve()
+    return home / ".pysysfan" / SERVICE_LAUNCHER_NAME
+
+
+def _build_service_launcher(
+    config_path: Path,
+    *,
+    user_home: Path | None = None,
+    executable_path: str | None = None,
+) -> str:
+    """Build the batch script that restores the user environment and starts the daemon."""
+    exe = executable_path or _pysysfan_exe()
     home = (user_home or Path.home()).resolve()
     home_drive = home.drive or ""
     home_tail = home.as_posix().replace("/", "\\")
@@ -59,18 +71,45 @@ def _build_task_command(config_path: Path, *, user_home: Path | None = None) -> 
     else:
         home_path = home_tail
 
-    escaped_home = str(home)
-    escaped_exe = str(exe)
-    escaped_config = str(config_path)
+    lines = [
+        "@echo off",
+        "setlocal",
+        f'set "USERPROFILE={home}"',
+        f'set "HOME={home}"',
+        f'set "HOMEDRIVE={home_drive}"',
+        f'set "HOMEPATH={home_path}"',
+        f'cd /d "{home}"',
+        f'call "{exe}" run --config "{config_path}"',
+    ]
+    return "\r\n".join(lines) + "\r\n"
 
-    return (
-        "cmd.exe /d /c "
-        f'"set USERPROFILE={escaped_home} && '
-        f"set HOME={escaped_home} && "
-        f"set HOMEDRIVE={home_drive} && "
-        f"set HOMEPATH={home_path} && "
-        f'"{escaped_exe}" run --config "{escaped_config}""'
+
+def _write_service_launcher(
+    config_path: Path, *, user_home: Path | None = None
+) -> Path:
+    """Write the scheduled-task launcher script and return its path."""
+    launcher_path = _service_launcher_path(user_home)
+    launcher_path.parent.mkdir(parents=True, exist_ok=True)
+    launcher_path.write_text(
+        _build_service_launcher(config_path, user_home=user_home),
+        encoding="utf-8",
+        newline="\r\n",
     )
+    return launcher_path
+
+
+def _build_task_command(launcher_path: Path) -> str:
+    """Build the short scheduled-task command line that invokes the launcher."""
+    normalized_launcher = str(Path(launcher_path).resolve())
+    return f'cmd.exe /d /c "{normalized_launcher}"'
+
+
+def _delete_service_launcher(user_home: Path | None = None) -> None:
+    """Delete the scheduled-task launcher script if it exists."""
+    try:
+        _service_launcher_path(user_home).unlink()
+    except FileNotFoundError:
+        return
 
 
 def install_task(config_path: Path | str | None = None) -> None:
@@ -90,7 +129,8 @@ def install_task(config_path: Path | str | None = None) -> None:
 
     config_path = Path(config_path).resolve()
 
-    cmd_args = _build_task_command(config_path)
+    launcher_path = _write_service_launcher(config_path)
+    cmd_args = _build_task_command(launcher_path)
 
     result = subprocess.run(
         [
@@ -141,6 +181,8 @@ def uninstall_task() -> None:
             f"schtasks /Delete failed (exit {result.returncode}):\n"
             f"{result.stdout}\n{result.stderr}"
         )
+
+    _delete_service_launcher()
 
     logger.info(f"Task '{TASK_NAME}' removed.")
 
