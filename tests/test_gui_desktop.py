@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
 
 pytest.importorskip("PySide6")
@@ -40,3 +42,23 @@ def test_main_window_has_expected_tabs(qtbot) -> None:
         is window.dashboard_page.status_corner_widget
     )
     assert "QTabBar::tab" in window.styleSheet()
+
+
+def test_main_window_hides_to_tray_when_minimized_preference_enabled(qtbot) -> None:
+    """A minimize action should hide the window when tray mode is enabled."""
+    window = MainWindow()
+    qtbot.addWidget(window)
+    tray_icon = MagicMock()
+    tray_icon.isVisible.return_value = True
+    window._tray_icon = tray_icon
+
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setattr(
+            "pysysfan.gui.desktop.main_window.get_minimize_to_tray",
+            lambda: True,
+        )
+        window.show()
+        window.showMinimized()
+        qtbot.waitUntil(lambda: not window.isVisible())
+
+    tray_icon.showMessage.assert_called_once()

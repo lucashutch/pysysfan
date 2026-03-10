@@ -1,9 +1,25 @@
-![PySysFan icon](icons/pysysfan.svg)
+<div align="center">
+  <img src="icons/pysysfan.svg" alt="PySysFan icon" width="120" height="120">
+  <h1>PySysFan</h1>
+  <p><strong>Windows-first fan control with a CLI, background daemon, and optional native desktop GUI.</strong></p>
+  <p>Safer, more transparent control over motherboard fan headers using LibreHardwareMonitor and Windows Task Scheduler.</p>
 
-# PySysFan
+  ![Windows 10/11](https://img.shields.io/badge/platform-Windows%2010%20%2F%2011-0078D6)
+  ![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-3776AB)
+  ![License](https://img.shields.io/badge/license-MIT-2ea043)
 
-PySysFan is a Windows-first fan control tool for people who want safer, more transparent control over motherboard fan headers.
-It combines:
+  <p>
+    <a href="docs/windows.md"><strong>Windows setup</strong></a>
+    ·
+    <a href="docs/config.md"><strong>Configuration guide</strong></a>
+    ·
+    <a href="docs/config-schema.md"><strong>Schema reference</strong></a>
+  </p>
+</div>
+
+---
+
+PySysFan combines:
 
 - a CLI for setup, scanning, validation, and service management
 - a background daemon that applies your fan curves continuously
@@ -38,7 +54,14 @@ You will typically need:
 
 Download and run [scripts/install-pysysfan.bat](scripts/install-pysysfan.bat) as Administrator.
 
-It installs PySysFan, downloads LibreHardwareMonitor, and starts the PawnIO installer flow.
+The installer now asks whether you want:
+
+- **Daemon + CLI only**, or
+- **Daemon + CLI + desktop GUI**
+
+If you select the desktop GUI, the installer also creates a **PySysFan Start Menu app** that uses the project icon and launches without opening a background terminal window.
+
+It also downloads LibreHardwareMonitor and starts the PawnIO installer flow.
 
 ### Option 2: Install from Python packaging tools
 
@@ -61,6 +84,7 @@ uv run pysysfan-gui
 ```
 
 The desktop app now uses the project icon in the **title bar**, **taskbar**, and **Windows notification area**.
+When installed through the Windows installer, it also gets a Start Menu entry for app-style launching.
 
 ## Quick start
 
@@ -87,7 +111,7 @@ If you installed the GUI:
 pysysfan-gui
 ```
 
-Use the GUI to review live temperatures, edit curves, assign sensors, and manage the startup service.
+Use the GUI to review live temperatures, edit curves, assign sensors, manage the startup service, and optionally minimize the app to the Windows notification area from the Service page.
 
 ## Example configuration
 
@@ -150,6 +174,7 @@ The optional desktop app provides three core pages:
 - **Service** — install, enable, disable, start, stop, restart, and inspect service state
 
 Closing the desktop window minimizes it to the notification area when the system tray is available.
+The Service page also includes an option to make the title-bar minimize button send the GUI to the tray instead of the taskbar.
 
 ## Documentation
 

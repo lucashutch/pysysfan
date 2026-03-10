@@ -2,12 +2,9 @@
 
 ## Recently completed
 
-- [x] 2026-03-10 — Package the new PySysFan SVG icon for the desktop app and apply it to the window, taskbar identity, and notification area.
-- [x] 2026-03-10 — Refresh the README for public Windows installation and day-one use.
-- [x] 2026-03-10 — Audit and expand the third-party license notice file for current direct and optional GUI dependencies.
-- [x] 2026-03-10 — Refresh `docs/config.md`, `docs/config-schema.md`, `docs/windows.md`, and `CONTRIBUTING.md`.
-
-## Near-term priorities
+- [x] 2026-03-10 — Refresh the Windows installer to support daemon-only or GUI installs, create a Start Menu app shortcut, and remove the obsolete Linux installer script.
+- [x] 2026-03-10 — Add a desktop GUI minimize-to-tray preference on the Service page and cover it with targeted GUI tests.
+- [x] 2026-03-10 — Rework the README and Windows guide for the polished Windows-first installer and GUI launch story.
 
 ### Desktop GUI
 - [ ] Continue dashboard stat-card polish and information hierarchy cleanup.
@@ -24,3 +21,8 @@
 - [ ] Review whether future standalone GUI packaging should ship a generated `.ico` and bundled third-party notice set.
 - [ ] Keep installer scripts aligned with the public installation story.
 - [ ] Revisit any remaining legacy GUI or packaging paths and remove them once fully superseded.
+
+## Improve Daemon and GUI idle resource usage
+- [ ] Profile the daemon and desktop app to identify any remaining CPU or memory usage optimizations, especially around idle periods.
+- [ ] Ensure gui doesnt needlessly refresh or poll when the daemon is idle or when the dashboard is not visible.
+- [ ] Consider adding a dynamic polling adjustment in the daemon based on system load or idle state to further reduce resource usage when the system is not under heavy load.
