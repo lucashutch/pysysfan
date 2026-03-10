@@ -37,6 +37,8 @@ from pysysfan.state_file import DEFAULT_STATE_PATH
 class ServicePage(QWidget):
     """Desktop service management page backed by local helpers."""
 
+    REFRESH_INTERVAL_MS = 10000
+
     def __init__(
         self,
         state_path: Path = DEFAULT_STATE_PATH,
@@ -215,10 +217,20 @@ class ServicePage(QWidget):
         layout.addStretch(1)
 
         self._refresh_timer = QTimer(self)
-        self._refresh_timer.setInterval(2000)
+        self._refresh_timer.setInterval(self.REFRESH_INTERVAL_MS)
         self._refresh_timer.timeout.connect(self.refresh_data)
-        self._refresh_timer.start()
         self.setStyleSheet(management_page_stylesheet(self.palette()))
+
+    def showEvent(self, event) -> None:  # noqa: N802
+        """Refresh and poll only while the service page is visible."""
+        super().showEvent(event)
+        self.refresh_data()
+        self._refresh_timer.start()
+
+    def hideEvent(self, event) -> None:  # noqa: N802
+        """Stop periodic polling when the service page is hidden."""
+        self._refresh_timer.stop()
+        super().hideEvent(event)
 
     def refresh_data(self) -> None:
         """Refresh Task Scheduler and daemon state."""

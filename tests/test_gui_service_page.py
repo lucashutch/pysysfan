@@ -150,3 +150,21 @@ def test_service_page_updates_minimize_to_tray_preference(qtbot, tmp_path) -> No
 
     assert calls == [True]
     assert page.message_label.text() == "Saved desktop app preference."
+
+
+def test_service_page_only_polls_while_visible(qtbot, tmp_path) -> None:
+    """The Service page should only run its refresh timer while visible."""
+    page = ServicePage(
+        state_path=tmp_path / "missing.json",
+        service_status_getter=lambda: _service_status(),
+        task_details_getter=lambda: {},
+    )
+    qtbot.addWidget(page)
+
+    assert page._refresh_timer.isActive() is False
+
+    page.show()
+    qtbot.waitUntil(page._refresh_timer.isActive)
+
+    page.hide()
+    qtbot.waitUntil(lambda: not page._refresh_timer.isActive())

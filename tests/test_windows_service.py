@@ -5,7 +5,9 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from pysysfan.platforms.windows_service import (
+    _hidden_process_kwargs,
     _pysysfan_exe,
+    get_service_status,
     install_task,
     uninstall_task,
     get_task_status,
@@ -32,6 +34,15 @@ class TestPysysfanExe:
         """Should raise FileNotFoundError when not in PATH."""
         with pytest.raises(FileNotFoundError, match="not found in PATH"):
             _pysysfan_exe()
+
+
+class TestHiddenProcessKwargs:
+    """Tests for the hidden subprocess helper."""
+
+    def test_returns_stable_shape(self):
+        """The helper should return kwargs on Windows and no-op elsewhere."""
+        kwargs = _hidden_process_kwargs()
+        assert kwargs == {} or "creationflags" in kwargs
 
 
 class TestInstallTask:
@@ -139,6 +150,35 @@ class TestGetTaskStatus:
             stdout="TaskName: \\pysysfan\n",
         )
         assert get_task_status() == "Unknown"
+
+
+class TestGetServiceStatus:
+    """Tests for `get_service_status()`."""
+
+    @patch("pysysfan.platforms.windows_service.read_state")
+    @patch("pysysfan.platforms.windows_service.subprocess.run")
+    def test_uses_hidden_process_kwargs(self, mock_run, mock_read_state):
+        """Task status queries should use the hidden-window subprocess kwargs."""
+        mock_read_state.return_value = None
+        mock_run.side_effect = [
+            MagicMock(returncode=0, stdout="Status: Running\n"),
+            MagicMock(returncode=0, stdout="Last Run Time: N/A\n"),
+        ]
+
+        get_service_status()
+
+        assert mock_run.call_count == 2
+        for call in mock_run.call_args_list:
+            kwargs = call.kwargs
+            assert kwargs["capture_output"] is True
+            assert kwargs["text"] is True
+            hidden = _hidden_process_kwargs()
+            for key, value in hidden.items():
+                if key == "startupinfo":
+                    assert kwargs[key].dwFlags == value.dwFlags
+                    assert kwargs[key].wShowWindow == value.wShowWindow
+                else:
+                    assert kwargs[key] == value
 
 
 class TestEnableTask:
