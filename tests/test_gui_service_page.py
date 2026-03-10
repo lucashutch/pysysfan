@@ -75,11 +75,62 @@ def test_service_page_sets_button_states_from_status(qtbot, tmp_path) -> None:
 
     page.refresh_data()
 
-    assert page.install_button.isEnabled() is False
+    assert page.install_button.isEnabled() is True
     assert page.uninstall_button.isEnabled() is True
     assert page.start_button.isEnabled() is True
     assert page.stop_button.isEnabled() is False
     assert page.restart_button.isEnabled() is False
+
+
+def test_service_page_shows_popup_for_admin_elevation(qtbot, tmp_path) -> None:
+    """Service actions should explain when Windows requests elevation."""
+    page = ServicePage(
+        state_path=tmp_path / "missing.json",
+        service_status_getter=lambda: _service_status(
+            task_installed=False,
+            daemon_running=False,
+        ),
+        task_details_getter=lambda: {},
+        command_runner=lambda action: (
+            True,
+            "Windows asked for Administrator permission for `pysysfan service install`. "
+            "Approve the Windows UAC prompt to continue. If no prompt appears, "
+            "close PySysFan and relaunch it as Administrator.",
+        ),
+    )
+    qtbot.addWidget(page)
+
+    with patch.object(QMessageBox, "information") as mock_information:
+        page.install_button.click()
+
+    mock_information.assert_called_once()
+
+
+def test_service_page_confirms_repair_when_task_already_installed(
+    qtbot, tmp_path
+) -> None:
+    """Repair installs should confirm before replacing an existing task."""
+    calls: list[str] = []
+    page = ServicePage(
+        state_path=tmp_path / "missing.json",
+        service_status_getter=lambda: _service_status(
+            task_installed=True,
+            daemon_running=False,
+        ),
+        task_details_getter=lambda: {},
+        command_runner=lambda action: (calls.append(action) or True, "Repaired"),
+    )
+    qtbot.addWidget(page)
+    page.refresh_data()
+
+    with patch.object(
+        QMessageBox,
+        "question",
+        return_value=QMessageBox.StandardButton.No,
+    ):
+        page.install_button.click()
+
+    assert calls == []
 
 
 def test_service_page_runs_stop_action(qtbot, tmp_path) -> None:

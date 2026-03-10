@@ -25,6 +25,9 @@ from pysysfan.state_file import DEFAULT_STATE_PATH, DaemonStateFile, read_state
 from pysysfan.temperature import get_valid_aggregation_methods
 
 
+ELEVATION_REQUESTED_SENTINEL = "Windows asked for Administrator permission"
+
+
 def _hidden_process_kwargs() -> dict[str, object]:
     """Return subprocess kwargs that suppress console windows on Windows."""
     if sys.platform != "win32":
@@ -40,6 +43,33 @@ def _hidden_process_kwargs() -> dict[str, object]:
         startupinfo.wShowWindow = getattr(subprocess, "SW_HIDE", 0)
         kwargs["startupinfo"] = startupinfo
     return kwargs
+
+
+def _find_executable(executable_name: str) -> str | None:
+    """Return a best-effort path to an installed console executable."""
+    for candidate in (executable_name, f"{executable_name}.exe"):
+        executable = shutil.which(candidate)
+        if executable is not None:
+            return executable
+
+    launcher_path = Path(sys.executable)
+    for candidate in (
+        launcher_path.with_name(executable_name),
+        launcher_path.with_name(f"{executable_name}.exe"),
+    ):
+        if candidate.is_file():
+            return str(candidate)
+
+    return None
+
+
+def _elevation_requested_message(command_label: str) -> str:
+    """Return a clear follow-up message after a UAC prompt was requested."""
+    return (
+        f"{ELEVATION_REQUESTED_SENTINEL} for {command_label}. "
+        "Approve the Windows UAC prompt to continue. "
+        "If no prompt appears, close PySysFan and relaunch it as Administrator."
+    )
 
 
 def check_admin() -> bool:
@@ -141,8 +171,7 @@ def run_service_command(action: str) -> tuple[bool, str]:
     When Administrator privileges are not already present on Windows, this will
     request elevation via UAC and return immediately.
     """
-    return run_python_module(
-        "pysysfan.cli",
+    return run_cli_command(
         ["service", action],
         elevate=True,
     )
@@ -150,7 +179,7 @@ def run_service_command(action: str) -> tuple[bool, str]:
 
 def run_installer_command(executable_name: str) -> tuple[bool, str]:
     """Run one of the installer entrypoints, requesting elevation if required."""
-    executable = shutil.which(executable_name) or shutil.which(f"{executable_name}.exe")
+    executable = _find_executable(executable_name)
     if executable is None:
         return False, f"Executable not found in PATH: {executable_name}"
 
@@ -165,10 +194,7 @@ def run_installer_command(executable_name: str) -> tuple[bool, str]:
         )
         if code <= 32:
             return False, f"Failed to request elevation for {executable_name}"
-        return (
-            True,
-            f"Elevation requested for {executable_name}. Refresh when it completes.",
-        )
+        return True, _elevation_requested_message(executable_name)
 
     completed = subprocess.run(
         [executable],
@@ -180,6 +206,45 @@ def run_installer_command(executable_name: str) -> tuple[bool, str]:
     if completed.returncode == 0:
         return True, output or f"Completed: {executable_name}"
     return False, output or f"Failed: {executable_name}"
+
+
+def run_cli_command(
+    args: Sequence[str],
+    *,
+    elevate: bool = False,
+    executable_name: str = "pysysfan",
+) -> tuple[bool, str]:
+    """Run an installed CLI executable, optionally requesting elevation."""
+    executable = _find_executable(executable_name)
+    if executable is None:
+        return run_python_module("pysysfan.cli", args, elevate=elevate)
+
+    if elevate and sys.platform == "win32" and not check_admin():
+        params = subprocess.list2cmdline(list(args))
+        code = ctypes.windll.shell32.ShellExecuteW(
+            None,
+            "runas",
+            executable,
+            params,
+            None,
+            1,
+        )
+        if code <= 32:
+            return False, f"Failed to request elevation for {' '.join(args)}"
+        return True, _elevation_requested_message(
+            f"`{executable_name} {' '.join(args)}`"
+        )
+
+    completed = subprocess.run(
+        [executable, *args],
+        capture_output=True,
+        text=True,
+        **_hidden_process_kwargs(),
+    )
+    output = (completed.stdout or completed.stderr).strip()
+    if completed.returncode == 0:
+        return True, output or f"Completed: {' '.join(args)}"
+    return False, output or f"Failed: {' '.join(args)}"
 
 
 def run_python_module(
@@ -203,10 +268,7 @@ def run_python_module(
         )
         if code <= 32:
             return False, f"Failed to request elevation for {' '.join(args)}"
-        return (
-            True,
-            f"Elevation requested for `pysysfan {' '.join(args)}`. Refresh when it completes.",
-        )
+        return True, _elevation_requested_message(f"`pysysfan {' '.join(args)}`")
 
     completed = subprocess.run(
         [sys.executable, *full_args],
