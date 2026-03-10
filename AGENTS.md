@@ -10,6 +10,7 @@ When working in this repository:
 - Run `uv run pytest tests/` to verify all tests pass.
 - Maintain the `pysysfan` naming convention throughout.
 - ALWAYS create a new plan in the .plans witha clear breakdown of steps before coding.
+- NEVER commit to main, always create a feature branch and open a PR for review.
 
 ## Project Structure
 

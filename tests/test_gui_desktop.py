@@ -6,6 +6,8 @@ import pytest
 
 pytest.importorskip("PySide6")
 
+from PySide6.QtCore import Qt
+
 from pysysfan.gui.desktop.app import get_or_create_application
 from pysysfan.gui.desktop.main_window import MainWindow
 
@@ -28,6 +30,11 @@ def test_main_window_has_expected_tabs(qtbot) -> None:
     assert window.tab_widget.count() == 3
     assert [window.tab_widget.tabText(index) for index in range(3)] == [
         "Dashboard",
-        "Curves",
+        "Config",
         "Service",
     ]
+    assert (
+        window.tab_widget.cornerWidget(Qt.Corner.TopRightCorner)
+        is window.dashboard_page.status_corner_widget
+    )
+    assert "QTabBar::tab" in window.styleSheet()

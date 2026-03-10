@@ -23,6 +23,7 @@ from pysysfan.gui.desktop.local_backend import (
     run_installer_command,
     run_service_command,
 )
+from pysysfan.gui.desktop.theme import PAGE_HEADING_STYLE, management_page_stylesheet
 from pysysfan.platforms import windows_service
 from pysysfan.state_file import DEFAULT_STATE_PATH
 
@@ -40,6 +41,7 @@ class ServicePage(QWidget):
         parent: QWidget | None = None,
     ):
         super().__init__(parent)
+        self.setObjectName("managementPageRoot")
         self._state_path = Path(state_path)
         self._service_status_getter = (
             service_status_getter or windows_service.get_service_status
@@ -56,7 +58,7 @@ class ServicePage(QWidget):
 
         heading = QLabel("Service", self)
         heading.setObjectName("serviceTitle")
-        heading.setStyleSheet("font-size: 20px; font-weight: 600;")
+        heading.setStyleSheet(PAGE_HEADING_STYLE)
         layout.addWidget(heading)
 
         toolbar = QHBoxLayout()
@@ -73,6 +75,7 @@ class ServicePage(QWidget):
         layout.addLayout(toolbar)
 
         self.message_label = QLabel("", self)
+        self.message_label.setObjectName("serviceMessageLabel")
         self.message_label.setWordWrap(True)
         self.message_label.hide()
         layout.addWidget(self.message_label)
@@ -174,6 +177,7 @@ class ServicePage(QWidget):
         self._refresh_timer.setInterval(2000)
         self._refresh_timer.timeout.connect(self.refresh_data)
         self._refresh_timer.start()
+        self.setStyleSheet(management_page_stylesheet(self.palette()))
 
     def refresh_data(self) -> None:
         """Refresh Task Scheduler and daemon state."""
