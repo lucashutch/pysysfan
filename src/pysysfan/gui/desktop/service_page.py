@@ -7,6 +7,7 @@ from typing import Any, Callable
 
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import (
+    QCheckBox,
     QGridLayout,
     QGroupBox,
     QHBoxLayout,
@@ -14,6 +15,7 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
+    QSystemTrayIcon,
     QVBoxLayout,
     QWidget,
 )
@@ -22,6 +24,10 @@ from pysysfan.gui.desktop.local_backend import (
     read_daemon_state,
     run_installer_command,
     run_service_command,
+)
+from pysysfan.gui.desktop.preferences import (
+    get_minimize_to_tray,
+    set_minimize_to_tray,
 )
 from pysysfan.gui.desktop.theme import PAGE_HEADING_STYLE, management_page_stylesheet
 from pysysfan.platforms import windows_service
@@ -38,6 +44,8 @@ class ServicePage(QWidget):
         task_details_getter: Callable[[], dict[str, str] | None] | None = None,
         command_runner: Callable[[str], tuple[bool, str]] | None = None,
         installer_runner: Callable[[str], tuple[bool, str]] | None = None,
+        minimize_to_tray_getter: Callable[[], bool] | None = None,
+        minimize_to_tray_setter: Callable[[bool], None] | None = None,
         parent: QWidget | None = None,
     ):
         super().__init__(parent)
@@ -51,6 +59,8 @@ class ServicePage(QWidget):
         )
         self._command_runner = command_runner or run_service_command
         self._installer_runner = installer_runner or run_installer_command
+        self._minimize_to_tray_getter = minimize_to_tray_getter or get_minimize_to_tray
+        self._minimize_to_tray_setter = minimize_to_tray_setter or set_minimize_to_tray
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
@@ -163,6 +173,37 @@ class ServicePage(QWidget):
         installers_row.addStretch(1)
         layout.addLayout(installers_row)
 
+        desktop_group = QGroupBox("Desktop App", self)
+        desktop_layout = QVBoxLayout(desktop_group)
+        desktop_layout.setSpacing(8)
+
+        self.minimize_to_tray_checkbox = QCheckBox(
+            "Minimize the GUI to the Windows notification area",
+            self,
+        )
+        self.minimize_to_tray_checkbox.setChecked(self._minimize_to_tray_getter())
+        self.minimize_to_tray_checkbox.toggled.connect(
+            self._set_minimize_to_tray_preference
+        )
+        desktop_layout.addWidget(self.minimize_to_tray_checkbox)
+
+        desktop_hint = QLabel(
+            "When enabled, clicking the title-bar minimize button hides the app "
+            "to the tray instead of leaving it minimized on the taskbar.",
+            self,
+        )
+        desktop_hint.setWordWrap(True)
+        desktop_layout.addWidget(desktop_hint)
+
+        if not QSystemTrayIcon.isSystemTrayAvailable():
+            self.minimize_to_tray_checkbox.setEnabled(False)
+            desktop_hint.setText(
+                "System tray integration is unavailable on this system, so the "
+                "minimize-to-tray option is disabled."
+            )
+
+        layout.addWidget(desktop_group)
+
         diagnostics_group = QGroupBox("Diagnostics", self)
         diagnostics_layout = QVBoxLayout(diagnostics_group)
         self.diagnostics_view = QPlainTextEdit(self)
@@ -206,6 +247,10 @@ class ServicePage(QWidget):
     def _run_installer(self, executable_name: str) -> None:
         success, message = self._installer_runner(executable_name)
         self._show_message(message, is_error=not success)
+
+    def _set_minimize_to_tray_preference(self, enabled: bool) -> None:
+        self._minimize_to_tray_setter(enabled)
+        self._show_message("Saved desktop app preference.", is_error=False)
 
     def _apply_status(self, service_status: Any, daemon_state) -> None:
         task_installed = bool(getattr(service_status, "task_installed", False))

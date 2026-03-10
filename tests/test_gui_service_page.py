@@ -123,3 +123,30 @@ def test_service_page_runs_installer_commands(qtbot, tmp_path) -> None:
 
     assert calls == ["pysysfan-install-lhm", "pysysfan-install-pawnio"]
     assert page.message_label.text() == "OK"
+
+
+def test_service_page_updates_minimize_to_tray_preference(qtbot, tmp_path) -> None:
+    """The desktop preference toggle should persist through injected helpers."""
+    calls: list[bool] = []
+    with patch(
+        "pysysfan.gui.desktop.service_page.QSystemTrayIcon.isSystemTrayAvailable",
+        return_value=True,
+    ):
+        page = ServicePage(
+            state_path=tmp_path / "missing.json",
+            service_status_getter=lambda: _service_status(
+                task_installed=False,
+                daemon_running=False,
+            ),
+            task_details_getter=lambda: {},
+            minimize_to_tray_getter=lambda: False,
+            minimize_to_tray_setter=lambda enabled: calls.append(enabled),
+        )
+    qtbot.addWidget(page)
+
+    assert page.minimize_to_tray_checkbox.isChecked() is False
+
+    page.minimize_to_tray_checkbox.click()
+
+    assert calls == [True]
+    assert page.message_label.text() == "Saved desktop app preference."

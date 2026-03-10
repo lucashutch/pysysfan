@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QEvent, QTimer, Qt
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import QMainWindow, QSystemTrayIcon, QTabWidget, QWidget
 
 from pysysfan.gui.desktop.curves_page import CurvesPage
 from pysysfan.gui.desktop.dashboard_page import DashboardPage
 from pysysfan.gui.desktop.icons import app_icon
+from pysysfan.gui.desktop.preferences import get_minimize_to_tray
 from pysysfan.gui.desktop.service_page import ServicePage
 from pysysfan.gui.desktop.theme import main_window_stylesheet
 
@@ -60,6 +61,10 @@ class MainWindow(QMainWindow):
         self.raise_()
         self.activateWindow()
 
+    def minimize_to_tray_enabled(self) -> bool:
+        """Return whether title-bar minimize should hide the window to the tray."""
+        return get_minimize_to_tray()
+
     def request_exit(self) -> None:
         """Allow the window to close and terminate the application."""
         self._allow_close = True
@@ -80,27 +85,54 @@ class MainWindow(QMainWindow):
                 except Exception:
                     continue
 
+    def changeEvent(self, event) -> None:  # noqa: N802
+        """Optionally minimize to the tray instead of the taskbar."""
+        super().changeEvent(event)
+        if event.type() != QEvent.Type.WindowStateChange:
+            return
+        if not self.isMinimized() or not self.minimize_to_tray_enabled():
+            return
+
+        QTimer.singleShot(0, self._hide_to_tray_on_minimize)
+
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
         """Hide to the tray when available unless the user explicitly quits."""
-        if (
-            self._tray_icon is not None
-            and self._tray_icon.isVisible()
-            and not self._allow_close
-        ):
+        if self._tray_available() and not self._allow_close:
             event.ignore()
-            self.hide()
-            self.statusBar().showMessage(
-                "PySysFan is still running in the notification area.",
-                5000,
+            self._hide_to_tray(
+                status_message="PySysFan is still running in the notification area.",
+                tray_message="PySysFan is still running in the Windows notification area.",
             )
-            if not self._tray_notice_shown:
-                self._tray_notice_shown = True
-                self._tray_icon.showMessage(
-                    "PySysFan",
-                    "PySysFan is still running in the Windows notification area.",
-                    QSystemTrayIcon.MessageIcon.Information,
-                    3000,
-                )
             return
 
         super().closeEvent(event)
+
+    def _hide_to_tray_on_minimize(self) -> None:
+        """Hide the window to the tray after a minimize action."""
+        if not self.isMinimized() or not self._tray_available():
+            return
+
+        self._hide_to_tray(
+            status_message="PySysFan was minimized to the notification area.",
+            tray_message="PySysFan was minimized to the Windows notification area.",
+        )
+
+    def _hide_to_tray(self, *, status_message: str, tray_message: str) -> None:
+        """Hide the window and optionally show a one-time tray notification."""
+        self.hide()
+        self.setWindowState(self.windowState() & ~Qt.WindowState.WindowMinimized)
+        self.statusBar().showMessage(status_message, 5000)
+        if self._tray_icon is None or self._tray_notice_shown:
+            return
+
+        self._tray_notice_shown = True
+        self._tray_icon.showMessage(
+            "PySysFan",
+            tray_message,
+            QSystemTrayIcon.MessageIcon.Information,
+            3000,
+        )
+
+    def _tray_available(self) -> bool:
+        """Return whether tray integration is active and visible."""
+        return self._tray_icon is not None and self._tray_icon.isVisible()

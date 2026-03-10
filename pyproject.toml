@@ -18,6 +18,8 @@ dependencies = [
 pysysfan = "pysysfan.cli:main"
 pysysfan-install-lhm = "pysysfan.install:install_lhm"
 pysysfan-install-pawnio = "pysysfan.install:install_pawnio"
+
+[project.gui-scripts]
 pysysfan-gui = "pysysfan.gui:main"
 
 [project.optional-dependencies]

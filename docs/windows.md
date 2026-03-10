@@ -26,9 +26,11 @@ Run [../scripts/install-pysysfan.bat](../scripts/install-pysysfan.bat) as Admini
 It is intended to:
 
 1. install `uv` if needed
-2. install PySysFan
+2. ask whether to install daemon-only or daemon + GUI
 3. download LibreHardwareMonitor
 4. launch the PawnIO installer flow
+
+If you include the GUI, the installer also creates a **PySysFan** Start Menu app that uses the project icon and launches without a console window.
 
 ### Manual installation with `uv`
 
@@ -65,6 +67,7 @@ uv run pysysfan-gui
 ```
 
 The desktop GUI uses the project icon in the window title bar, taskbar, and notification area.
+Installer-created GUI shortcuts also use the PySysFan icon in the Start Menu.
 
 ## Hardware compatibility
 
@@ -176,6 +179,7 @@ Main areas:
 - **Service** for scheduled-task management and diagnostics
 
 When the Windows notification area is available, closing the window minimizes the app to the tray instead of fully exiting it.
+The Service page also exposes a preference that lets the title-bar minimize button send the GUI to the tray instead of leaving it minimized on the taskbar.
 
 ## Troubleshooting
 

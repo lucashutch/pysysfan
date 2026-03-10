@@ -7,9 +7,10 @@ import logging
 import sys
 from functools import lru_cache
 from importlib.resources import files
+from pathlib import Path
 
 from PySide6.QtCore import QByteArray, QRectF, Qt
-from PySide6.QtGui import QIcon, QPainter, QPixmap
+from PySide6.QtGui import QGuiApplication, QIcon, QPainter, QPixmap
 from PySide6.QtSvg import QSvgRenderer
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,28 @@ def app_icon() -> QIcon:
             painter.end()
         icon.addPixmap(pixmap)
     return icon
+
+
+def write_windows_icon_file(output_path: Path | str, size: int = 256) -> bool:
+    """Render the packaged SVG icon to a Windows `.ico` file."""
+    target_path = Path(output_path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+
+    existing_app = QGuiApplication.instance()
+    temporary_app: QGuiApplication | None = None
+    if existing_app is None:
+        temporary_app = QGuiApplication([])
+
+    try:
+        saved = app_icon().pixmap(size, size).save(str(target_path), "ICO")
+        if not saved:
+            logger.warning(
+                "Unable to write PySysFan Windows icon file: %s", target_path
+            )
+        return saved
+    finally:
+        if temporary_app is not None:
+            temporary_app.quit()
 
 
 def configure_windows_app_id(

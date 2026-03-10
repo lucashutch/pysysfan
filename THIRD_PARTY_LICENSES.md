@@ -64,10 +64,10 @@ These are important to PySysFan's Windows workflow but are **not bundled in this
 - **Current handling**: Downloaded from upstream at user request/runtime setup time, not vendored in the repo.
 
 ### PawnIO
-- **License**: No clear license file was exposed in the public `PawnIO.Setup` release repository during this audit
-- **Source**: https://github.com/namazso/PawnIO.Setup
+- **License**: GNU General Public License v2 (GPL-2.0) with a special linking exception; see upstream `COPYING` for the full text
+- **Source**: https://github.com/namazso/PawnIO (full license text: https://github.com/namazso/PawnIO/blob/master/COPYING)
 - **Usage**: Required low-level driver support for some Windows fan-control paths.
-- **Current handling**: Not bundled. Users are directed to upstream installation flows.
+- **Current handling**: Not bundled. Users are directed to upstream installation flows. PawnIO is released under GPL-2.0 which imposes strong copyleft obligations when combining or redistributing the driver; the upstream repository includes a special exception that permits combining PawnIO with LGPL-licensed libraries and independent modules that communicate over the device IO control interface. For these reasons, PySysFan continues to treat PawnIO as an externally installed dependency rather than bundling or mirroring it.
 
 ## Compliance notes
 
@@ -99,7 +99,7 @@ If PySysFan ever bundles LibreHardwareMonitor binaries or modifies MPL-covered f
 
 ## 5. PawnIO caution
 
-Because the public PawnIO release repository did not expose a clear license file at the time of review, PySysFan should continue treating PawnIO as an externally installed dependency rather than bundling or mirroring it.
+The upstream PawnIO repository is available at https://github.com/namazso/PawnIO and is released under the GNU General Public License v2 (GPL-2.0) with a special linking exception (see the repository's `COPYING` file for the full text). Because PawnIO is licensed under GPL-2.0 it imposes strong copyleft obligations when redistributed or combined with other code; the upstream exception permits combining PawnIO with LGPL-licensed libraries and independent modules that communicate with PawnIO solely via the device IO control interface. For these reasons PySysFan continues to treat PawnIO as an externally installed dependency rather than bundling or mirroring it.
 
 ## Audit date
 
