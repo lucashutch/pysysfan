@@ -14,6 +14,7 @@ from pysysfan import __version__
 # printing Unicode glyphs (e.g. check marks) does not raise a
 # UnicodeEncodeError on consoles using legacy encodings (common on Windows).
 import sys
+
 try:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
