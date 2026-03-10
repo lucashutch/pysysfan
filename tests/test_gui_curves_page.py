@@ -60,6 +60,9 @@ def test_curves_page_refresh_populates_curve_and_fan_data(qtbot, tmp_path) -> No
     assert page.fan_selector.count() == 1
     assert page.fan_curve_selector.currentText() == "balanced"
     assert page.temp_ids_edit.text() == "/cpu/temp/0"
+    assert page.preview_plot.minimumHeight() >= 400
+    assert page.points_table.columnWidth(0) >= 180
+    assert getattr(page, "allow_fan_off_checkbox", None) is None
 
 
 def test_curves_page_save_persists_curve_to_yaml(qtbot, tmp_path) -> None:
@@ -85,6 +88,27 @@ def test_curves_page_save_persists_curve_to_yaml(qtbot, tmp_path) -> None:
     assert "daemon will reload" in page.message_label.text().lower()
 
 
+def test_curves_page_save_general_settings_persists_poll_interval(
+    qtbot,
+    tmp_path,
+) -> None:
+    """Saving general settings should persist the poll interval independently."""
+    profile_manager = ProfileManager(config_dir=tmp_path)
+    _write_profile_config(profile_manager, DEFAULT_PROFILE_NAME, "balanced")
+    page = CurvesPage(profile_manager=profile_manager)
+    qtbot.addWidget(page)
+    page.refresh_data()
+
+    page.poll_interval_spin.setValue(1.0)
+    page.save_general_settings()
+
+    reloaded = Config.load(
+        profile_manager.get_profile_config_path(DEFAULT_PROFILE_NAME)
+    )
+    assert reloaded.poll_interval == 1.0
+    assert "saved general settings" in page.message_label.text().lower()
+
+
 def test_curves_page_saves_selected_fan_settings(qtbot, tmp_path) -> None:
     """Saving fan settings should update the selected fan block in YAML."""
     profile_manager = ProfileManager(config_dir=tmp_path)
@@ -96,7 +120,6 @@ def test_curves_page_saves_selected_fan_settings(qtbot, tmp_path) -> None:
     page.fan_curve_selector.setCurrentText("silent")
     page.temp_ids_edit.setText("/cpu/temp/0, /gpu/temp/0")
     page.aggregation_selector.setCurrentText("average")
-    page.allow_fan_off_checkbox.setChecked(True)
     page.save_fan_settings()
 
     reloaded = Config.load(
@@ -152,3 +175,38 @@ def test_curves_page_switch_profile_updates_editor(qtbot, tmp_path) -> None:
 
     assert profile_manager.get_active_profile() == "gaming"
     assert page.curve_selector.currentText() == "silent"
+
+
+def test_curves_page_can_create_profile(qtbot, tmp_path) -> None:
+    """Users should be able to create a new profile from the Config tab."""
+    profile_manager = ProfileManager(config_dir=tmp_path)
+    _write_profile_config(profile_manager, DEFAULT_PROFILE_NAME, "balanced")
+    page = CurvesPage(profile_manager=profile_manager)
+    qtbot.addWidget(page)
+    page.refresh_data()
+
+    with patch("pysysfan.gui.desktop.curves_page.QInputDialog.getText") as get_text:
+        get_text.return_value = ("Gaming Mode", True)
+        page.create_profile()
+
+    assert profile_manager.get_active_profile() == "gaming_mode"
+    assert profile_manager.get_profile_config_path("gaming_mode").exists()
+    assert "created and switched" in page.message_label.text().lower()
+
+
+def test_curves_page_can_rename_profile_display_name(qtbot, tmp_path) -> None:
+    """Users should be able to rename the visible profile name from the Config tab."""
+    profile_manager = ProfileManager(config_dir=tmp_path)
+    _write_profile_config(profile_manager, DEFAULT_PROFILE_NAME, "balanced")
+    page = CurvesPage(profile_manager=profile_manager)
+    qtbot.addWidget(page)
+    page.refresh_data()
+
+    with patch("pysysfan.gui.desktop.curves_page.QInputDialog.getText") as get_text:
+        get_text.return_value = ("Quiet Everyday", True)
+        page.rename_profile()
+
+    default_profile = profile_manager.get_profile(DEFAULT_PROFILE_NAME)
+    assert default_profile.metadata.display_name == "Quiet Everyday"
+    assert page.profile_selector.currentText() == "Quiet Everyday (default)"
+    assert "renamed profile" in page.message_label.text().lower()

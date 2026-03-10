@@ -45,6 +45,12 @@
 
 ## - Refine UI visuals: 
 - status: grouped fan mappings, tab chrome, and graph key refresh completed
+- completed: aligned dashboard fan groups to config keys, tightened graph selectors, and rebalanced dashboard card/plot spacing
+- completed: dashboard height balancing, config-tab layout refresh, poll-interval save UX, profile management controls, and draggable curve editing
+- completed: dashboard graph chrome cleanup, fan-card simplification, configured-fan graph filtering, and extra Config/Service styling polish
+- completed: fan-card pane now scrolls independently, curve-editor temperature columns are wider, and graph selectors have clearer labels/arrows
+- completed: daemon fan/control matching now preserves GPU graph coverage and configured target groups remain visible in the dashboard
+- completed: daemon-owned 15-minute NDJSON history now feeds dashboard graphs even when the UI starts later than the service
 - add icons, colored status badges, improved card styling, and small UX polish to stat cards and plots
 - fix the curve plotting, it is very basic and doesnt look good and on all screens it isnt scaled well.
 - the chosen card items at the top of the dashboard look very basic and could use some styling and polish to make them more visually appealing and easier to read at a glance.

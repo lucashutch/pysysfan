@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QMenu,
     QScrollArea,
+    QSizePolicy,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -24,8 +25,12 @@ from PySide6.QtWidgets import (
 )
 
 from pysysfan.config import Config, FanConfig
-from pysysfan.gui.desktop.local_backend import read_daemon_state, run_service_command
-from pysysfan.gui.desktop.plotting import DashboardPlotWidget, pg
+from pysysfan.gui.desktop.local_backend import (
+    read_daemon_history,
+    read_daemon_state,
+    run_service_command,
+)
+from pysysfan.gui.desktop.plotting import DashboardPlotWidget, ElapsedSecondsAxis, pg
 from pysysfan.gui.desktop.theme import (
     SECTION_SUBTITLE_STYLE,
     SECTION_TITLE_STYLE,
@@ -35,6 +40,7 @@ from pysysfan.gui.desktop.theme import (
     message_stylesheet,
     plot_theme,
 )
+from pysysfan.history_file import DEFAULT_HISTORY_PATH, HistorySample
 from pysysfan.platforms import windows_service
 from pysysfan.profiles import ProfileManager
 from pysysfan.state_file import DEFAULT_STATE_PATH, DaemonStateFile
@@ -52,6 +58,7 @@ class DashboardPage(QWidget):
     def __init__(
         self,
         state_path: Path = DEFAULT_STATE_PATH,
+        history_path: Path = DEFAULT_HISTORY_PATH,
         service_action_runner=None,
         service_status_getter=None,
         profile_manager: ProfileManager | None = None,
@@ -59,6 +66,7 @@ class DashboardPage(QWidget):
     ):
         super().__init__(parent)
         self._state_path = Path(state_path)
+        self._history_path = Path(history_path)
         self._service_action_runner = service_action_runner or run_service_command
         self._service_status_getter = (
             service_status_getter or windows_service.get_service_status
@@ -139,6 +147,7 @@ class DashboardPage(QWidget):
         self.main_splitter = QSplitter(Qt.Orientation.Horizontal, self.content)
         self.main_splitter.setChildrenCollapsible(False)
         self.main_splitter.setHandleWidth(8)
+        self.main_splitter.setMinimumHeight(800)
         content_layout.addWidget(self.main_splitter, 1)
 
         self.left_panel = QWidget(self.main_splitter)
@@ -147,12 +156,16 @@ class DashboardPage(QWidget):
         left_layout.setSpacing(16)
 
         self.fan_summary_group = QGroupBox("Fan Groups", self.left_panel)
+        self.fan_summary_group.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding,
+        )
         fan_summary_layout = QVBoxLayout(self.fan_summary_group)
         fan_summary_layout.setContentsMargins(16, 18, 16, 16)
         fan_summary_layout.setSpacing(10)
 
         fan_summary_heading = QLabel(
-            "Grouped fans, their targets, and the live sensors currently steering them."
+            "Configured fan groups, their live targets, and the sensors currently steering them."
         )
         fan_summary_heading.setProperty("sectionRole", "subtitle")
         fan_summary_heading.setWordWrap(True)
@@ -167,12 +180,24 @@ class DashboardPage(QWidget):
         self.fan_summary_empty_label.setWordWrap(True)
         fan_summary_layout.addWidget(self.fan_summary_empty_label)
 
-        self.fan_summary_layout = QGridLayout()
+        self.fan_summary_scroll_area = QScrollArea(self.fan_summary_group)
+        self.fan_summary_scroll_area.setObjectName("fanSummaryScrollArea")
+        self.fan_summary_scroll_area.setWidgetResizable(True)
+        self.fan_summary_scroll_area.setFrameShape(QFrame.Shape.NoFrame)
+        self.fan_summary_scroll_area.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        )
+        fan_summary_layout.addWidget(self.fan_summary_scroll_area, 1)
+
+        self.fan_summary_scroll_content = QWidget(self.fan_summary_scroll_area)
+        self.fan_summary_scroll_content.setObjectName("fanSummaryScrollContent")
+        self.fan_summary_scroll_area.setWidget(self.fan_summary_scroll_content)
+
+        self.fan_summary_layout = QGridLayout(self.fan_summary_scroll_content)
+        self.fan_summary_layout.setContentsMargins(0, 0, 0, 0)
         self.fan_summary_layout.setHorizontalSpacing(12)
         self.fan_summary_layout.setVerticalSpacing(12)
-        fan_summary_layout.addLayout(self.fan_summary_layout)
-        left_layout.addWidget(self.fan_summary_group)
-        left_layout.addStretch(1)
+        left_layout.addWidget(self.fan_summary_group, 1)
 
         self.right_panel = QWidget(self.main_splitter)
         right_layout = QVBoxLayout(self.right_panel)
@@ -193,9 +218,19 @@ class DashboardPage(QWidget):
         graph_header.addWidget(graph_subtitle)
         graph_header.addStretch(1)
 
+        history_label = QLabel("History", self.right_panel)
+        history_label.setObjectName("historySelectorLabel")
+        history_label.setProperty("sectionRole", "subtitle")
+        graph_header.addWidget(history_label)
+
         self.history_selector = QComboBox(self.right_panel)
         self.history_selector.setObjectName("historySelector")
         self.history_selector.addItems(list(self.HISTORY_WINDOWS))
+        self.history_selector.setMinimumContentsLength(4)
+        self.history_selector.setMaximumWidth(98)
+        self.history_selector.setSizeAdjustPolicy(
+            QComboBox.SizeAdjustPolicy.AdjustToContentsOnFirstShow
+        )
         self.history_selector.currentTextChanged.connect(self._change_history_window)
         graph_header.addWidget(self.history_selector)
         right_layout.addLayout(graph_header)
@@ -203,34 +238,46 @@ class DashboardPage(QWidget):
         self.temperature_plot = self._create_plot_widget(
             "temperature",
             "Temperatures",
-            "Seconds",
+            "",
             "°C",
         )
-        self.temperature_plot.setMinimumHeight(320)
-        right_layout.addWidget(self.temperature_plot)
+        self.temperature_plot.setMinimumHeight(220)
+        self.temperature_plot.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding,
+        )
+        right_layout.addWidget(self.temperature_plot, 1)
 
         self.fan_rpm_plot = self._create_plot_widget(
             "fan_rpm",
             "Fan RPM",
-            "Seconds",
+            "",
             "RPM",
         )
         self.fan_target_plot = self._create_plot_widget(
             "fan_target",
             "Target PWM",
-            "Seconds",
+            "",
             "%",
         )
-        self.fan_rpm_plot.setMinimumHeight(240)
-        self.fan_target_plot.setMinimumHeight(240)
-        right_layout.addWidget(self.fan_rpm_plot)
-        right_layout.addWidget(self.fan_target_plot)
-        right_layout.addStretch(1)
+        self.fan_rpm_plot.setMinimumHeight(180)
+        self.fan_target_plot.setMinimumHeight(180)
+        self.fan_rpm_plot.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding,
+        )
+        self.fan_target_plot.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding,
+        )
+        right_layout.addWidget(self.fan_rpm_plot, 1)
+        right_layout.addWidget(self.fan_target_plot, 1)
 
         self.main_splitter.addWidget(self.left_panel)
         self.main_splitter.addWidget(self.right_panel)
         self.left_panel.setMinimumWidth(440)
         self.right_panel.setMinimumWidth(520)
+        self.right_panel.setMinimumHeight(800)
         self.main_splitter.setStretchFactor(0, 0)
         self.main_splitter.setStretchFactor(1, 1)
         self.main_splitter.setSizes([470, 980])
@@ -259,7 +306,7 @@ class DashboardPage(QWidget):
         self._apply_summary(state)
         self._apply_alerts(state)
         self._record_live_labels(state)
-        self._append_history(state)
+        self._load_history(state)
         self._refresh_graph_controls()
         self._refresh_plots()
 
@@ -297,6 +344,10 @@ class DashboardPage(QWidget):
         self._daemon_indicator_tone = "warning" if installed else "critical"
         self.daemon_indicator.setToolTip("Daemon is not running")
         self._active_config = None
+        self._last_state_timestamp = None
+        self._temperature_history.clear()
+        self._fan_rpm_history.clear()
+        self._fan_target_history.clear()
         self._rebuild_fan_summary_cards(None, None)
         self._apply_alert_menu([])
         self._refresh_graph_controls()
@@ -365,35 +416,67 @@ class DashboardPage(QWidget):
             )
 
         for fan in state.fan_speeds:
-            label = f"{fan.hardware_name} / {fan.sensor_name}"
-            self._fan_labels[fan.identifier] = label
-            self._fan_groups[fan.identifier] = fan.hardware_name
-            target_label = fan.control_identifier or fan.identifier
-            self._target_labels[target_label] = label
-            self._target_groups[target_label] = fan.hardware_name
+            group_name, fan_config = self._resolve_live_fan_config(fan)
+            if group_name is None:
+                continue
+            label = self._series_display_name(group_name, fan_config, fan)
+            series_id = fan.control_identifier or fan.identifier
+            self._fan_labels[series_id] = label
+            self._fan_groups[series_id] = group_name
+            self._target_labels[series_id] = label
+            self._target_groups[series_id] = group_name
 
-    def _append_history(self, state: DaemonStateFile) -> None:
-        if self._last_state_timestamp == state.timestamp:
-            return
+        if self._active_config is not None:
+            for group_name, fan_config in sorted(self._active_config.fans.items()):
+                label = self._series_display_name(group_name, fan_config, None)
+                self._target_labels[fan_config.fan_id] = label
+                self._target_groups[fan_config.fan_id] = group_name
 
-        self._last_state_timestamp = state.timestamp
-        for sensor in state.temperatures:
-            if sensor.value is not None and self._is_relevant_temperature(sensor):
-                self._temperature_history[sensor.identifier].append(
-                    (state.timestamp, sensor.value)
-                )
+        self._prune_unmapped_fan_history()
 
-        for fan in state.fan_speeds:
-            if fan.rpm is not None:
-                self._fan_rpm_history[fan.identifier].append((state.timestamp, fan.rpm))
-            if fan.control_identifier is not None:
-                target = state.fan_targets.get(fan.control_identifier)
-                if target is not None:
-                    self._fan_target_history[fan.control_identifier].append(
-                        (state.timestamp, target)
-                    )
+    def _load_history(self, state: DaemonStateFile) -> None:
+        samples = read_daemon_history(self._history_path)
+        if not samples:
+            samples = [self._build_fallback_history_sample(state)]
 
-        self._trim_history(state.timestamp)
+        self._temperature_history.clear()
+        self._fan_rpm_history.clear()
+        self._fan_target_history.clear()
+
+        latest_timestamp = state.timestamp
+        for sample in samples:
+            latest_timestamp = max(latest_timestamp, sample.timestamp)
+            for sensor_id, value in sample.temperatures.items():
+                self._temperature_history[sensor_id].append((sample.timestamp, value))
+            for series_id, value in sample.fan_rpm.items():
+                self._fan_rpm_history[series_id].append((sample.timestamp, value))
+            for series_id, value in sample.fan_targets.items():
+                self._fan_target_history[series_id].append((sample.timestamp, value))
+
+        self._last_state_timestamp = latest_timestamp
+        self._prune_unmapped_fan_history()
+        self._trim_history(latest_timestamp)
+
+    def _build_fallback_history_sample(self, state: DaemonStateFile) -> HistorySample:
+        temperatures = {
+            sensor.identifier: float(sensor.value)
+            for sensor in state.temperatures
+            if sensor.value is not None and self._is_relevant_temperature(sensor)
+        }
+        fan_rpm = {
+            (fan.control_identifier or fan.identifier): float(fan.rpm)
+            for fan in state.fan_speeds
+            if fan.rpm is not None
+        }
+        fan_targets = {
+            identifier: float(value) for identifier, value in state.fan_targets.items()
+        }
+        return HistorySample(
+            timestamp=state.timestamp,
+            temperatures=temperatures,
+            fan_rpm=fan_rpm,
+            fan_targets=fan_targets,
+        )
 
     def _trim_history(self, latest_timestamp: float) -> None:
         cutoff = latest_timestamp - self._history_seconds
@@ -430,42 +513,51 @@ class DashboardPage(QWidget):
             fallback.setWordWrap(True)
             return self._wrap_widget(title, fallback)
 
-        plot_widget = DashboardPlotWidget(self)
-        plot_widget.setLabel("bottom", x_label)
+        plot_widget = DashboardPlotWidget(
+            self,
+            axisItems={"bottom": ElapsedSecondsAxis(orientation="bottom")},
+        )
+        plot_widget.setLabel("bottom", "")
         plot_widget.setLabel("left", y_label)
         plot_widget.showGrid(x=True, y=True, alpha=0.25)
+        plot_widget.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding,
+        )
         self._apply_plot_theme(plot_widget)
 
         plot_group = QGroupBox(title, self.right_panel)
+        plot_group.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding,
+        )
         group_layout = QVBoxLayout(plot_group)
         group_layout.setContentsMargins(12, 12, 12, 12)
-        group_layout.setSpacing(8)
+        group_layout.setSpacing(6)
 
         controls_row = QHBoxLayout()
         controls_row.setSpacing(8)
-        subtitle = QLabel("Choose which series are visible.", plot_group)
-        subtitle.setProperty("sectionRole", "subtitle")
-        controls_row.addWidget(subtitle)
-        controls_row.addStretch(1)
-
-        series_button = QToolButton(plot_group)
-        series_button.setObjectName(f"{graph_key}SeriesButton")
-        series_button.setText("Series")
-        series_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        series_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
-        series_menu = QMenu(series_button)
-        series_button.setMenu(series_menu)
-        controls_row.addWidget(series_button)
-        group_layout.addLayout(controls_row)
 
         legend_label = QLabel("Visible: none", plot_group)
         legend_label.setObjectName(f"{graph_key}LegendLabel")
         legend_label.setProperty("sectionRole", "subtitle")
         legend_label.setWordWrap(True)
         legend_label.setTextFormat(Qt.TextFormat.RichText)
-        group_layout.addWidget(legend_label)
+        controls_row.addWidget(legend_label, 1)
 
-        group_layout.addWidget(plot_widget)
+        series_button = QToolButton(plot_group)
+        series_button.setObjectName(f"{graph_key}SeriesButton")
+        series_button.setProperty("graphControl", "selector")
+        series_button.setText("Show Lines")
+        series_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        series_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+        series_menu = QMenu(series_button)
+        series_button.setMenu(series_menu)
+        series_menu.aboutToHide.connect(self._refresh_graph_controls)
+        controls_row.addWidget(series_button)
+        group_layout.addLayout(controls_row)
+
+        group_layout.addWidget(plot_widget, 1)
 
         self._graph_controls[graph_key] = {
             "group": plot_group,
@@ -492,6 +584,8 @@ class DashboardPage(QWidget):
         plot_item.getAxis("bottom").setPen(colors["muted"])
         plot_item.getAxis("top").setPen(colors["muted"])
         plot_item.getAxis("right").setPen(colors["muted"])
+        plot_item.getAxis("bottom").setHeight(28)
+        plot_item.getAxis("left").setWidth(52)
         plot_item.showGrid(x=True, y=True, alpha=0.25)
 
     def _refresh_plots(self) -> None:
@@ -595,7 +689,7 @@ class DashboardPage(QWidget):
         catalog: dict[str, str] = {}
         groups = sorted({group for group in group_map.values() if group})
         for group in groups:
-            catalog[f"group::{group}"] = group
+            catalog[f"group::{group}"] = self._display_group_name(group)
         for series_id, series in sorted(history_map.items()):
             if not series:
                 continue
@@ -664,12 +758,15 @@ class DashboardPage(QWidget):
         if not isinstance(menu, QMenu) or not isinstance(button, QToolButton):
             return
 
+        if menu.isVisible():
+            return
         menu.clear()
         if not catalog:
             empty_action = QAction("No series available", menu)
             empty_action.setEnabled(False)
             menu.addAction(empty_action)
-            button.setText("Series")
+            button.setText("Show Lines")
+            button.setToolTip("No series available")
             return
 
         enabled_count = 0
@@ -689,7 +786,8 @@ class DashboardPage(QWidget):
             )
             menu.addAction(action)
 
-        button.setText(f"Series ({enabled_count})")
+        button.setText("Show Lines")
+        button.setToolTip(f"Shown lines: {enabled_count}")
 
     def _toggle_graph_series(
         self,
@@ -730,10 +828,11 @@ class DashboardPage(QWidget):
                 group = series_id.split("::", 1)[1]
                 if group in grouped_history:
                     filtered[series_id] = grouped_history[group]
+                    display_group = self._display_group_name(group)
                     if graph_key == "fan_rpm":
-                        self._fan_labels[series_id] = group
+                        self._fan_labels[series_id] = display_group
                     else:
-                        self._target_labels[series_id] = group
+                        self._target_labels[series_id] = display_group
                 continue
 
             raw_id = series_id.split("::", 1)[1] if "::" in series_id else series_id
@@ -745,6 +844,17 @@ class DashboardPage(QWidget):
                 else:
                     self._target_labels[series_id] = labels.get(raw_id, raw_id)
         return filtered
+
+    def _prune_unmapped_fan_history(self) -> None:
+        mapped_fan_ids = set(self._fan_groups)
+        mapped_target_ids = set(self._target_groups)
+        for history_map, mapped_ids in (
+            (self._fan_rpm_history, mapped_fan_ids),
+            (self._fan_target_history, mapped_target_ids),
+        ):
+            for series_id in list(history_map.keys()):
+                if series_id not in mapped_ids:
+                    del history_map[series_id]
 
     def _build_grouped_history(
         self,
@@ -850,7 +960,11 @@ class DashboardPage(QWidget):
         card = QFrame(self.fan_summary_group)
         card.setObjectName(f"{self._object_name_token(group_name)}GroupCard")
         card.setProperty("cardRole", "fan-summary")
-        card.setMinimumHeight(210)
+        card.setMinimumHeight(178)
+        card.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Minimum,
+        )
 
         layout = QVBoxLayout(card)
         layout.setContentsMargins(18, 18, 18, 18)
@@ -859,12 +973,7 @@ class DashboardPage(QWidget):
         header = QHBoxLayout()
         header.setSpacing(8)
 
-        eyebrow_label = QLabel("Fan group", card)
-        eyebrow_label.setObjectName("fanGroupEyebrowLabel")
-        eyebrow_label.setProperty("cardTextRole", "eyebrow")
-        layout.addWidget(eyebrow_label)
-
-        title_label = QLabel(group_name, card)
+        title_label = QLabel(self._display_group_name(group_name), card)
         title_label.setObjectName("fanGroupTitleLabel")
         title_label.setProperty("cardTextRole", "title")
         header.addWidget(title_label)
@@ -876,41 +985,76 @@ class DashboardPage(QWidget):
             for target in [state.fan_targets.get(fan_config.fan_id)]
             if target is not None
         ]
-        target_badge = QLabel(
-            self._target_summary_text(target_values, len(members)),
-            card,
-        )
-        target_badge.setStyleSheet(
-            badge_stylesheet(
-                "warning" if not target_values else "info",
-                self.palette(),
-            )
-        )
-        header.addWidget(target_badge)
+        curve_badge = QLabel(self._group_curve_badge_text(members), card)
+        curve_badge.setObjectName("fanGroupCurveBadgeLabel")
+        curve_badge.setStyleSheet(badge_stylesheet("info", self.palette()))
+        header.addWidget(curve_badge)
         layout.addLayout(header)
 
-        value_label = QLabel(self._target_detail_text(target_values), card)
-        value_label.setObjectName("fanGroupValueLabel")
-        value_label.setProperty("cardTextRole", "value")
-        layout.addWidget(value_label)
+        subtitle_text = self._group_subtitle_text(state, members)
+        if subtitle_text:
+            fans_label = QLabel(subtitle_text, card)
+            fans_label.setObjectName("fanGroupMembersLabel")
+            fans_label.setProperty("cardTextRole", "muted")
+            fans_label.setWordWrap(True)
+            layout.addWidget(fans_label)
 
-        fans_label = QLabel(self._group_fans_text(state, members), card)
-        fans_label.setObjectName("fanGroupMembersLabel")
-        fans_label.setProperty("cardTextRole", "body")
-        fans_label.setWordWrap(True)
-        layout.addWidget(fans_label)
+        actual_values = [
+            float(live_fan.current_control_pct)
+            for _, _, live_fan in members
+            if live_fan is not None
+            and getattr(live_fan, "current_control_pct", None) is not None
+        ]
+        rpm_values = [
+            float(live_fan.rpm)
+            for _, _, live_fan in members
+            if live_fan is not None and getattr(live_fan, "rpm", None) is not None
+        ]
+
+        metrics_layout = QGridLayout()
+        metrics_layout.setHorizontalSpacing(10)
+        metrics_layout.setVerticalSpacing(10)
+        metrics_layout.addWidget(
+            self._create_metric_card(
+                card,
+                "Target",
+                self._format_percent_metric(target_values),
+                "fanGroupTargetValueLabel",
+            ),
+            0,
+            0,
+        )
+        metrics_layout.addWidget(
+            self._create_metric_card(
+                card,
+                "Actual",
+                self._format_percent_metric(actual_values, digits=1),
+                "fanGroupActualValueLabel",
+            ),
+            0,
+            1,
+        )
+        metrics_layout.addWidget(
+            self._create_metric_card(
+                card,
+                "RPM",
+                self._format_rpm_metric(rpm_values),
+                "fanGroupRpmValueLabel",
+            ),
+            0,
+            2,
+        )
+        layout.addLayout(metrics_layout)
+
+        sensors_caption = QLabel("Controlling sensors", card)
+        sensors_caption.setProperty("cardTextRole", "eyebrow")
+        layout.addWidget(sensors_caption)
 
         sensors_label = QLabel(self._group_sensor_text(state, members), card)
         sensors_label.setObjectName("fanGroupSensorsLabel")
         sensors_label.setProperty("cardTextRole", "body")
         sensors_label.setWordWrap(True)
         layout.addWidget(sensors_label)
-
-        curves_label = QLabel(self._group_curve_text(members), card)
-        curves_label.setObjectName("fanGroupCurvesLabel")
-        curves_label.setProperty("cardTextRole", "muted")
-        curves_label.setWordWrap(True)
-        layout.addWidget(curves_label)
         return card
 
     def _group_fan_configs(
@@ -918,43 +1062,28 @@ class DashboardPage(QWidget):
         state: DaemonStateFile,
         active_config: Config,
     ) -> list[tuple[str, list[tuple[str, FanConfig, object | None]]]]:
-        grouped: dict[str, list[tuple[str, FanConfig, object | None]]] = defaultdict(
-            list
-        )
-        for fan_name, fan_config in sorted(active_config.fans.items()):
-            live_fan = self._find_live_fan_state(state, fan_config)
-            group_name = self._fan_group_name(fan_name, fan_config, live_fan)
-            grouped[group_name].append((fan_name, fan_config, live_fan))
-        return sorted(grouped.items(), key=lambda item: item[0].lower())
+        return [
+            (
+                fan_name,
+                [(fan_name, fan_config, self._find_live_fan_state(state, fan_config))],
+            )
+            for fan_name, fan_config in sorted(active_config.fans.items())
+        ]
 
-    def _fan_group_name(self, fan_name: str, fan_config: FanConfig, live_fan) -> str:
-        if live_fan is not None and getattr(live_fan, "hardware_name", None):
-            return str(live_fan.hardware_name)
-        if fan_config.header_name:
-            return fan_config.header_name
-        return fan_name.replace("_", " ").title()
-
-    def _group_fans_text(
+    def _group_subtitle_text(
         self,
         state: DaemonStateFile,
         members: list[tuple[str, FanConfig, object | None]],
     ) -> str:
-        fan_lines: list[str] = []
-        for fan_name, fan_config, live_fan in members:
+        labels: list[str] = []
+        for fan_name, fan_config, _ in members:
             label = self._friendly_fan_name(fan_name, fan_config, state)
-            details: list[str] = []
-            target = state.fan_targets.get(fan_config.fan_id)
-            if target is not None:
-                details.append(f"target {target:.0f}%")
-            if live_fan is not None and getattr(live_fan, "rpm", None) is not None:
-                details.append(f"{live_fan.rpm:.0f} RPM")
-            if (
-                live_fan is not None
-                and getattr(live_fan, "current_control_pct", None) is not None
-            ):
-                details.append(f"actual {live_fan.current_control_pct:.1f}%")
-            fan_lines.append(f"{label} ({', '.join(details)})" if details else label)
-        return "Fans: " + "; ".join(fan_lines)
+            if label != fan_name:
+                labels.append(label)
+        if not labels:
+            return "Mapped control: direct"
+        prefix = "Mapped control" if len(labels) == 1 else "Mapped controls"
+        return f"{prefix}: {'; '.join(labels)}"
 
     def _group_sensor_text(
         self,
@@ -968,14 +1097,25 @@ class DashboardPage(QWidget):
                 if detail not in seen:
                     seen.add(detail)
                     sensor_details.append(detail)
-        return "Sensors: " + "; ".join(sensor_details or ["No sensors configured"])
+        return "  •  ".join(sensor_details or ["No sensors configured"])
 
     def _group_curve_text(
         self,
         members: list[tuple[str, FanConfig, object | None]],
     ) -> str:
         curves = sorted({fan_config.curve for _, fan_config, _ in members})
-        return "Curves: " + ", ".join(curves or ["None"])
+        return "Curve: " + ", ".join(curves or ["None"])
+
+    def _group_curve_badge_text(
+        self,
+        members: list[tuple[str, FanConfig, object | None]],
+    ) -> str:
+        curves = sorted({fan_config.curve for _, fan_config, _ in members})
+        if not curves:
+            return "No curve"
+        if len(curves) == 1:
+            return curves[0]
+        return f"{len(curves)} curves"
 
     @staticmethod
     def _target_summary_text(target_values: list[float], fan_count: int) -> str:
@@ -992,6 +1132,81 @@ class DashboardPage(QWidget):
         if len(target_values) == 1:
             return f"{target_values[0]:.1f}%"
         return f"{sum(target_values) / len(target_values):.1f}% avg"
+
+    def _resolve_live_fan_config(
+        self,
+        live_fan,
+    ) -> tuple[str | None, FanConfig | None]:
+        if self._active_config is None:
+            return None, None
+
+        candidate_ids = self._candidate_fan_ids(live_fan)
+
+        for fan_name, fan_config in sorted(self._active_config.fans.items()):
+            if fan_config.fan_id in candidate_ids:
+                return fan_name, fan_config
+
+        return None, None
+
+    def _series_display_name(
+        self,
+        group_name: str,
+        fan_config: FanConfig | None,
+        live_fan,
+    ) -> str:
+        group_label = self._display_group_name(group_name)
+        detail = ""
+        if fan_config is not None and fan_config.header_name:
+            detail = fan_config.header_name
+        elif getattr(live_fan, "sensor_name", None):
+            detail = str(live_fan.sensor_name)
+        elif getattr(live_fan, "hardware_name", None):
+            detail = str(live_fan.hardware_name)
+        if detail:
+            if detail.strip().lower() == group_label.strip().lower():
+                return group_label
+            return f"{group_label} · {detail}"
+        return group_label
+
+    def _create_metric_card(
+        self,
+        parent: QWidget,
+        title: str,
+        value: str,
+        value_object_name: str,
+    ) -> QFrame:
+        frame = QFrame(parent)
+        frame.setProperty("cardRole", "fan-metric")
+
+        layout = QVBoxLayout(frame)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(4)
+
+        title_label = QLabel(title, frame)
+        title_label.setProperty("cardTextRole", "metricTitle")
+        layout.addWidget(title_label)
+
+        value_label = QLabel(value, frame)
+        value_label.setObjectName(value_object_name)
+        value_label.setProperty("cardTextRole", "metricValue")
+        layout.addWidget(value_label)
+        return frame
+
+    @staticmethod
+    def _format_percent_metric(values: list[float], *, digits: int = 0) -> str:
+        if not values:
+            return "—"
+        if len(values) == 1:
+            return f"{values[0]:.{digits}f}%"
+        return f"{min(values):.{digits}f}–{max(values):.{digits}f}%"
+
+    @staticmethod
+    def _format_rpm_metric(values: list[float]) -> str:
+        if not values:
+            return "—"
+        if len(values) == 1:
+            return f"{values[0]:.0f} RPM"
+        return f"{min(values):.0f}–{max(values):.0f} RPM"
 
     def _set_plot_legend(
         self,
@@ -1016,10 +1231,7 @@ class DashboardPage(QWidget):
 
     def _find_live_fan_state(self, state: DaemonStateFile, fan_config: FanConfig):
         for fan in state.fan_speeds:
-            if (
-                fan.control_identifier == fan_config.fan_id
-                or fan.identifier == fan_config.fan_id
-            ):
+            if fan_config.fan_id in self._candidate_fan_ids(fan):
                 return fan
         return None
 
@@ -1037,6 +1249,38 @@ class DashboardPage(QWidget):
             return f"{live_fan.hardware_name} / {live_fan.sensor_name}"
 
         return fan_name.replace("_", " ").title()
+
+    @staticmethod
+    def _candidate_fan_ids(live_fan) -> set[str]:
+        candidates = {
+            value
+            for value in (
+                getattr(live_fan, "control_identifier", None),
+                getattr(live_fan, "identifier", None),
+            )
+            if isinstance(value, str) and value
+        }
+        identifier = getattr(live_fan, "identifier", None)
+        if isinstance(identifier, str) and "/fan/" in identifier:
+            candidates.add(identifier.replace("/fan/", "/control/"))
+        if isinstance(identifier, str) and "/control/" in identifier:
+            candidates.add(identifier.replace("/control/", "/fan/"))
+        return candidates
+
+    @staticmethod
+    def _display_group_name(group_name: str) -> str:
+        acronyms = {"cpu", "gpu", "ram", "aio", "vrm"}
+        parts = [part for part in group_name.replace("-", "_").split("_") if part]
+        if not parts:
+            return group_name
+        rendered: list[str] = []
+        for part in parts:
+            lowered = part.lower()
+            if lowered in acronyms:
+                rendered.append(lowered.upper())
+                continue
+            rendered.append(part.capitalize())
+        return " ".join(rendered)
 
     def _resolve_sensor_labels(
         self,
@@ -1066,7 +1310,7 @@ class DashboardPage(QWidget):
             if sensor is not None:
                 label = f"{sensor.hardware_name} / {sensor.sensor_name}"
                 if sensor.value is not None:
-                    label = f"{label} {sensor.value:.1f}°C"
+                    label = f"{label} · {sensor.value:.1f}°C"
             resolved.append(label)
         return resolved or ["No sensors configured"]
 

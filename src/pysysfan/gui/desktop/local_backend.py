@@ -15,6 +15,11 @@ from typing import Sequence
 
 from pysysfan.config import Config, DEFAULT_CONFIG_PATH
 from pysysfan.curves import FanCurve, InvalidCurveError, parse_curve
+from pysysfan.history_file import (
+    DEFAULT_HISTORY_PATH,
+    HistorySample,
+    read_history,
+)
 from pysysfan.profiles import DEFAULT_PROFILE_NAME, ProfileManager
 from pysysfan.state_file import DEFAULT_STATE_PATH, DaemonStateFile, read_state
 from pysysfan.temperature import get_valid_aggregation_methods
@@ -104,6 +109,13 @@ def build_curve_preview_series(
 def read_daemon_state(state_path: Path = DEFAULT_STATE_PATH) -> DaemonStateFile | None:
     """Read the latest daemon state snapshot if one is available."""
     return read_state(state_path)
+
+
+def read_daemon_history(
+    history_path: Path = DEFAULT_HISTORY_PATH,
+) -> list[HistorySample]:
+    """Read recent daemon history samples from the shared NDJSON file."""
+    return read_history(history_path)
 
 
 def run_service_command(action: str) -> tuple[bool, str]:

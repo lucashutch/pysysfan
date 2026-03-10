@@ -13,6 +13,13 @@ from pathlib import Path
 from pysysfan.cache import HardwareCacheManager, get_default_cache_manager
 from pysysfan.config import Config, DEFAULT_CONFIG_PATH
 from pysysfan.curves import FanCurve, StaticCurve, parse_curve, InvalidCurveError
+from pysysfan.history_file import (
+    DEFAULT_HISTORY_MAX_AGE_SECONDS,
+    DEFAULT_HISTORY_PATH,
+    HistorySample,
+    append_history_sample,
+    compact_history,
+)
 from pysysfan.notifications import NotificationManager
 from pysysfan.profiles import ProfileManager, DEFAULT_PROFILE_NAME
 from pysysfan.state_file import (
@@ -28,6 +35,11 @@ from pysysfan.temperature import lookup_and_aggregate, get_valid_aggregation_met
 from pysysfan.watcher import ConfigWatcher
 
 logger = logging.getLogger(__name__)
+
+
+def _format_poll_interval(seconds: float) -> str:
+    """Render poll intervals without distracting floating-point noise."""
+    return f"{float(seconds):.3f}".rstrip("0").rstrip(".")
 
 
 class FanDaemon:
@@ -48,6 +60,7 @@ class FanDaemon:
         auto_reload: bool = True,
         cache_manager: HardwareCacheManager | None = None,
         state_path: Path = DEFAULT_STATE_PATH,
+        history_path: Path = DEFAULT_HISTORY_PATH,
     ):
         # Use active profile if no explicit config_path provided
         config_path = Path(config_path) if config_path else DEFAULT_CONFIG_PATH
@@ -69,7 +82,9 @@ class FanDaemon:
         self._unconfigured_fans: set[str] = set()
         self._update_thread: threading.Thread | None = None
         self.state_path = Path(state_path)
+        self.history_path = Path(history_path)
         self._start_time: float = 0.0
+        self._last_history_compaction: float = 0.0
         self._current_temps: dict[str, float] = {}
         self._current_fan_speeds: dict[str, float] = {}
         self._current_targets: dict[str, float] = {}
@@ -180,7 +195,7 @@ class FanDaemon:
             logger.info(
                 f"  Fans: {len(new_cfg.fans)}, "
                 f"Curves: {len(new_cfg.curves)}, "
-                f"Poll interval: {new_cfg.poll_interval}s"
+                f"Poll interval: {_format_poll_interval(new_cfg.poll_interval)}s"
             )
             return True
         except Exception as e:
@@ -434,29 +449,84 @@ class FanDaemon:
 
         return control_map
 
+    @staticmethod
+    def _identifier_root(identifier: str, marker: str) -> str | None:
+        """Return the identifier prefix before a marker segment such as `fan`."""
+        marker_token = f"/{marker}/"
+        if marker_token not in identifier:
+            return None
+        return identifier.split(marker_token, 1)[0]
+
+    @staticmethod
+    def _identifier_index(identifier: str, marker: str) -> str | None:
+        """Return the segment immediately following a marker such as `control`."""
+        parts = identifier.split("/")
+        try:
+            marker_index = parts.index(marker)
+        except ValueError:
+            return None
+        if marker_index + 1 >= len(parts):
+            return None
+        return parts[marker_index + 1]
+
+    @classmethod
+    def _control_match_score(cls, fan: object, control: object) -> int:
+        """Score how likely a control belongs to a given fan sensor."""
+        fan_identifier = getattr(fan, "identifier", "")
+        control_identifier = getattr(control, "identifier", "")
+        if not isinstance(fan_identifier, str) or not isinstance(
+            control_identifier, str
+        ):
+            return -1
+
+        score = 0
+        fan_root = cls._identifier_root(fan_identifier, "fan")
+        control_root = cls._identifier_root(control_identifier, "control")
+        if fan_root and control_root and fan_root == control_root:
+            score += 100
+
+        fan_index = cls._identifier_index(fan_identifier, "fan")
+        control_index = cls._identifier_index(control_identifier, "control")
+        if fan_index and control_index and fan_index == control_index:
+            score += 25
+
+        if getattr(fan, "hardware_name", None) == getattr(
+            control, "hardware_name", None
+        ):
+            score += 10
+
+        fan_parts = fan_identifier.strip("/").split("/")
+        control_parts = control_identifier.strip("/").split("/")
+        shared_prefix = 0
+        for fan_part, control_part in zip(fan_parts, control_parts):
+            if fan_part != control_part:
+                break
+            shared_prefix += 1
+        score += shared_prefix
+        return score
+
     @classmethod
     def _match_fans_with_controls(cls, fans: list, controls: list) -> list[tuple]:
         """Match fan RPM sensors with their corresponding controls."""
-        control_map = cls._build_control_map(controls)
         matched: list[tuple] = []
 
         for fan in fans:
-            parts = fan.identifier.split("/")
-            try:
-                fan_idx = parts.index("fan")
-            except ValueError:
-                matched.append((fan, None))
-                continue
-
-            if fan_idx + 1 < len(parts):
-                matched.append((fan, control_map.get(parts[fan_idx + 1])))
-            else:
-                matched.append((fan, None))
+            best_control = None
+            best_score = -1
+            for control in controls:
+                score = cls._control_match_score(fan, control)
+                if score > best_score:
+                    best_control = control
+                    best_score = score
+            matched.append((fan, best_control if best_score >= 0 else None))
 
         return matched
 
-    def _build_state_snapshot(self) -> DaemonStateFile:
+    def _build_state_snapshot(
+        self, *, timestamp: float | None = None
+    ) -> DaemonStateFile:
         """Build the persisted daemon runtime snapshot."""
+        snapshot_time = time.time() if timestamp is None else timestamp
         try:
             pm = ProfileManager()
             active_profile = pm.get_active_profile()
@@ -506,10 +576,10 @@ class FanDaemon:
         ]
 
         return DaemonStateFile(
-            timestamp=time.time(),
+            timestamp=snapshot_time,
             pid=os.getpid(),
             running=self._running,
-            uptime_seconds=(time.time() - self._start_time)
+            uptime_seconds=(snapshot_time - self._start_time)
             if self._start_time
             else 0.0,
             active_profile=active_profile,
@@ -522,6 +592,33 @@ class FanDaemon:
             fan_speeds=fan_speeds,
             fan_targets=dict(self._current_targets),
             recent_alerts=alerts,
+        )
+
+    def _build_history_sample(self, *, timestamp: float | None = None) -> HistorySample:
+        """Build the rolling history sample written for the desktop UI."""
+        sample_time = time.time() if timestamp is None else timestamp
+        fan_rpm: dict[str, float] = {}
+        for fan, control in self._match_fans_with_controls(
+            self._latest_fan_speeds,
+            self._latest_controls,
+        ):
+            if fan.value is None:
+                continue
+            series_id = control.identifier if control is not None else fan.identifier
+            fan_rpm[series_id] = float(fan.value)
+
+        return HistorySample(
+            timestamp=sample_time,
+            temperatures={
+                sensor.identifier: float(sensor.value)
+                for sensor in self._latest_temperatures
+                if sensor.value is not None
+            },
+            fan_rpm=fan_rpm,
+            fan_targets={
+                identifier: float(value)
+                for identifier, value in self._current_targets.items()
+            },
         )
 
     def _run_once(self, cfg: Config) -> dict[str, float]:
@@ -598,7 +695,22 @@ class FanDaemon:
 
     def _update_state(self) -> None:
         """Persist the latest daemon runtime snapshot to disk."""
-        write_state(self._build_state_snapshot(), self.state_path)
+        update_time = time.time()
+        write_state(self._build_state_snapshot(timestamp=update_time), self.state_path)
+        append_history_sample(
+            self._build_history_sample(timestamp=update_time),
+            self.history_path,
+        )
+        if (
+            self._last_history_compaction == 0.0
+            or update_time - self._last_history_compaction >= 60.0
+        ):
+            compact_history(
+                self.history_path,
+                max_age_seconds=DEFAULT_HISTORY_MAX_AGE_SECONDS,
+                now=update_time,
+            )
+            self._last_history_compaction = update_time
 
     # ── Public API ────────────────────────────────────────────────────
 
@@ -684,7 +796,10 @@ class FanDaemon:
             self._running = True
             startup_duration = time.perf_counter() - startup_t0
             logger.info(f"Startup completed in {startup_duration:.1f}s")
-            logger.info(f"Control loop started (poll interval: {cfg.poll_interval}s)")
+            logger.info(
+                "Control loop started "
+                f"(poll interval: {_format_poll_interval(cfg.poll_interval)}s)"
+            )
 
             while self._running:
                 # Get current config (may have been reloaded)

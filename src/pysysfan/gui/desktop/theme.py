@@ -108,6 +108,12 @@ QFrame[cardRole="fan-summary"] {{
     background: {colors["card"]};
 }}
 
+QFrame[cardRole="fan-metric"] {{
+    border: 1px solid {colors["border"]};
+    border-radius: 14px;
+    background: {colors["raised"]};
+}}
+
 QLabel#daemonIndicator {{
     font-size: 18px;
     font-weight: 900;
@@ -150,6 +156,20 @@ QLabel[cardTextRole="value"] {{
     color: {colors["text"]};
 }}
 
+QLabel[cardTextRole="metricTitle"] {{
+    font-size: 11px;
+    font-weight: 700;
+    color: {colors["muted"]};
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}}
+
+QLabel[cardTextRole="metricValue"] {{
+    font-size: 18px;
+    font-weight: 800;
+    color: {colors["text"]};
+}}
+
 QLabel[cardTextRole="body"] {{
     font-size: 12px;
     color: {colors["text"]};
@@ -165,18 +185,50 @@ QLabel[cardTextRole="icon"] {{
 }}
 
 QToolButton#alertsButton,
-QComboBox#historySelector {{
+QComboBox#historySelector,
+QToolButton[graphControl="selector"] {{
     border: 1px solid {colors["border"]};
     border-radius: 12px;
-    padding: 6px 10px;
+    padding: 5px 10px;
     background: {colors["raised"]};
     color: {colors["text"]};
     font-weight: 700;
 }}
 
+QComboBox#historySelector {{
+    min-width: 72px;
+    max-width: 98px;
+    padding: 5px 24px 5px 10px;
+}}
+
+QComboBox#historySelector::drop-down {{
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
+    width: 22px;
+    border: 0;
+}}
+
+QComboBox#historySelector::down-arrow,
+QComboBox::down-arrow {{
+    width: 12px;
+    height: 12px;
+}}
+
+QToolButton[graphControl="selector"] {{
+    min-width: 108px;
+    padding: 4px 28px 4px 10px;
+}}
+
 QToolButton#alertsButton::menu-indicator {{
     image: none;
     width: 0;
+}}
+
+QToolButton[graphControl="selector"]::menu-indicator {{
+    subcontrol-origin: padding;
+    subcontrol-position: center right;
+    width: 14px;
+    right: 8px;
 }}
 
 QTableWidget, QListWidget {{
@@ -252,6 +304,104 @@ QWidget#dashboardStatusCorner {{
 QStatusBar {{
     background: {colors["window"]};
     color: {muted};
+}}
+"""
+
+
+def management_page_stylesheet(palette: QPalette) -> str:
+    """Return a shared stylesheet for the Config and Service management pages."""
+    colors = desktop_colors(palette)
+    hover_background = _hex(
+        _mix(QColor(colors["raised"]), QColor(colors["accent"]), 0.12)
+    )
+    button_text = colors["text"]
+    return f"""
+QWidget#managementPageRoot {{
+    background: {colors["window"]};
+    color: {colors["text"]};
+}}
+
+QGroupBox {{
+    border: 1px solid {colors["border"]};
+    border-radius: 18px;
+    margin-top: 14px;
+    padding-top: 8px;
+    background: {colors["raised"]};
+    color: {colors["text"]};
+    font-size: 15px;
+    font-weight: 800;
+}}
+
+QGroupBox::title {{
+    subcontrol-origin: margin;
+    left: 16px;
+    padding: 0 8px;
+}}
+
+QLabel#curvesMessageLabel,
+QLabel#serviceMessageLabel {{
+    border-radius: 12px;
+    padding: 8px 10px;
+    background: {colors["raised"]};
+}}
+
+QPushButton,
+QComboBox,
+QLineEdit,
+QDoubleSpinBox,
+QPlainTextEdit,
+QTableWidget {{
+    border: 1px solid {colors["border"]};
+    border-radius: 12px;
+    background: {colors["base"]};
+    color: {colors["text"]};
+}}
+
+QPushButton {{
+    background: {colors["panel"]};
+    color: {button_text};
+    padding: 7px 12px;
+    font-weight: 700;
+}}
+
+QPushButton:hover {{
+    background: {hover_background};
+}}
+
+QPushButton:pressed {{
+    background: {colors["accent"]};
+    color: {colors["window"]};
+}}
+
+QComboBox,
+QLineEdit,
+QDoubleSpinBox {{
+    padding: 6px 10px;
+}}
+
+QComboBox::drop-down {{
+    border: 0;
+    width: 22px;
+}}
+
+QTableWidget,
+QPlainTextEdit {{
+    gridline-color: {colors["border"]};
+}}
+
+QHeaderView::section {{
+    background: {colors["raised"]};
+    color: {colors["text"]};
+    border: 0;
+    border-bottom: 1px solid {colors["border"]};
+    padding: 8px;
+    font-weight: 700;
+}}
+
+QSplitter::handle {{
+    background: {colors["border"]};
+    margin: 6px 0;
+    border-radius: 999px;
 }}
 """
 

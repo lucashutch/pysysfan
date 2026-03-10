@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 
 from pysysfan.config import Config, CurveConfig, FanConfig, UpdateConfig
 from pysysfan.daemon import FanDaemon
+from pysysfan.history_file import read_history
 from pysysfan.platforms.base import ControlInfo, HardwareScanResult, SensorInfo
 from pysysfan.state_file import read_state
 
@@ -33,7 +34,12 @@ def _sample_config() -> Config:
 class TestDaemonStateSnapshots:
     def test_update_state_writes_snapshot_file(self, tmp_path):
         state_path = tmp_path / "daemon_state.json"
-        daemon = FanDaemon(config_path=tmp_path / "config.yaml", state_path=state_path)
+        history_path = tmp_path / "daemon_history.ndjson"
+        daemon = FanDaemon(
+            config_path=tmp_path / "config.yaml",
+            state_path=state_path,
+            history_path=history_path,
+        )
         daemon._cfg = _sample_config()
         daemon._start_time = 100.0
         daemon._running = True
@@ -84,6 +90,11 @@ class TestDaemonStateSnapshots:
         assert state.fan_speeds[0].current_control_pct == 55.0
         assert state.fan_speeds[0].controllable is True
 
+        history = read_history(history_path, now=110.0)
+        assert len(history) == 1
+        assert history[0].fan_rpm == {"/mb/control/0": 1325.0}
+        assert history[0].fan_targets == {"/mb/control/0": 60.0}
+
     def test_run_deletes_state_file_on_shutdown(self, tmp_path):
         state_path = tmp_path / "daemon_state.json"
         daemon = FanDaemon(config_path=tmp_path / "config.yaml", state_path=state_path)
@@ -114,3 +125,64 @@ class TestDaemonStateSnapshots:
         assert not state_path.exists()
         hw.restore_defaults.assert_called_once()
         hw.close.assert_called_once()
+
+    def test_update_state_matches_gpu_controls_by_device_path(self, tmp_path):
+        state_path = tmp_path / "daemon_state.json"
+        history_path = tmp_path / "daemon_history.ndjson"
+        daemon = FanDaemon(
+            config_path=tmp_path / "config.yaml",
+            state_path=state_path,
+            history_path=history_path,
+        )
+        daemon._cfg = _sample_config()
+        daemon._start_time = 100.0
+        daemon._running = True
+        daemon._current_targets = {
+            "/lpc/nct6799d/0/control/0": 40.0,
+            "/gpu-nvidia/0/control/0": 30.0,
+        }
+        daemon._latest_temperatures = []
+        daemon._latest_fan_speeds = [
+            SensorInfo(
+                hardware_name="Nuvoton NCT6799D",
+                hardware_type="SuperIO",
+                sensor_name="Fan #1",
+                sensor_type="Fan",
+                identifier="/lpc/nct6799d/0/fan/0",
+                value=800.0,
+            ),
+            SensorInfo(
+                hardware_name="NVIDIA GeForce GTX 1070",
+                hardware_type="GpuNvidia",
+                sensor_name="GPU",
+                sensor_type="Fan",
+                identifier="/gpu-nvidia/0/fan/1",
+                value=1200.0,
+            ),
+        ]
+        daemon._latest_controls = [
+            ControlInfo(
+                hardware_name="Nuvoton NCT6799D",
+                sensor_name="Fan #1 Control",
+                identifier="/lpc/nct6799d/0/control/0",
+                current_value=40.0,
+                has_control=True,
+            ),
+            ControlInfo(
+                hardware_name="NVIDIA GeForce GTX 1070",
+                sensor_name="GPU Fan Control",
+                identifier="/gpu-nvidia/0/control/0",
+                current_value=30.0,
+                has_control=True,
+            ),
+        ]
+
+        with patch("pysysfan.daemon.time.time", return_value=110.0):
+            daemon._update_state()
+
+        state = read_state(state_path, now=110.0)
+        assert state is not None
+        assert {fan.identifier: fan.control_identifier for fan in state.fan_speeds} == {
+            "/lpc/nct6799d/0/fan/0": "/lpc/nct6799d/0/control/0",
+            "/gpu-nvidia/0/fan/1": "/gpu-nvidia/0/control/0",
+        }
