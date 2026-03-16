@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import getpass
+import os
 import subprocess
 import shutil
 import logging
@@ -35,14 +37,80 @@ def _hidden_process_kwargs() -> dict[str, object]:
     return kwargs
 
 
+def _is_windows_store_stub(exe_path: str) -> bool:
+    """Return True if the exe is a Windows Store app execution alias.
+
+    These stubs live under ``AppData\\Local\\Microsoft\\WindowsApps\\`` and
+    fail with "Unable to create process" when launched from a scheduled task
+    because they require an interactive app-execution context.
+    """
+    return "windowsapps" in exe_path.lower()
+
+
+def _uv_tool_dir() -> Path | None:
+    """Return the UV tool directory by running ``uv tool dir``, or None if unavailable."""
+    uv = shutil.which("uv") or shutil.which("uv.exe")
+    if uv:
+        try:
+            result = subprocess.run(
+                [uv, "tool", "dir"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return Path(result.stdout.strip())
+        except (subprocess.TimeoutExpired, OSError):
+            pass
+    # Default UV tool dir for Windows: %APPDATA%\uv\tools
+    if os.name == "nt":
+        appdata = os.environ.get("APPDATA", "")
+        if appdata:
+            default = Path(appdata) / "uv" / "tools"
+            if default.is_dir():
+                return default
+    return None
+
+
+def _pysysfan_uv_venv_exe() -> str | None:
+    """Return pysysfan.exe from inside the UV tool venv, if installed there.
+
+    When installed via ``uv tool install .``, pysysfan lives in a venv that
+    uses UV's standalone CPython — not the Windows Store Python stub.  Using
+    this exe bypasses the "Unable to create process" failure that occurs when
+    the scheduled task tries to launch a Windows Store app alias.
+    """
+    tool_dir = _uv_tool_dir()
+    if tool_dir is None:
+        return None
+    for candidate in (
+        tool_dir / "pysysfan" / "Scripts" / "pysysfan.exe",  # Windows
+        tool_dir / "pysysfan" / "bin" / "pysysfan",  # Unix / WSL
+    ):
+        if candidate.is_file():
+            return str(candidate)
+    return None
+
+
 def _pysysfan_exe() -> str:
-    """Find the pysysfan executable in PATH."""
-    exe = shutil.which("pysysfan")
-    if exe:
-        return exe
-    exe = shutil.which("pysysfan.exe")
-    if exe:
-        return exe
+    """Return the pysysfan executable path.
+
+    Search order:
+    1. UV tool venv (standalone CPython — works in scheduled tasks without
+       requiring an interactive Windows app-execution context).
+    2. PATH entries that are *not* Windows Store app execution aliases.
+    """
+    # Prefer the UV tool venv exe so the service always gets standalone CPython.
+    uv_exe = _pysysfan_uv_venv_exe()
+    if uv_exe:
+        return uv_exe
+
+    # Fall back to PATH, skipping Windows Store stubs.
+    for name in ("pysysfan", "pysysfan.exe"):
+        exe = shutil.which(name)
+        if exe and not _is_windows_store_stub(exe):
+            return exe
+
     raise FileNotFoundError(
         "pysysfan executable not found in PATH. "
         "Install with 'uv tool install .' then ensure uv tool bin is in PATH."
@@ -82,6 +150,11 @@ def _build_service_launcher(
         f'call "{exe}" run --config "{config_path}"',
     ]
     return "\r\n".join(lines) + "\r\n"
+
+
+def _get_current_username() -> str:
+    """Return the effective username for the scheduled task principal."""
+    return os.environ.get("USERNAME") or getpass.getuser()
 
 
 def _write_service_launcher(
@@ -132,6 +205,11 @@ def install_task(config_path: Path | str | None = None) -> None:
     launcher_path = _write_service_launcher(config_path)
     cmd_args = _build_task_command(launcher_path)
 
+    # Run as the current interactive user so the user-space Python
+    # environment (including Windows Store / uv / pip installs) is accessible.
+    # SYSTEM cannot use Windows Store Python stubs or user-profile venvs.
+    username = _get_current_username()
+
     result = subprocess.run(
         [
             "schtasks",
@@ -141,11 +219,12 @@ def install_task(config_path: Path | str | None = None) -> None:
             "/TR",
             cmd_args,
             "/SC",
-            "ONSTART",
+            "ONLOGON",
+            "/RU",
+            username,
+            "/IT",  # interactive token — no stored password needed
             "/RL",
             "HIGHEST",
-            "/RU",
-            "SYSTEM",
             "/F",
         ],
         capture_output=True,

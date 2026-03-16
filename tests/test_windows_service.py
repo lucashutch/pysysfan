@@ -10,7 +10,10 @@ from pysysfan.platforms.windows_service import (
     _build_service_launcher,
     _build_task_command,
     _hidden_process_kwargs,
+    _is_windows_store_stub,
     _pysysfan_exe,
+    _pysysfan_uv_venv_exe,
+    _uv_tool_dir,
     get_service_status,
     install_task,
     uninstall_task,
@@ -18,23 +21,111 @@ from pysysfan.platforms.windows_service import (
 )
 
 
+class TestWindowsStoreStub:
+    """Tests for _is_windows_store_stub()."""
+
+    def test_detects_windowsapps_path(self):
+        assert _is_windows_store_stub(
+            r"C:\Users\lucas\AppData\Local\Microsoft\WindowsApps\python.exe"
+        )
+
+    def test_detects_case_insensitive(self):
+        assert _is_windows_store_stub(
+            r"C:\Users\lucas\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.11_qbz5n2kfra8p0\python.exe"
+        )
+
+    def test_normal_exe_not_a_stub(self):
+        assert not _is_windows_store_stub(r"C:\tools\pysysfan.exe")
+        assert not _is_windows_store_stub(
+            r"C:\Users\lucas\AppData\Roaming\uv\tools\pysysfan\Scripts\pysysfan.exe"
+        )
+
+
+class TestUvToolDir:
+    """Tests for _uv_tool_dir()."""
+
+    @patch(
+        "pysysfan.platforms.windows_service.shutil.which",
+        return_value=r"C:\tools\uv.exe",
+    )
+    @patch("pysysfan.platforms.windows_service.subprocess.run")
+    def test_returns_path_from_uv(self, mock_run, mock_which):
+        mock_run.return_value = MagicMock(
+            returncode=0, stdout=r"C:\Users\lucas\AppData\Roaming\uv\tools" + "\n"
+        )
+        result = _uv_tool_dir()
+        assert result == Path(r"C:\Users\lucas\AppData\Roaming\uv\tools")
+
+    @patch("pysysfan.platforms.windows_service.shutil.which", return_value=None)
+    def test_returns_none_when_uv_not_found(self, mock_which):
+        with patch.dict("os.environ", {"APPDATA": ""}, clear=False):
+            result = _uv_tool_dir()
+        assert result is None
+
+
+class TestPysysfanUvVenvExe:
+    """Tests for _pysysfan_uv_venv_exe()."""
+
+    @patch("pysysfan.platforms.windows_service._uv_tool_dir")
+    def test_returns_none_when_no_tool_dir(self, mock_dir):
+        mock_dir.return_value = None
+        assert _pysysfan_uv_venv_exe() is None
+
+    @patch("pysysfan.platforms.windows_service._uv_tool_dir")
+    def test_returns_exe_when_found(self, mock_dir, tmp_path):
+        scripts = tmp_path / "pysysfan" / "Scripts"
+        scripts.mkdir(parents=True)
+        exe = scripts / "pysysfan.exe"
+        exe.write_bytes(b"fake exe")
+        mock_dir.return_value = tmp_path
+        assert _pysysfan_uv_venv_exe() == str(exe)
+
+    @patch("pysysfan.platforms.windows_service._uv_tool_dir")
+    def test_returns_none_when_venv_missing(self, mock_dir, tmp_path):
+        mock_dir.return_value = tmp_path
+        assert _pysysfan_uv_venv_exe() is None
+
+
 class TestPysysfanExe:
     """Tests for _pysysfan_exe()."""
 
+    @patch("pysysfan.platforms.windows_service._pysysfan_uv_venv_exe")
+    def test_prefers_uv_venv_exe(self, mock_uv_exe):
+        """Should prefer the UV tool venv exe over PATH."""
+        mock_uv_exe.return_value = (
+            r"C:\AppData\Roaming\uv\tools\pysysfan\Scripts\pysysfan.exe"
+        )
+        assert (
+            _pysysfan_exe()
+            == r"C:\AppData\Roaming\uv\tools\pysysfan\Scripts\pysysfan.exe"
+        )
+
+    @patch(
+        "pysysfan.platforms.windows_service._pysysfan_uv_venv_exe", return_value=None
+    )
     @patch("pysysfan.platforms.windows_service.shutil.which")
-    def test_found_in_path(self, mock_which):
-        """Should return the exe when found via shutil.which."""
+    def test_found_in_path(self, mock_which, mock_uv):
+        """Should return the PATH exe when no UV venv exe is found."""
         mock_which.return_value = r"C:\tools\pysysfan.exe"
         assert _pysysfan_exe() == r"C:\tools\pysysfan.exe"
 
+    @patch(
+        "pysysfan.platforms.windows_service._pysysfan_uv_venv_exe", return_value=None
+    )
     @patch("pysysfan.platforms.windows_service.shutil.which")
-    def test_fallback_pysysfan_exe(self, mock_which):
-        """Should try pysysfan.exe as a fallback."""
-        mock_which.side_effect = [None, r"C:\tools\pysysfan.exe"]
-        assert _pysysfan_exe() == r"C:\tools\pysysfan.exe"
+    def test_skips_windows_store_stub(self, mock_which, mock_uv):
+        """Should skip Windows Store app stubs and raise FileNotFoundError."""
+        mock_which.return_value = (
+            r"C:\Users\u\AppData\Local\Microsoft\WindowsApps\python.exe"
+        )
+        with pytest.raises(FileNotFoundError, match="not found in PATH"):
+            _pysysfan_exe()
 
+    @patch(
+        "pysysfan.platforms.windows_service._pysysfan_uv_venv_exe", return_value=None
+    )
     @patch("pysysfan.platforms.windows_service.shutil.which", return_value=None)
-    def test_raises_when_not_found(self, mock_which):
+    def test_raises_when_not_found(self, mock_which, mock_uv):
         """Should raise FileNotFoundError when not in PATH."""
         with pytest.raises(FileNotFoundError, match="not found in PATH"):
             _pysysfan_exe()
@@ -58,8 +149,12 @@ class TestInstallTask:
         "pysysfan.platforms.windows_service._pysysfan_exe",
         return_value=r"C:\tools\pysysfan.exe",
     )
-    def test_success(self, mock_exe, mock_run, mock_write_launcher):
-        """Should call schtasks /Create without errors."""
+    @patch(
+        "pysysfan.platforms.windows_service._get_current_username",
+        return_value="testuser",
+    )
+    def test_success(self, mock_user, mock_exe, mock_run, mock_write_launcher):
+        """Should call schtasks /Create with ONLOGON and current user."""
         mock_write_launcher.return_value = Path(
             r"C:\Users\lucas\.pysysfan\pysysfan-service.cmd"
         )
@@ -69,6 +164,10 @@ class TestInstallTask:
         args = mock_run.call_args[0][0]
         assert "schtasks" in args
         assert "/Create" in args
+        assert "ONLOGON" in args
+        assert "testuser" in args
+        assert "/IT" in args
+        assert "SYSTEM" not in args
 
     @patch("pysysfan.platforms.windows_service._write_service_launcher")
     @patch("pysysfan.platforms.windows_service.subprocess.run")
@@ -76,7 +175,11 @@ class TestInstallTask:
         "pysysfan.platforms.windows_service._pysysfan_exe",
         return_value=r"C:\tools\pysysfan.exe",
     )
-    def test_with_config_path(self, mock_exe, mock_run, mock_write_launcher):
+    @patch(
+        "pysysfan.platforms.windows_service._get_current_username",
+        return_value="testuser",
+    )
+    def test_with_config_path(self, mock_user, mock_exe, mock_run, mock_write_launcher):
         """Should point schtasks at a short launcher command when provided."""
         launcher_path = Path(r"C:\Users\lucas\.pysysfan\pysysfan-service.cmd")
         mock_write_launcher.return_value = launcher_path
@@ -95,7 +198,11 @@ class TestInstallTask:
         "pysysfan.platforms.windows_service._pysysfan_exe",
         return_value=r"C:\tools\pysysfan.exe",
     )
-    def test_failure_raises(self, mock_exe, mock_run, mock_write_launcher):
+    @patch(
+        "pysysfan.platforms.windows_service._get_current_username",
+        return_value="testuser",
+    )
+    def test_failure_raises(self, mock_user, mock_exe, mock_run, mock_write_launcher):
         """Should raise RuntimeError when schtasks fails."""
         mock_write_launcher.return_value = Path(
             r"C:\Users\lucas\.pysysfan\pysysfan-service.cmd"
