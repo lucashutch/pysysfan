@@ -13,6 +13,7 @@ Usage (typically invoked by Task Scheduler, not manually)::
 from __future__ import annotations
 
 import argparse
+import atexit
 import logging
 import sys
 from logging.handlers import RotatingFileHandler
@@ -55,6 +56,7 @@ def _redirect_stdio(log_path: Path) -> None:
     """
     log_path.parent.mkdir(parents=True, exist_ok=True)
     log_file = open(log_path, "a", encoding="utf-8")  # noqa: SIM115
+    atexit.register(log_file.close)
     sys.stdout = log_file
     sys.stderr = log_file
 
