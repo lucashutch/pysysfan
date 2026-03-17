@@ -9,7 +9,7 @@
 
 - [x] **Lazy CLR runtime initialisation** — `lhm/__init__.py` now performs CLR and assembly initialization only on the first `load_lhm()` call and caches the loaded hardware namespace for reuse.
 
-- **Skip state file write when nothing has changed** — The daemon calls `write_state()` every poll cycle. Add an equality check against the last written snapshot and skip the atomic write when the payload is unchanged.
+- [x] **Skip state file write when nothing has changed** — The daemon now hashes a normalized snapshot payload and skips `write_state()` when only volatile fields (timestamp/uptime) changed.
 
 - **Selective LHM hardware `Update()` per poll cycle** — Build a set of required hardware nodes from the active config at load time and only call `Update()` on those nodes each cycle, skipping unused hardware.
 

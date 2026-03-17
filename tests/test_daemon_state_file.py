@@ -186,3 +186,56 @@ class TestDaemonStateSnapshots:
             "/lpc/nct6799d/0/fan/0": "/lpc/nct6799d/0/control/0",
             "/gpu-nvidia/0/fan/1": "/gpu-nvidia/0/control/0",
         }
+
+    def test_update_state_skips_unchanged_snapshot_writes(self, tmp_path):
+        state_path = tmp_path / "daemon_state.json"
+        history_path = tmp_path / "daemon_history.ndjson"
+        daemon = FanDaemon(
+            config_path=tmp_path / "config.yaml",
+            state_path=state_path,
+            history_path=history_path,
+        )
+        daemon._cfg = _sample_config()
+        daemon._start_time = 100.0
+        daemon._running = True
+        daemon._current_targets = {"/mb/control/0": 60.0}
+        daemon._latest_temperatures = [
+            SensorInfo(
+                hardware_name="CPU",
+                hardware_type="CPU",
+                sensor_name="Package",
+                sensor_type="Temperature",
+                identifier="/cpu/temp/0",
+                value=61.5,
+            )
+        ]
+        daemon._latest_fan_speeds = [
+            SensorInfo(
+                hardware_name="Motherboard",
+                hardware_type="SuperIO",
+                sensor_name="CPU Fan",
+                sensor_type="Fan",
+                identifier="/mb/fan/0",
+                value=1325.0,
+            )
+        ]
+        daemon._latest_controls = [
+            ControlInfo(
+                hardware_name="Motherboard",
+                sensor_name="CPU Fan Control",
+                identifier="/mb/control/0",
+                current_value=55.0,
+                has_control=True,
+            )
+        ]
+
+        with (
+            patch("pysysfan.daemon.write_state") as mock_write_state,
+            patch("pysysfan.daemon.append_history_sample") as mock_append_history,
+            patch("pysysfan.daemon.time.time", side_effect=[110.0, 111.0]),
+        ):
+            daemon._update_state()
+            daemon._update_state()
+
+        assert mock_write_state.call_count == 1
+        assert mock_append_history.call_count == 2

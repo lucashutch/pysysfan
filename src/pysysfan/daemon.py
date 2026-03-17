@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import atexit
+import json
 import logging
 import os
 import signal
@@ -91,6 +92,7 @@ class FanDaemon:
         self._latest_temperatures: list = []
         self._latest_fan_speeds: list = []
         self._latest_controls: list = []
+        self._last_state_signature: str | None = None
 
         # Notification manager
         self._notification_manager = NotificationManager()
@@ -697,7 +699,16 @@ class FanDaemon:
     def _update_state(self) -> None:
         """Persist the latest daemon runtime snapshot to disk."""
         update_time = time.time()
-        write_state(self._build_state_snapshot(timestamp=update_time), self.state_path)
+        snapshot = self._build_state_snapshot(timestamp=update_time)
+        payload = snapshot.to_dict()
+        # Ignore monotonic fields so we can skip writes when logical state is unchanged.
+        payload["timestamp"] = 0.0
+        payload["uptime_seconds"] = 0.0
+        signature = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        if signature != self._last_state_signature:
+            write_state(snapshot, self.state_path)
+            self._last_state_signature = signature
+
         append_history_sample(
             self._build_history_sample(timestamp=update_time),
             self.history_path,
