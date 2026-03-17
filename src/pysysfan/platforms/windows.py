@@ -326,9 +326,13 @@ class WindowsHardwareManager(BaseHardwareManager):
 
         Uses hardware identifiers and control sensor identifiers to detect changes.
         Sensor values are ignored to ensure stable fingerprints.
+        The LHM version marker file is included so replacing the DLL invalidates
+        the cache even when the hardware layout is identical.
         """
         import hashlib
         import logging
+
+        from pysysfan.lhm import LHM_DIR
 
         logger = logging.getLogger(__name__)
         self._ensure_open()
@@ -346,7 +350,17 @@ class WindowsHardwareManager(BaseHardwareManager):
             if sensor_type_val == SensorKind.CONTROL:
                 control_ids.add(str(sensor.Identifier))
 
-        fingerprint_parts = sorted(hw_ids) + sorted(control_ids)
+        # Include the LHM version so the cache is invalidated when the DLL is
+        # replaced even if the hardware layout remains identical.
+        version_file = LHM_DIR / ".lhm_version"
+        try:
+            lhm_version = version_file.read_text(encoding="utf-8").strip()
+        except OSError:
+            lhm_version = ""
+
+        fingerprint_parts = (
+            sorted(hw_ids) + sorted(control_ids) + [f"lhm:{lhm_version}"]
+        )
         fingerprint_data = ";".join(fingerprint_parts)
 
         logger.debug(
