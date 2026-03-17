@@ -20,6 +20,7 @@ from datetime import datetime
 from pathlib import Path
 
 from pysysfan.config import DEFAULT_CONFIG_DIR, DEFAULT_CONFIG_PATH
+from pysysfan.platforms._process import hidden_process_kwargs
 from pysysfan.state_file import read_state
 
 logger = logging.getLogger(__name__)
@@ -34,19 +35,7 @@ HISTORY_FILE_PATH = DEFAULT_CONFIG_DIR / "daemon_history.ndjson"
 
 def _hidden_process_kwargs() -> dict[str, object]:
     """Return subprocess kwargs that suppress console windows on Windows."""
-    if subprocess.os.name != "nt":
-        return {}
-
-    kwargs: dict[str, object] = {
-        "creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0),
-    }
-    startupinfo_factory = getattr(subprocess, "STARTUPINFO", None)
-    if startupinfo_factory is not None:
-        startupinfo = startupinfo_factory()
-        startupinfo.dwFlags |= getattr(subprocess, "STARTF_USESHOWWINDOW", 0)
-        startupinfo.wShowWindow = getattr(subprocess, "SW_HIDE", 0)
-        kwargs["startupinfo"] = startupinfo
-    return kwargs
+    return hidden_process_kwargs()
 
 
 def _is_windows_store_stub(exe_path: str) -> bool:

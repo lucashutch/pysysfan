@@ -20,6 +20,7 @@ from pysysfan.history_file import (
     HistorySample,
     read_history,
 )
+from pysysfan.platforms._process import hidden_process_kwargs
 from pysysfan.profiles import DEFAULT_PROFILE_NAME, ProfileManager
 from pysysfan.state_file import DEFAULT_STATE_PATH, DaemonStateFile, read_state
 from pysysfan.temperature import get_valid_aggregation_methods
@@ -30,19 +31,7 @@ ELEVATION_REQUESTED_SENTINEL = "Windows asked for Administrator permission"
 
 def _hidden_process_kwargs() -> dict[str, object]:
     """Return subprocess kwargs that suppress console windows on Windows."""
-    if sys.platform != "win32":
-        return {}
-
-    kwargs: dict[str, object] = {
-        "creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0),
-    }
-    startupinfo_factory = getattr(subprocess, "STARTUPINFO", None)
-    if startupinfo_factory is not None:
-        startupinfo = startupinfo_factory()
-        startupinfo.dwFlags |= getattr(subprocess, "STARTF_USESHOWWINDOW", 0)
-        startupinfo.wShowWindow = getattr(subprocess, "SW_HIDE", 0)
-        kwargs["startupinfo"] = startupinfo
-    return kwargs
+    return hidden_process_kwargs()
 
 
 def _find_executable(executable_name: str) -> str | None:
