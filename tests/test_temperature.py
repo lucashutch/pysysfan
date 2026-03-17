@@ -5,6 +5,7 @@ import pytest
 from pysysfan.temperature import (
     AggregationMethod,
     aggregate_temperatures,
+    build_temperature_index,
     lookup_and_aggregate,
     get_valid_aggregation_methods,
 )
@@ -230,6 +231,23 @@ def test_lookup_and_aggregate_different_methods():
     assert lookup_and_aggregate(temp_ids, sensors, "min") == 40.0
     assert lookup_and_aggregate(temp_ids, sensors, "average") == 50.0
     assert lookup_and_aggregate(temp_ids, sensors, "median") == 50.0
+
+
+def test_lookup_and_aggregate_uses_prebuilt_index():
+    """Should support O(1) identifier lookup with a prebuilt sensor index."""
+    sensors = [
+        create_mock_sensor("/cpu/0/temp/0", 40.0),
+        create_mock_sensor("/cpu/0/temp/1", 50.0),
+        create_mock_sensor("/cpu/0/temp/2", 60.0),
+    ]
+    sensor_index = build_temperature_index(sensors)
+    result = lookup_and_aggregate(
+        ["/cpu/0/temp/0", "/cpu/0/temp/1", "/cpu/0/temp/2"],
+        sensors,
+        "max",
+        sensor_index=sensor_index,
+    )
+    assert result == 60.0
 
 
 # ── get_valid_aggregation_methods ──────────────────────────────────────

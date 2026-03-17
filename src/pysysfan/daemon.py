@@ -32,7 +32,11 @@ from pysysfan.state_file import (
     delete_state,
     write_state,
 )
-from pysysfan.temperature import lookup_and_aggregate, get_valid_aggregation_methods
+from pysysfan.temperature import (
+    build_temperature_index,
+    lookup_and_aggregate,
+    get_valid_aggregation_methods,
+)
 from pysysfan.watcher import ConfigWatcher
 
 logger = logging.getLogger(__name__)
@@ -652,6 +656,7 @@ class FanDaemon:
         temps = self._hw.get_temperatures(refresh=False)
         fans = self._hw.get_fan_speeds(refresh=False)
         controls = self._hw.get_controls(refresh=False)
+        temp_index = build_temperature_index(temps)
         self._latest_temperatures = list(temps)
         self._latest_fan_speeds = list(fans)
         self._latest_controls = list(controls)
@@ -671,7 +676,10 @@ class FanDaemon:
 
             # Aggregate temperatures from multiple sensors
             agg_temp = lookup_and_aggregate(
-                fan_cfg.temp_ids, temps, fan_cfg.aggregation
+                fan_cfg.temp_ids,
+                temps,
+                fan_cfg.aggregation,
+                sensor_index=temp_index,
             )
 
             if agg_temp is None:
