@@ -11,7 +11,7 @@
 
 - [x] **Skip state file write when nothing has changed** — The daemon now hashes a normalized snapshot payload and skips `write_state()` when only volatile fields (timestamp/uptime) changed.
 
-- **Selective LHM hardware `Update()` per poll cycle** — Build a set of required hardware nodes from the active config at load time and only call `Update()` on those nodes each cycle, skipping unused hardware.
+- [x] **Selective LHM hardware `Update()` per poll cycle** — The daemon now passes configured sensor/control IDs to `WindowsHardwareManager`, which updates only matching hardware nodes each poll cycle.
 
 - **Dashboard diff-read for state and history files** — Cache each file's `mtime` and skip full deserialisation when the file has not changed, halving file I/O on the GUI process during idle.
 

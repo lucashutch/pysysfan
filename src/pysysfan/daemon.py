@@ -193,6 +193,7 @@ class FanDaemon:
             self._cfg = new_cfg
             self._curves = self._build_curves(new_cfg)
             self._unconfigured_fans.clear()
+            self._apply_hardware_update_scope(new_cfg)
             self._config_error = None
             logger.info("Configuration reloaded successfully")
             logger.info(
@@ -249,6 +250,23 @@ class FanDaemon:
                 f"Loaded curve '{name}' with {len(c.points)} points, hysteresis={c.hysteresis}°C"
             )
         return curves
+
+    @staticmethod
+    def _collect_required_sensor_ids(cfg: Config) -> set[str]:
+        """Collect sensor/control identifiers required by the active config."""
+        required: set[str] = set()
+        for fan_cfg in cfg.fans.values():
+            required.add(fan_cfg.fan_id)
+            required.update(fan_cfg.temp_ids)
+        return required
+
+    def _apply_hardware_update_scope(self, cfg: Config) -> None:
+        """Limit hardware refreshes to nodes used by the active config."""
+        if self._hw is None:
+            return
+        set_scope = getattr(self._hw, "set_required_sensor_ids", None)
+        if callable(set_scope):
+            set_scope(self._collect_required_sensor_ids(cfg))
 
     def _open_hardware(self):
         import time as time_module
@@ -628,9 +646,12 @@ class FanDaemon:
         """Perform a single control pass. Returns {fan_name: speed_percent}."""
         applied: dict[str, float] = {}
 
-        temps = self._hw.get_temperatures()
-        fans = self._hw.get_fan_speeds()
-        controls = self._hw.get_controls()
+        refresh = getattr(self._hw, "refresh", None)
+        if callable(refresh):
+            refresh()
+        temps = self._hw.get_temperatures(refresh=False)
+        fans = self._hw.get_fan_speeds(refresh=False)
+        controls = self._hw.get_controls(refresh=False)
         self._latest_temperatures = list(temps)
         self._latest_fan_speeds = list(fans)
         self._latest_controls = list(controls)
@@ -742,6 +763,7 @@ class FanDaemon:
         try:
             scan_result = self._use_cached_scan()
             self._initialize_unconfigured_fans(scan_result)
+            self._apply_hardware_update_scope(self._cfg)
             result = self._run_once(self._cfg)
         finally:
             self._hw.restore_defaults()
@@ -794,6 +816,7 @@ class FanDaemon:
             )
 
             self._initialize_unconfigured_fans(scan_result)
+            self._apply_hardware_update_scope(cfg)
 
             # Start config watcher after hardware is ready
             self._start_watcher()
