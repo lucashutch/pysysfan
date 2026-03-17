@@ -50,6 +50,8 @@ class DashboardPage(QWidget):
     """Desktop dashboard backed by the local daemon state file."""
 
     REFRESH_INTERVAL_MS = 1000
+    IDLE_REFRESH_INTERVAL_MS = 3000
+    OFFLINE_REFRESH_INTERVAL_MS = 5000
 
     HISTORY_WINDOWS = {
         "60 s": 60,
@@ -102,6 +104,7 @@ class DashboardPage(QWidget):
             "fan_target": set(),
         }
         self._graph_defaults_initialized: set[str] = set()
+        self._last_polled_state_timestamp: float | None = None
 
         self.setObjectName("dashboardRoot")
         layout = QVBoxLayout(self)
@@ -311,8 +314,19 @@ class DashboardPage(QWidget):
 
         state = read_daemon_state(self._state_path)
         if state is None:
+            self._set_refresh_interval(self.OFFLINE_REFRESH_INTERVAL_MS)
+            self._last_polled_state_timestamp = None
             self._apply_offline_state(service_status)
             return
+
+        if (not state.running) or (
+            self._last_polled_state_timestamp is not None
+            and state.timestamp <= self._last_polled_state_timestamp
+        ):
+            self._set_refresh_interval(self.IDLE_REFRESH_INTERVAL_MS)
+        else:
+            self._set_refresh_interval(self.REFRESH_INTERVAL_MS)
+        self._last_polled_state_timestamp = state.timestamp
 
         self._show_message("", is_error=False)
         self._apply_summary(state)
@@ -321,6 +335,11 @@ class DashboardPage(QWidget):
         self._load_history(state)
         self._refresh_graph_controls()
         self._refresh_plots()
+
+    def _set_refresh_interval(self, interval_ms: int) -> None:
+        """Set timer cadence only when needed to avoid unnecessary churn."""
+        if self._refresh_timer.interval() != interval_ms:
+            self._refresh_timer.setInterval(interval_ms)
 
     def start_service(self) -> None:
         """Request startup of the configured service/task."""

@@ -17,7 +17,7 @@
 
 - [x] **Pre-sort and cache temp sensor lookup index** — The daemon now builds a per-cycle `identifier → SensorInfo` map once and passes it into `lookup_and_aggregate()` for O(1) lookups.
 
-- **Reduce GUI idle polling** — Ensure the dashboard does not refresh or poll the daemon state when the window is not visible or the daemon is idle. Consider dynamic poll-interval scaling based on system activity.
+- [x] **Reduce GUI idle polling** — Dashboard polling remains disabled while hidden and now scales refresh intervals dynamically for active, idle/unchanged, and offline states.
 
 ---
 
