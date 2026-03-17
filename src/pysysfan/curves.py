@@ -93,8 +93,15 @@ class FanCurve:
             if current_temp > (self._last_temp - self.hysteresis):
                 return self._last_speed
 
+        # Only advance the hysteresis reference temperature when speed is strictly
+        # increasing.  If temperature falls through a plateau (e.g. the curve is
+        # clamped at 100%) target_speed == _last_speed, and updating _last_temp to
+        # the lower current temperature would silently shift the effective hysteresis
+        # band downward each call.
+        prev_speed = self._last_speed
         self._last_speed = target_speed
-        self._last_temp = current_temp
+        if target_speed > prev_speed:
+            self._last_temp = current_temp
         return target_speed
 
     def _interpolate(self, temp: float) -> float:

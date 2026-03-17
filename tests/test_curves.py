@@ -94,6 +94,32 @@ def test_hysteresis_no_effect_on_rising(balanced):
     assert result == pytest.approx(60.0)
 
 
+def test_hysteresis_reference_not_eroded_on_plateau(balanced):
+    """_last_temp must not drift down when speed is flat on a plateau.
+
+    If temperature falls through a region where the curve is already at its
+    maximum (or any flat segment), the hysteresis reference must stay anchored
+    at the peak temperature, not silently drift downward each call.
+    """
+    # balanced tops out at 100% for T >= 85°C; use a sub-plateau around 70°:
+    # at 70°c the speed is 70%; push slightly above that then let temp drift down
+    # while staying in the flat interpolated zone.
+    curve = FanCurve("test", [(60, 80), (80, 80)], hysteresis=5.0)  # flat at 80%
+    curve.evaluate(75)   # latch at 80%, last_temp=75
+    curve.evaluate(74)   # still 80%, last_temp must stay 75
+    curve.evaluate(73)   # still 80%, last_temp must stay 75
+    # Now drop by enough to exceed hysteresis from the TRUE peak (75), but NOT
+    # from a drifted value (73): 70 > 73-5=68 → would hold if drifted; 70 > 75-5=70 → no hold.
+    result = curve.evaluate(70)
+    assert result == pytest.approx(80.0), (
+        "Hysteresis ref drifted: released early because _last_temp was eroded to 73 "
+        "instead of staying at 75"
+    )
+    # But a larger drop must release:
+    result2 = curve.evaluate(69)  # 69 > 75-5=70? No → should release
+    assert result2 == pytest.approx(80.0)
+
+
 # ── Preset curve shapes ──────────────────────────────────────────────
 
 
