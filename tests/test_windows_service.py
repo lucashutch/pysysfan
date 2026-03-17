@@ -6,14 +6,15 @@ from unittest.mock import patch, MagicMock
 import pytest
 
 from pysysfan.platforms.windows_service import (
-    SERVICE_LAUNCHER_NAME,
-    _build_service_launcher,
     _build_task_command,
+    _build_task_xml,
     _hidden_process_kwargs,
     _is_windows_store_stub,
     _pysysfan_exe,
+    _pysysfan_service_exe,
     _pysysfan_uv_venv_exe,
     _uv_tool_dir,
+    clean_all,
     get_service_status,
     install_task,
     uninstall_task,
@@ -86,6 +87,34 @@ class TestPysysfanUvVenvExe:
         assert _pysysfan_uv_venv_exe() is None
 
 
+class TestPysysfanServiceExe:
+    """Tests for _pysysfan_service_exe()."""
+
+    @patch("pysysfan.platforms.windows_service._pysysfan_service_uv_venv_exe")
+    def test_prefers_service_uv_venv_exe(self, mock_svc_exe):
+        mock_svc_exe.return_value = (
+            r"C:\AppData\Roaming\uv\tools\pysysfan\Scripts\pysysfan-service.exe"
+        )
+        assert _pysysfan_service_exe() == (
+            r"C:\AppData\Roaming\uv\tools\pysysfan\Scripts\pysysfan-service.exe"
+        )
+
+    @patch(
+        "pysysfan.platforms.windows_service._pysysfan_service_uv_venv_exe",
+        return_value=None,
+    )
+    @patch("pysysfan.platforms.windows_service._find_exe_in_path")
+    @patch(
+        "pysysfan.platforms.windows_service._pysysfan_uv_venv_exe",
+        return_value=r"C:\tools\pysysfan.exe",
+    )
+    def test_falls_back_to_pysysfan(self, mock_uv, mock_path, mock_svc):
+        """When pysysfan-service.exe is not found, falls back to pysysfan.exe."""
+        mock_path.return_value = None  # no pysysfan-service in PATH either
+        result = _pysysfan_service_exe()
+        assert result == r"C:\tools\pysysfan.exe"
+
+
 class TestPysysfanExe:
     """Tests for _pysysfan_exe()."""
 
@@ -141,72 +170,55 @@ class TestHiddenProcessKwargs:
 
 
 class TestInstallTask:
-    """Tests for install_task()."""
+    """Tests for install_task() — XML-based task creation."""
 
-    @patch("pysysfan.platforms.windows_service._write_service_launcher")
     @patch("pysysfan.platforms.windows_service.subprocess.run")
     @patch(
-        "pysysfan.platforms.windows_service._pysysfan_exe",
-        return_value=r"C:\tools\pysysfan.exe",
+        "pysysfan.platforms.windows_service._pysysfan_service_exe",
+        return_value=r"C:\tools\pysysfan-service.exe",
     )
     @patch(
         "pysysfan.platforms.windows_service._get_current_username",
         return_value="testuser",
     )
-    def test_success(self, mock_user, mock_exe, mock_run, mock_write_launcher):
-        """Should call schtasks /Create with ONLOGON and current user."""
-        mock_write_launcher.return_value = Path(
-            r"C:\Users\lucas\.pysysfan\pysysfan-service.cmd"
-        )
+    def test_success(self, mock_user, mock_exe, mock_run):
+        """Should call schtasks /Create with /XML flag."""
         mock_run.return_value = MagicMock(returncode=0)
         install_task()
         mock_run.assert_called_once()
         args = mock_run.call_args[0][0]
         assert "schtasks" in args
         assert "/Create" in args
-        assert "ONLOGON" in args
-        assert "testuser" in args
-        assert "/IT" in args
-        assert "SYSTEM" not in args
+        assert "/XML" in args
+        assert "/F" in args
 
-    @patch("pysysfan.platforms.windows_service._write_service_launcher")
     @patch("pysysfan.platforms.windows_service.subprocess.run")
     @patch(
-        "pysysfan.platforms.windows_service._pysysfan_exe",
-        return_value=r"C:\tools\pysysfan.exe",
+        "pysysfan.platforms.windows_service._pysysfan_service_exe",
+        return_value=r"C:\tools\pysysfan-service.exe",
     )
     @patch(
         "pysysfan.platforms.windows_service._get_current_username",
         return_value="testuser",
     )
-    def test_with_config_path(self, mock_user, mock_exe, mock_run, mock_write_launcher):
-        """Should point schtasks at a short launcher command when provided."""
-        launcher_path = Path(r"C:\Users\lucas\.pysysfan\pysysfan-service.cmd")
-        mock_write_launcher.return_value = launcher_path
+    def test_with_config_path(self, mock_user, mock_exe, mock_run):
+        """Should include custom config path in the XML task definition."""
         mock_run.return_value = MagicMock(returncode=0)
         install_task(config_path=r"C:\cfg\config.yaml")
-        args = mock_run.call_args[0][0]
-        tr_idx = args.index("/TR")
-        cmd_str = args[tr_idx + 1]
-        assert "cmd.exe /d /c" in cmd_str
-        assert str(launcher_path) in cmd_str
-        assert len(cmd_str) < 261
+        # Verify schtasks was called (XML content itself is tested in TestBuildTaskXml)
+        mock_run.assert_called_once()
 
-    @patch("pysysfan.platforms.windows_service._write_service_launcher")
     @patch("pysysfan.platforms.windows_service.subprocess.run")
     @patch(
-        "pysysfan.platforms.windows_service._pysysfan_exe",
-        return_value=r"C:\tools\pysysfan.exe",
+        "pysysfan.platforms.windows_service._pysysfan_service_exe",
+        return_value=r"C:\tools\pysysfan-service.exe",
     )
     @patch(
         "pysysfan.platforms.windows_service._get_current_username",
         return_value="testuser",
     )
-    def test_failure_raises(self, mock_user, mock_exe, mock_run, mock_write_launcher):
+    def test_failure_raises(self, mock_user, mock_exe, mock_run):
         """Should raise RuntimeError when schtasks fails."""
-        mock_write_launcher.return_value = Path(
-            r"C:\Users\lucas\.pysysfan\pysysfan-service.cmd"
-        )
         mock_run.return_value = MagicMock(
             returncode=1, stdout="error", stderr="access denied"
         )
@@ -214,56 +226,62 @@ class TestInstallTask:
             install_task()
 
 
-class TestServiceLauncher:
-    """Tests for the generated service launcher script."""
+class TestBuildTaskCommand:
+    """Tests for the task command builder."""
 
-    @patch(
-        "pysysfan.platforms.windows_service._pysysfan_exe",
-        return_value=r"C:\tools\pysysfan.exe",
-    )
-    def test_builds_launcher_with_user_home_environment(self, _mock_exe):
-        launcher = _build_service_launcher(
-            Path(r"C:\Users\lucas\.pysysfan\config.yaml"),
-            user_home=Path(r"C:\Users\lucas"),
-        )
+    def test_build_task_command_with_exe_and_config(self):
+        """Should build a direct exe invocation."""
+        exe = r"C:\Users\lucas\AppData\Roaming\uv\tools\pysysfan\Scripts\pysysfan-service.exe"
+        config = Path(r"C:\Users\lucas\.pysysfan\config.yaml")
 
-        assert launcher.startswith("@echo off")
-        assert 'set "USERPROFILE=C:\\Users\\lucas"' in launcher
-        assert 'set "HOME=C:\\Users\\lucas"' in launcher
-        assert 'set "HOMEDRIVE=C:"' in launcher
-        assert 'set "HOMEPATH=\\Users\\lucas"' in launcher
-        assert (
-            'call "C:\\tools\\pysysfan.exe" run --config "C:\\Users\\lucas\\.pysysfan\\config.yaml"'
-            in launcher
-        )
+        command = _build_task_command(exe, config)
 
-    def test_build_task_command_points_to_launcher(self):
-        launcher_path = Path(r"C:\Users\lucas\.pysysfan\pysysfan-service.cmd")
+        assert command.startswith('"')
+        assert "pysysfan-service.exe" in command
+        assert "--config" in command
+        assert ".pysysfan" in command
 
-        command = _build_task_command(launcher_path)
+    def test_build_task_command_stays_under_limit(self):
+        """Task command should stay under 260 char Windows limit."""
+        exe = r"C:\tools\pysysfan-service.exe"
+        config = Path(r"C:\Users\lucas\.pysysfan\config.yaml")
 
-        assert command == f'cmd.exe /d /c "{launcher_path}"'
+        command = _build_task_command(exe, config)
+
         assert len(command) < 261
 
-    @patch(
-        "pysysfan.platforms.windows_service._pysysfan_exe",
-        return_value=r"C:\tools\pysysfan.exe",
-    )
-    def test_install_writes_expected_launcher_file(self, _mock_exe, tmp_path):
-        from pysysfan.platforms.windows_service import (
-            _service_launcher_path,
-            _write_service_launcher,
+
+class TestBuildTaskXml:
+    """Tests for the XML task definition builder."""
+
+    def test_xml_contains_required_elements(self):
+        """XML should contain all required task scheduler elements."""
+        xml = _build_task_xml(
+            r"C:\tools\pysysfan-service.exe",
+            Path(r"C:\Users\lucas\.pysysfan\config.yaml"),
+            "testuser",
         )
+        assert "LogonTrigger" in xml
+        assert "HighestAvailable" in xml
+        assert "InteractiveToken" in xml
+        assert "<ExecutionTimeLimit>PT0S</ExecutionTimeLimit>" in xml
+        assert "<MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>" in xml
+        assert "<DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>" in xml
+        assert "<StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>" in xml
+        assert "<AllowStartOnDemand>true</AllowStartOnDemand>" in xml
+        assert "pysysfan-service.exe" in xml
+        assert "testuser" in xml
 
-        user_home = tmp_path / "home"
-        config_path = user_home / ".pysysfan" / "config.yaml"
-        launcher_path = _write_service_launcher(config_path, user_home=user_home)
-
-        assert launcher_path == _service_launcher_path(user_home)
-        assert launcher_path.name == SERVICE_LAUNCHER_NAME
-        launcher_text = launcher_path.read_text(encoding="utf-8")
-        assert 'set "USERPROFILE=' in launcher_text
-        assert 'call "C:\\tools\\pysysfan.exe" run --config ' in launcher_text
+    def test_xml_escapes_special_characters(self):
+        """Should escape XML special characters in paths and username."""
+        xml = _build_task_xml(
+            r"C:\tools\pysysfan & son.exe",
+            Path(r"C:\Users\<bob>\config.yaml"),
+            "user&admin",
+        )
+        assert "&amp;" in xml
+        assert "&lt;bob&gt;" in xml
+        assert "user&amp;admin" in xml
 
 
 class TestUninstallTask:
@@ -445,3 +463,53 @@ class TestDisableTask:
 
         with pytest.raises(RuntimeError, match="failed"):
             disable_task()
+
+
+class TestCleanAll:
+    """Tests for clean_all()."""
+
+    @patch("pysysfan.platforms.windows_service.subprocess.run")
+    def test_clean_all_deletes_task_and_processes(self, mock_run):
+        """Should attempt to kill processes and delete the task."""
+        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        messages = clean_all()
+        assert any("Killed" in m or "Deleted" in m for m in messages)
+
+    @patch("pysysfan.platforms.windows_service.subprocess.run")
+    def test_clean_all_when_nothing_installed(self, mock_run):
+        """Should report gracefully when nothing is installed."""
+        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="not found")
+        messages = clean_all()
+        assert any("not installed" in m.lower() for m in messages)
+
+    @patch("pysysfan.platforms.windows_service.subprocess.run")
+    def test_clean_all_removes_state_files(self, mock_run, tmp_path):
+        """Should remove state and log files when they exist."""
+        mock_run.return_value = MagicMock(returncode=1, stdout="", stderr="not found")
+
+        import pysysfan.platforms.windows_service as ws
+
+        state = tmp_path / "daemon_state.json"
+        history = tmp_path / "daemon_history.ndjson"
+        log = tmp_path / "service.log"
+        state.write_text("{}")
+        history.write_text("")
+        log.write_text("")
+
+        orig_state = ws.STATE_FILE_PATH
+        orig_hist = ws.HISTORY_FILE_PATH
+        orig_log = ws.SERVICE_LOG_PATH
+        try:
+            ws.STATE_FILE_PATH = state
+            ws.HISTORY_FILE_PATH = history
+            ws.SERVICE_LOG_PATH = log
+            messages = clean_all()
+        finally:
+            ws.STATE_FILE_PATH = orig_state
+            ws.HISTORY_FILE_PATH = orig_hist
+            ws.SERVICE_LOG_PATH = orig_log
+
+        assert not state.exists()
+        assert not history.exists()
+        assert not log.exists()
+        assert any("daemon_state.json" in m for m in messages)

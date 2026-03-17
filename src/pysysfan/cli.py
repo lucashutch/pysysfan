@@ -955,6 +955,23 @@ def service_status():
         console.print(f"[bold]Task status:[/] {status}")
 
 
+@service.command("clean")
+def service_clean():
+    """Remove all pysysfan service artefacts for a clean-slate reinstall.
+
+    Kills running processes, deletes the scheduled task, and removes
+    state/history/log files.
+    """
+    from pysysfan.platforms import windows_service
+
+    _require_service_admin("Cleaning service artefacts")
+
+    messages = windows_service.clean_all()
+    for msg in messages:
+        console.print(f"  {msg}")
+    console.print("[bold green]✓ Service clean complete.[/]")
+
+
 # ── Update subcommand group ──────────────────────────────────────────
 
 
