@@ -1,4 +1,10 @@
-"""Windows Task Scheduler integration for pysysfan startup service."""
+"""Windows Task Scheduler integration for pysysfan startup service.
+
+The scheduled task launches the **GUI-subsystem** ``pysysfan-service.exe``
+(registered via ``[project.gui-scripts]``) so that no console window is ever
+displayed.  An XML task definition gives full control over execution policy,
+battery handling, and instance deduplication.
+"""
 
 from __future__ import annotations
 
@@ -7,17 +13,23 @@ import os
 import subprocess
 import shutil
 import logging
+import tempfile
+import textwrap
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
-from pysysfan.config import DEFAULT_CONFIG_PATH
+from pysysfan.config import DEFAULT_CONFIG_DIR, DEFAULT_CONFIG_PATH
 from pysysfan.state_file import read_state
 
 logger = logging.getLogger(__name__)
 
 TASK_NAME = "pysysfan"
-SERVICE_LAUNCHER_NAME = "pysysfan-service.cmd"
+
+# Paths managed by clean_all()
+SERVICE_LOG_PATH = DEFAULT_CONFIG_DIR / "service.log"
+STATE_FILE_PATH = DEFAULT_CONFIG_DIR / "daemon_state.json"
+HISTORY_FILE_PATH = DEFAULT_CONFIG_DIR / "daemon_history.ndjson"
 
 
 def _hidden_process_kwargs() -> dict[str, object]:
@@ -72,23 +84,36 @@ def _uv_tool_dir() -> Path | None:
     return None
 
 
-def _pysysfan_uv_venv_exe() -> str | None:
-    """Return pysysfan.exe from inside the UV tool venv, if installed there.
-
-    When installed via ``uv tool install .``, pysysfan lives in a venv that
-    uses UV's standalone CPython — not the Windows Store Python stub.  Using
-    this exe bypasses the "Unable to create process" failure that occurs when
-    the scheduled task tries to launch a Windows Store app alias.
-    """
+def _find_uv_venv_exe(name: str) -> str | None:
+    """Return an exe from the UV tool venv for pysysfan, or None."""
     tool_dir = _uv_tool_dir()
     if tool_dir is None:
         return None
     for candidate in (
-        tool_dir / "pysysfan" / "Scripts" / "pysysfan.exe",  # Windows
-        tool_dir / "pysysfan" / "bin" / "pysysfan",  # Unix / WSL
+        tool_dir / "pysysfan" / "Scripts" / name,  # Windows
+        tool_dir / "pysysfan" / "bin" / name.removesuffix(".exe"),  # Unix
     ):
         if candidate.is_file():
             return str(candidate)
+    return None
+
+
+def _pysysfan_uv_venv_exe() -> str | None:
+    """Return pysysfan.exe from inside the UV tool venv, if installed there."""
+    return _find_uv_venv_exe("pysysfan.exe")
+
+
+def _pysysfan_service_uv_venv_exe() -> str | None:
+    """Return pysysfan-service.exe from the UV tool venv, if installed there."""
+    return _find_uv_venv_exe("pysysfan-service.exe")
+
+
+def _find_exe_in_path(name: str) -> str | None:
+    """Find an executable in PATH, skipping Windows Store stubs."""
+    for candidate in (name, f"{name}.exe"):
+        exe = shutil.which(candidate)
+        if exe and not _is_windows_store_stub(exe):
+            return exe
     return None
 
 
@@ -100,16 +125,13 @@ def _pysysfan_exe() -> str:
        requiring an interactive Windows app-execution context).
     2. PATH entries that are *not* Windows Store app execution aliases.
     """
-    # Prefer the UV tool venv exe so the service always gets standalone CPython.
     uv_exe = _pysysfan_uv_venv_exe()
     if uv_exe:
         return uv_exe
 
-    # Fall back to PATH, skipping Windows Store stubs.
-    for name in ("pysysfan", "pysysfan.exe"):
-        exe = shutil.which(name)
-        if exe and not _is_windows_store_stub(exe):
-            return exe
+    path_exe = _find_exe_in_path("pysysfan")
+    if path_exe:
+        return path_exe
 
     raise FileNotFoundError(
         "pysysfan executable not found in PATH. "
@@ -117,39 +139,27 @@ def _pysysfan_exe() -> str:
     )
 
 
-def _service_launcher_path(user_home: Path | None = None) -> Path:
-    """Return the launcher script path used by the scheduled task."""
-    home = (user_home or Path.home()).resolve()
-    return home / ".pysysfan" / SERVICE_LAUNCHER_NAME
+def _pysysfan_service_exe() -> str:
+    """Return the pysysfan-service executable path (GUI-subsystem / windowless).
 
+    Search order:
+    1. UV tool venv ``pysysfan-service.exe`` (preferred — guaranteed windowless).
+    2. PATH ``pysysfan-service`` / ``pysysfan-service.exe``.
+    3. Fallback to ``pysysfan.exe`` (console — will show a window, but works).
+    """
+    uv_exe = _pysysfan_service_uv_venv_exe()
+    if uv_exe:
+        return uv_exe
 
-def _build_service_launcher(
-    config_path: Path,
-    *,
-    user_home: Path | None = None,
-    executable_path: str | None = None,
-) -> str:
-    """Build the batch script that restores the user environment and starts the daemon."""
-    exe = executable_path or _pysysfan_exe()
-    home = (user_home or Path.home()).resolve()
-    home_drive = home.drive or ""
-    home_tail = home.as_posix().replace("/", "\\")
-    if home_drive and home_tail.lower().startswith(home_drive.lower()):
-        home_path = home_tail[len(home_drive) :]
-    else:
-        home_path = home_tail
+    path_exe = _find_exe_in_path("pysysfan-service")
+    if path_exe:
+        return path_exe
 
-    lines = [
-        "@echo off",
-        "setlocal",
-        f'set "USERPROFILE={home}"',
-        f'set "HOME={home}"',
-        f'set "HOMEDRIVE={home_drive}"',
-        f'set "HOMEPATH={home_path}"',
-        f'cd /d "{home}"',
-        f'call "{exe}" run --config "{config_path}"',
-    ]
-    return "\r\n".join(lines) + "\r\n"
+    logger.warning(
+        "pysysfan-service.exe not found — falling back to pysysfan.exe. "
+        "Reinstall with 'uv tool install . --force' to get the windowless service exe."
+    )
+    return _pysysfan_exe()
 
 
 def _get_current_username() -> str:
@@ -157,80 +167,133 @@ def _get_current_username() -> str:
     return os.environ.get("USERNAME") or getpass.getuser()
 
 
-def _write_service_launcher(
-    config_path: Path, *, user_home: Path | None = None
-) -> Path:
-    """Write the scheduled-task launcher script and return its path."""
-    launcher_path = _service_launcher_path(user_home)
-    launcher_path.parent.mkdir(parents=True, exist_ok=True)
-    launcher_path.write_text(
-        _build_service_launcher(config_path, user_home=user_home),
-        encoding="utf-8",
-        newline="\r\n",
-    )
-    return launcher_path
+def _build_task_command(exe_path: str, config_path: Path) -> str:
+    """Build the scheduled-task command line for the service executable."""
+    resolved_exe = str(Path(exe_path).resolve())
+    resolved_config = str(Path(config_path).resolve())
+    return f'"{resolved_exe}" --config "{resolved_config}"'
 
 
-def _build_task_command(launcher_path: Path) -> str:
-    """Build the short scheduled-task command line that invokes the launcher."""
-    normalized_launcher = str(Path(launcher_path).resolve())
-    return f'cmd.exe /d /c "{normalized_launcher}"'
+def _build_task_xml(
+    exe_path: str,
+    config_path: Path,
+    username: str,
+) -> str:
+    """Build an XML task definition for Task Scheduler.
 
+    The XML gives us full control over settings that ``schtasks /Create``
+    CLI flags cannot express (Hidden, battery policy, execution time limit,
+    multiple-instance policy, etc.).
+    """
+    resolved_exe = str(Path(exe_path).resolve())
+    resolved_config = str(Path(config_path).resolve())
 
-def _delete_service_launcher(user_home: Path | None = None) -> None:
-    """Delete the scheduled-task launcher script if it exists."""
-    try:
-        _service_launcher_path(user_home).unlink()
-    except FileNotFoundError:
-        return
+    # Escape XML special characters in paths
+    def _xml_escape(s: str) -> str:
+        return (
+            s.replace("&", "&amp;")
+            .replace("<", "&lt;")
+            .replace(">", "&gt;")
+            .replace('"', "&quot;")
+            .replace("'", "&apos;")
+        )
+
+    exe_escaped = _xml_escape(resolved_exe)
+    args_escaped = _xml_escape(f'--config "{resolved_config}"')
+    user_escaped = _xml_escape(username)
+
+    return textwrap.dedent(f"""\
+        <?xml version="1.0" encoding="UTF-16"?>
+        <Task version="1.2"
+              xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
+          <RegistrationInfo>
+            <Description>pysysfan fan control daemon — runs invisibly at logon.</Description>
+          </RegistrationInfo>
+          <Triggers>
+            <LogonTrigger>
+              <Enabled>true</Enabled>
+            </LogonTrigger>
+          </Triggers>
+          <Principals>
+            <Principal id="Author">
+              <UserId>{user_escaped}</UserId>
+              <LogonType>InteractiveToken</LogonType>
+              <RunLevel>HighestAvailable</RunLevel>
+            </Principal>
+          </Principals>
+          <Settings>
+            <MultipleInstancesPolicy>IgnoreNew</MultipleInstancesPolicy>
+            <DisallowStartIfOnBatteries>false</DisallowStartIfOnBatteries>
+            <StopIfGoingOnBatteries>false</StopIfGoingOnBatteries>
+            <AllowHardTerminate>true</AllowHardTerminate>
+            <StartWhenAvailable>true</StartWhenAvailable>
+            <RunOnlyIfNetworkAvailable>false</RunOnlyIfNetworkAvailable>
+            <IdleSettings>
+              <StopOnIdleEnd>false</StopOnIdleEnd>
+              <RestartOnIdle>false</RestartOnIdle>
+            </IdleSettings>
+            <AllowStartOnDemand>true</AllowStartOnDemand>
+            <Enabled>true</Enabled>
+            <Hidden>false</Hidden>
+            <RunOnlyIfIdle>false</RunOnlyIfIdle>
+            <ExecutionTimeLimit>PT0S</ExecutionTimeLimit>
+            <Priority>7</Priority>
+          </Settings>
+          <Actions Context="Author">
+            <Exec>
+              <Command>{exe_escaped}</Command>
+              <Arguments>{args_escaped}</Arguments>
+            </Exec>
+          </Actions>
+        </Task>
+    """)
 
 
 def install_task(config_path: Path | str | None = None) -> None:
-    """Create a Windows Task Scheduler task to run pysysfan at system startup.
+    """Create a Windows Task Scheduler task to run pysysfan at user logon.
 
-    The task runs as SYSTEM with highest privileges so it has access to
-    hardware sensors before any user logs in.
+    Uses an XML task definition so the GUI-subsystem ``pysysfan-service.exe``
+    is launched without any console window.
 
     Args:
         config_path: Optional explicit path to config file. If not provided,
-                     uses the default path (~/.pysysfan/config.yaml). The path
-                     is resolved to an absolute path before creating the task
-                     to avoid issues with SYSTEM account's different home directory.
+                     uses the default path (~/.pysysfan/config.yaml).
     """
     if config_path is None:
         config_path = DEFAULT_CONFIG_PATH
 
     config_path = Path(config_path).resolve()
-
-    launcher_path = _write_service_launcher(config_path)
-    cmd_args = _build_task_command(launcher_path)
-
-    # Run as the current interactive user so the user-space Python
-    # environment (including Windows Store / uv / pip installs) is accessible.
-    # SYSTEM cannot use Windows Store Python stubs or user-profile venvs.
+    exe_path = _pysysfan_service_exe()
     username = _get_current_username()
+    xml_content = _build_task_xml(exe_path, config_path, username)
 
-    result = subprocess.run(
-        [
-            "schtasks",
-            "/Create",
-            "/TN",
-            TASK_NAME,
-            "/TR",
-            cmd_args,
-            "/SC",
-            "ONLOGON",
-            "/RU",
-            username,
-            "/IT",  # interactive token — no stored password needed
-            "/RL",
-            "HIGHEST",
-            "/F",
-        ],
-        capture_output=True,
-        text=True,
-        **_hidden_process_kwargs(),
+    # Write XML to a temp file, import via schtasks, then delete.
+    tmp = tempfile.NamedTemporaryFile(
+        mode="w",
+        suffix=".xml",
+        encoding="utf-16",
+        delete=False,
     )
+    try:
+        tmp.write(xml_content)
+        tmp.close()
+
+        result = subprocess.run(
+            [
+                "schtasks",
+                "/Create",
+                "/TN",
+                TASK_NAME,
+                "/XML",
+                tmp.name,
+                "/F",
+            ],
+            capture_output=True,
+            text=True,
+            **_hidden_process_kwargs(),
+        )
+    finally:
+        Path(tmp.name).unlink(missing_ok=True)
 
     if result.returncode != 0:
         raise RuntimeError(
@@ -238,7 +301,9 @@ def install_task(config_path: Path | str | None = None) -> None:
             f"{result.stdout}\n{result.stderr}"
         )
 
-    logger.info(f"Task '{TASK_NAME}' installed successfully with config: {config_path}")
+    logger.info(
+        "Task '%s' installed (exe: %s, config: %s)", TASK_NAME, exe_path, config_path
+    )
 
 
 def uninstall_task() -> None:
@@ -260,8 +325,6 @@ def uninstall_task() -> None:
             f"schtasks /Delete failed (exit {result.returncode}):\n"
             f"{result.stdout}\n{result.stderr}"
         )
-
-    _delete_service_launcher()
 
     logger.info(f"Task '{TASK_NAME}' removed.")
 
@@ -499,3 +562,52 @@ def get_task_details() -> dict[str, str] | None:
             details[key.strip()] = value.strip()
 
     return details
+
+
+def clean_all() -> list[str]:
+    """Remove all pysysfan service artefacts for a clean-slate reinstall.
+
+    1. Kill running pysysfan / pysysfan-service processes.
+    2. Delete the scheduled task.
+    3. Remove state, history, and service log files.
+
+    Returns:
+        List of human-readable messages describing what was cleaned.
+    """
+    messages: list[str] = []
+
+    # Kill processes
+    for exe_name in ("pysysfan.exe", "pysysfan-service.exe"):
+        result = subprocess.run(
+            ["taskkill", "/F", "/IM", exe_name],
+            capture_output=True,
+            text=True,
+            **_hidden_process_kwargs(),
+        )
+        if result.returncode == 0:
+            messages.append(f"Killed running {exe_name} processes.")
+        # returncode != 0 likely means "not found" — that's fine.
+
+    # Delete scheduled task
+    result = subprocess.run(
+        ["schtasks", "/Delete", "/TN", TASK_NAME, "/F"],
+        capture_output=True,
+        text=True,
+        **_hidden_process_kwargs(),
+    )
+    if result.returncode == 0:
+        messages.append(f"Deleted scheduled task '{TASK_NAME}'.")
+    else:
+        messages.append(f"Scheduled task '{TASK_NAME}' was not installed.")
+
+    # Remove state files
+    for path in (STATE_FILE_PATH, HISTORY_FILE_PATH, SERVICE_LOG_PATH):
+        if path.is_file():
+            path.unlink()
+            messages.append(f"Removed {path.name}.")
+    # Remove rotated log backups (service.log.1, service.log.2, etc.)
+    for backup in SERVICE_LOG_PATH.parent.glob("service.log.*"):
+        backup.unlink(missing_ok=True)
+        messages.append(f"Removed {backup.name}.")
+
+    return messages

@@ -174,6 +174,11 @@ class ServicePage(QWidget):
             lambda: self._run_installer("pysysfan-install-pawnio")
         )
         installers_row.addWidget(self.install_pawnio_button)
+
+        self.view_log_button = QPushButton("View Service Log", self)
+        self.view_log_button.clicked.connect(self._open_service_log)
+        installers_row.addWidget(self.view_log_button)
+
         installers_row.addStretch(1)
         layout.addLayout(installers_row)
 
@@ -274,6 +279,23 @@ class ServicePage(QWidget):
     def _set_minimize_to_tray_preference(self, enabled: bool) -> None:
         self._minimize_to_tray_setter(enabled)
         self._show_message("Saved desktop app preference.", is_error=False)
+
+    def _open_service_log(self) -> None:
+        """Open the service log file in the system default text editor."""
+        import os
+        from pysysfan.platforms.windows_service import SERVICE_LOG_PATH
+
+        if not SERVICE_LOG_PATH.is_file():
+            self._show_message(
+                "No service log file found yet. "
+                "The log is created when the service starts.",
+                is_error=True,
+            )
+            return
+        try:
+            os.startfile(str(SERVICE_LOG_PATH))  # noqa: S606
+        except OSError as exc:
+            self._show_message(f"Could not open log file: {exc}", is_error=True)
 
     def _apply_status(self, service_status: Any, daemon_state) -> None:
         task_installed = bool(getattr(service_status, "task_installed", False))

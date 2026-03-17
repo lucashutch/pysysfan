@@ -21,6 +21,7 @@ pysysfan-install-pawnio = "pysysfan.install:install_pawnio"
 
 [project.gui-scripts]
 pysysfan-gui = "pysysfan.gui:main"
+pysysfan-service = "pysysfan.service_entry:main"
 
 [project.optional-dependencies]
 gui = ["PySide6>=6.8", "pyqtgraph>=0.13"]

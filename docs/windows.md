@@ -143,8 +143,9 @@ Use `--once` first when validating new config changes.
 ## Installing the startup service
 
 PySysFan uses **Windows Task Scheduler**, not the Windows Services MMC stack.
+The daemon runs as a **GUI-subsystem** executable (`pysysfan-service.exe`) so no CMD window ever appears at logon.
 
-Install it from an elevated shell:
+Install from an elevated shell:
 
 ```powershell
 pysysfan service install
@@ -160,9 +161,12 @@ pysysfan service restart
 pysysfan service disable
 pysysfan service enable
 pysysfan service uninstall
+pysysfan service clean   # remove task + processes + state files for a clean reinstall
 ```
 
-The scheduled task is created to run at startup with high privileges so the daemon can access sensors before user login.
+The scheduled task runs at logon with high privileges so the daemon can access sensors.
+Service output is written to `%USERPROFILE%\.pysysfan\service.log` (rotates at 5 MB, 3 backups).
+The GUI **Service** page includes a **View Service Log** button to open this file directly.
 
 ## Optional desktop GUI
 
@@ -223,18 +227,32 @@ Common causes:
 
 ### Service installed but not running correctly
 
-Check the task status first:
+Check the task status and view the service log first:
 
 ```powershell
 pysysfan service status
 schtasks /Query /TN pysysfan /FO LIST /V
 ```
 
-Then validate the config and test a manual single run:
+Open the service log (the GUI **Service** page also has a **View Service Log** button):
+
+```powershell
+notepad %USERPROFILE%\.pysysfan\service.log
+```
+
+Validate the config and test a manual single run:
 
 ```powershell
 pysysfan config validate
 pysysfan run --once
+```
+
+For a full clean-slate reinstall:
+
+```powershell
+sudo pysysfan service clean
+sudo pysysfan service install
+sudo pysysfan service start
 ```
 
 ## Related docs
