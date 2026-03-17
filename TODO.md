@@ -13,7 +13,7 @@
 
 - [x] **Selective LHM hardware `Update()` per poll cycle** — The daemon now passes configured sensor/control IDs to `WindowsHardwareManager`, which updates only matching hardware nodes each poll cycle.
 
-- **Dashboard diff-read for state and history files** — Cache each file's `mtime` and skip full deserialisation when the file has not changed, halving file I/O on the GUI process during idle.
+- [x] **Dashboard diff-read for state and history files** — The desktop local backend now caches file `mtime` and reuses parsed state/history payloads when unchanged.
 
 - **Pre-sort and cache temp sensor lookup index** — `lookup_and_aggregate()` does a linear scan over all sensors every poll cycle. Build an `identifier → SensorInfo` dict once per `read_sensors()` call for O(1) lookups.
 

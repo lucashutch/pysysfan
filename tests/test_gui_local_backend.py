@@ -2,9 +2,30 @@
 
 from __future__ import annotations
 
+import time
 from unittest.mock import MagicMock, patch
 
-from pysysfan.gui.desktop.local_backend import run_service_command
+from pysysfan.gui.desktop import local_backend
+from pysysfan.gui.desktop.local_backend import (
+    read_daemon_history,
+    read_daemon_state,
+    run_service_command,
+)
+from pysysfan.history_file import HistorySample, append_history_sample
+from pysysfan.state_file import DaemonStateFile, write_state
+
+
+def _sample_state(timestamp: float | None = None) -> DaemonStateFile:
+    stamp = time.time() if timestamp is None else timestamp
+    return DaemonStateFile(
+        timestamp=stamp,
+        pid=123,
+        running=True,
+        uptime_seconds=5.0,
+        active_profile="default",
+        poll_interval=1.0,
+        config_path="C:/tmp/config.yaml",
+    )
 
 
 @patch("pysysfan.gui.desktop.local_backend.check_admin", return_value=False)
@@ -54,3 +75,54 @@ def test_run_service_command_falls_back_to_python_module(
         ["service", "start"],
         elevate=True,
     )
+
+
+def test_read_daemon_state_uses_mtime_cache(tmp_path) -> None:
+    """State reads should skip deserialization when file mtime is unchanged."""
+    state_path = tmp_path / "daemon_state.json"
+    write_state(_sample_state(), state_path)
+    local_backend._STATE_CACHE_PATH = None
+    local_backend._STATE_CACHE_MTIME_NS = None
+    local_backend._STATE_CACHE_VALUE = None
+
+    with patch("pysysfan.gui.desktop.local_backend.read_state") as mock_read_state:
+        mock_read_state.return_value = _sample_state()
+        first = read_daemon_state(state_path)
+        second = read_daemon_state(state_path)
+
+    assert first is not None
+    assert second is not None
+    assert mock_read_state.call_count == 1
+
+
+def test_read_daemon_history_uses_mtime_cache(tmp_path) -> None:
+    """History reads should skip re-parsing when the NDJSON mtime is unchanged."""
+    history_path = tmp_path / "daemon_history.ndjson"
+    append_history_sample(
+        HistorySample(
+            timestamp=time.time(),
+            temperatures={"/cpu/temp/0": 60.0},
+            fan_rpm={"/mb/control/0": 1200.0},
+            fan_targets={"/mb/control/0": 55.0},
+        ),
+        history_path,
+    )
+    local_backend._HISTORY_CACHE_PATH = None
+    local_backend._HISTORY_CACHE_MTIME_NS = None
+    local_backend._HISTORY_CACHE_VALUE = None
+
+    with patch("pysysfan.gui.desktop.local_backend.read_history") as mock_history:
+        mock_history.return_value = [
+            HistorySample(
+                timestamp=time.time(),
+                temperatures={"/cpu/temp/0": 60.0},
+                fan_rpm={"/mb/control/0": 1200.0},
+                fan_targets={"/mb/control/0": 55.0},
+            )
+        ]
+        first = read_daemon_history(history_path)
+        second = read_daemon_history(history_path)
+
+    assert len(first) == 1
+    assert len(second) == 1
+    assert mock_history.call_count == 1
