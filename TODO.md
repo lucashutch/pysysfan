@@ -2,25 +2,6 @@
 
 ## Bug Fixes
 
-- **[!] `config.py` — silent curve loss on boolean/string key collision** — If a YAML file contains both `on: ...` (parsed as `True`) and `"on": ...`, the normalisation loop silently renames one, making it inaccessible to any fan referencing it. Detect and raise a `ValueError` listing the conflicting keys instead.
-
-- **[!] `curves.py` — hysteresis `_last_temp` not reset on speed increases** — When temperature holds steady at a new peak, `_last_speed` updates but `_last_temp` does not advance, silently shifting the hysteresis band down each call. Reset `_last_temp` whenever `target_speed >= _last_speed`.
-
-- **`service_entry.py` — file handle leak on log redirect** — `_redirect_stdio()` opens the log file with a bare `open()` call without ever closing it on error paths before the daemon loop. Replace with a context manager or `atexit` cleanup.
-
-- **`platforms/windows_service.py` — `subprocess.os.name` undefined** — The guard `if subprocess.os.name != "nt"` relies on an undocumented internal attribute. Replace with `import os; if os.name != "nt"`.
-
-- **`lhm/download.py` — full asset loaded into memory before ZIP extraction** — `resp.content` reads the entire download (often 10+ MB) into one `bytes` object before extracting. Stream via `iter_content` into a `BytesIO` or temp file instead to avoid the memory spike.
-
-- **`history_file.py` — history file grows unboundedly between compaction runs** — At a 0.1 s poll interval the file can grow ~50 KB/min before compaction fires. Enforce a max file size or line count in `append_history_sample` and compact if history is too large.
-
-- **`daemon.py` — `_unconfigured_fans` not cleared on config reload** — After a hot-reload that removes a fan, its identifier remains in `_unconfigured_fans` forever, causing spurious warnings. Clear the set inside `reload_config()` before rebuilding curves.
-
-- **`local_backend.py` — `_hidden_process_kwargs` duplicated from `windows_service.py`** — Extract the shared helper to `platforms/_process.py` to avoid divergence.
-
-- **`cache.py` — cache fingerprint missing LHM version** — If the LHM DLL is replaced but the hardware layout is identical, stale cached data is served. Include the DLL modification timestamp or `.lhm_version` in the fingerprint.
-
-- **`notifications.py` — alert history exceeds `_max_history` on multi-rule fire** — The history trim runs after each individual append inside a loop. Move it to after the loop so it runs exactly once per `check()` call.
 
 ---
 

@@ -105,9 +105,9 @@ def test_hysteresis_reference_not_eroded_on_plateau(balanced):
     # at 70°c the speed is 70%; push slightly above that then let temp drift down
     # while staying in the flat interpolated zone.
     curve = FanCurve("test", [(60, 80), (80, 80)], hysteresis=5.0)  # flat at 80%
-    curve.evaluate(75)   # latch at 80%, last_temp=75
-    curve.evaluate(74)   # still 80%, last_temp must stay 75
-    curve.evaluate(73)   # still 80%, last_temp must stay 75
+    curve.evaluate(75)  # latch at 80%, last_temp=75
+    curve.evaluate(74)  # still 80%, last_temp must stay 75
+    curve.evaluate(73)  # still 80%, last_temp must stay 75
     # Now drop by enough to exceed hysteresis from the TRUE peak (75), but NOT
     # from a drifted value (73): 70 > 73-5=68 → would hold if drifted; 70 > 75-5=70 → no hold.
     result = curve.evaluate(70)
