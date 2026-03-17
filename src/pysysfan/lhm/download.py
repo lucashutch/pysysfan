@@ -57,11 +57,14 @@ def download_and_extract_dll(asset: dict, target_dir: Path) -> Path:
     resp = requests.get(asset["browser_download_url"], timeout=120, stream=True)
     resp.raise_for_status()
 
-    content = io.BytesIO(resp.content)
+    buf = io.BytesIO()
+    for chunk in resp.iter_content(65536):
+        buf.write(chunk)
+    buf.seek(0)
 
     target_dir.mkdir(parents=True, exist_ok=True)
 
-    with zipfile.ZipFile(content) as zf:
+    with zipfile.ZipFile(buf) as zf:
         # Verify the main DLL is in the archive
         dll_entries = [
             name

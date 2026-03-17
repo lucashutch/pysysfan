@@ -121,7 +121,7 @@ class TestDownloadAndExtractDll:
             ["LibreHardwareMonitorLib.dll", "HidSharp.dll", "readme.txt"]
         )
         mock_response = MagicMock()
-        mock_response.content = zip_bytes
+        mock_response.iter_content.return_value = [zip_bytes]
         mock_response.raise_for_status = MagicMock()
         mock_get.return_value = mock_response
 
@@ -141,7 +141,7 @@ class TestDownloadAndExtractDll:
         """Should raise FileNotFoundError when DLL is missing from the ZIP."""
         zip_bytes = self._make_zip_bytes(["readme.txt", "changelog.txt"])
         mock_response = MagicMock()
-        mock_response.content = zip_bytes
+        mock_response.iter_content.return_value = [zip_bytes]
         mock_response.raise_for_status = MagicMock()
         mock_get.return_value = mock_response
 
