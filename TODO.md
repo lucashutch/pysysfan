@@ -7,7 +7,7 @@
 
 ## Performance Enhancements
 
-- **[!] Lazy CLR runtime initialisation** — `lhm/__init__.py` calls `_ensure_clr()` at import time, adding ~200 ms to any CLI subcommand that touches `pysysfan.hardware`. Defer until the first `load_lhm()` call inside `WindowsHardwareManager.open()`.
+- [x] **Lazy CLR runtime initialisation** — `lhm/__init__.py` now performs CLR and assembly initialization only on the first `load_lhm()` call and caches the loaded hardware namespace for reuse.
 
 - **Skip state file write when nothing has changed** — The daemon calls `write_state()` every poll cycle. Add an equality check against the last written snapshot and skip the atomic write when the payload is unchanged.
 
