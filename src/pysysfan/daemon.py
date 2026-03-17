@@ -738,20 +738,27 @@ class FanDaemon:
             write_state(snapshot, self.state_path)
             self._last_state_signature = signature
 
-        append_history_sample(
-            self._build_history_sample(timestamp=update_time),
-            self.history_path,
-        )
+        try:
+            append_history_sample(
+                self._build_history_sample(timestamp=update_time),
+                self.history_path,
+            )
+        except OSError as exc:
+            logger.warning("Failed to append history sample: %s", exc)
+
         if (
             self._last_history_compaction == 0.0
             or update_time - self._last_history_compaction >= 60.0
         ):
-            compact_history(
-                self.history_path,
-                max_age_seconds=DEFAULT_HISTORY_MAX_AGE_SECONDS,
-                now=update_time,
-            )
-            self._last_history_compaction = update_time
+            try:
+                compact_history(
+                    self.history_path,
+                    max_age_seconds=DEFAULT_HISTORY_MAX_AGE_SECONDS,
+                    now=update_time,
+                )
+                self._last_history_compaction = update_time
+            except OSError as exc:
+                logger.warning("Failed to compact history file: %s", exc)
 
     # ── Public API ────────────────────────────────────────────────────
 

@@ -592,11 +592,17 @@ def clean_all() -> list[str]:
     # Remove state files
     for path in (STATE_FILE_PATH, HISTORY_FILE_PATH, SERVICE_LOG_PATH):
         if path.is_file():
-            path.unlink()
-            messages.append(f"Removed {path.name}.")
+            try:
+                path.unlink()
+                messages.append(f"Removed {path.name}.")
+            except OSError:
+                messages.append(f"Could not remove {path.name} (file in use).")
     # Remove rotated log backups (service.log.1, service.log.2, etc.)
     for backup in SERVICE_LOG_PATH.parent.glob("service.log.*"):
-        backup.unlink(missing_ok=True)
-        messages.append(f"Removed {backup.name}.")
+        try:
+            backup.unlink(missing_ok=True)
+            messages.append(f"Removed {backup.name}.")
+        except OSError:
+            messages.append(f"Could not remove {backup.name} (file in use).")
 
     return messages
