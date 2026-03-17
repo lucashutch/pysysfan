@@ -190,9 +190,12 @@ echo     3. Run: pysysfan config init
 echo     4. Edit %%USERPROFILE%%\.pysysfan\config.yaml to match your hardware
 if "!INSTALL_GUI!"=="1" (
     echo     5. Launch PySysFan from the Start Menu or run: pysysfan-gui
-    echo     6. Use the Service tab to install startup automation when ready
+    echo     6. Use the Service tab to install the startup service when ready
+    echo        ^(the daemon runs invisibly - no CMD window will appear^)
 ) else (
-    echo     5. Run: pysysfan service install
+    echo     5. Run ^(elevated^): sudo pysysfan service install
+    echo        The daemon will then start invisibly at every logon.
+    echo        Logs: %%USERPROFILE%%\.pysysfan\service.log
 )
 echo.
 echo  ============================================================
@@ -307,6 +310,10 @@ echo    2. Install PySysFan as daemon-only or daemon + GUI
 echo    3. Download LibreHardwareMonitor
 echo    4. Install the PawnIO driver
 echo    5. Create a Start Menu app shortcut when the GUI is selected
+echo.
+echo  The background service ^(pysysfan-service.exe^) runs invisibly at logon -
+echo  no CMD window will appear. Logs are written to:
+echo    %%USERPROFILE%%\.pysysfan\service.log
 echo.
 goto :eof
 

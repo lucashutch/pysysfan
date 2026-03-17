@@ -32,7 +32,7 @@ PySysFan is designed around LibreHardwareMonitor sensor data and Windows Task Sc
 - **Custom temperature-based fan curves** for CPU, GPU, and motherboard sensors
 - **Multiple temperature inputs per fan** with `max`, `min`, `average`, or `median` aggregation
 - **Safe fallbacks** that return control to BIOS/firmware on exit or failure
-- **Windows startup integration** using a high-privilege scheduled task
+- **Invisible background service** using a high-privilege scheduled task — no console window at startup
 - **Native desktop GUI** with a Dashboard, Config editor, Service management page, and system tray presence
 - **Readable YAML config** that stays usable even if you prefer the CLI over the GUI
 
@@ -105,6 +105,9 @@ pysysfan run --once
 pysysfan service install
 ```
 
+The startup service runs **completely in the background** — no CMD window appears at logon.
+Service output is logged to `~/.pysysfan/service.log`.
+
 If you installed the GUI:
 
 ```powershell
@@ -161,7 +164,10 @@ pysysfan monitor
 pysysfan run --once
 pysysfan service status
 pysysfan service install
+pysysfan service start
+pysysfan service stop
 pysysfan service restart
+pysysfan service clean
 pysysfan update check
 ```
 
@@ -171,7 +177,7 @@ The optional desktop app provides three core pages:
 
 - **Dashboard** — daemon health, active profile, live readings, recent alerts, and history charts
 - **Config** — fan assignments, curve editing, and profile-aware configuration changes
-- **Service** — install, enable, disable, start, stop, restart, and inspect service state
+- **Service** — install, enable, disable, start, stop, restart, clean, and inspect service state; includes a **View Service Log** button that opens `~/.pysysfan/service.log`
 
 Closing the desktop window minimizes it to the notification area when the system tray is available.
 The Service page also includes an option to make the title-bar minimize button send the GUI to the tray instead of the taskbar.
