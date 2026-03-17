@@ -190,6 +190,7 @@ class FanDaemon:
         try:
             self._cfg = new_cfg
             self._curves = self._build_curves(new_cfg)
+            self._unconfigured_fans.clear()
             self._config_error = None
             logger.info("Configuration reloaded successfully")
             logger.info(

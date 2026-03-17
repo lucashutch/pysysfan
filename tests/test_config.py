@@ -746,3 +746,20 @@ curves: {}
     # Should be converted to string "on", not boolean True
     assert cfg.fans["top_fan"].curve == "on"
     assert isinstance(cfg.fans["top_fan"].curve, str)
+
+
+def test_load_config_boolean_string_key_collision_raises(tmp_path):
+    """Colliding bool key (true/false → 'on'/'off') and string key must raise ValueError."""
+    cfg_file = tmp_path / "config.yaml"
+    # YAML parses unquoted 'on' as boolean True; having both 'on' (bool) and
+    # '"on"' (string) as curve keys is ambiguous and was previously silently renamed.
+    cfg_file.write_text(
+        "fans: {}\n"
+        "curves:\n"
+        "  on:\n"
+        "    points: [[30, 30], [70, 100]]\n"
+        '  "on":\n'
+        "    points: [[30, 50], [70, 100]]\n"
+    )
+    with pytest.raises(ValueError, match="Conflicting curve keys"):
+        Config.load(cfg_file)

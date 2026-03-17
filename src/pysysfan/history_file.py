@@ -18,6 +18,11 @@ from pysysfan.config import DEFAULT_CONFIG_DIR
 
 DEFAULT_HISTORY_PATH = DEFAULT_CONFIG_DIR / "daemon_history.ndjson"
 DEFAULT_HISTORY_MAX_AGE_SECONDS = 15 * 60.0
+# Skip appending once the file grows beyond this limit to prevent unbounded
+# growth between compaction runs (compaction fires every ~60 s in the daemon).
+# At a 0.1 s poll interval the file accumulates ~50 KB/min, so 5 MB gives
+# ample headroom while preventing runaway growth.
+HISTORY_MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 
 
 @dataclass(slots=True)
@@ -57,8 +62,14 @@ def append_history_sample(
     sample: HistorySample,
     path: Path = DEFAULT_HISTORY_PATH,
 ) -> None:
-    """Append a single NDJSON history sample to disk."""
+    """Append a single NDJSON history sample to disk.
+
+    Skips the write when the file has already exceeded ``HISTORY_MAX_FILE_SIZE``
+    to prevent unbounded growth between periodic compaction runs.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
+    if path.exists() and path.stat().st_size >= HISTORY_MAX_FILE_SIZE:
+        return
     with path.open("a", encoding="utf-8", newline="\n") as handle:
         handle.write(json.dumps(sample.to_dict(), sort_keys=True))
         handle.write("\n")
@@ -137,6 +148,7 @@ def compact_history(
 __all__ = [
     "DEFAULT_HISTORY_MAX_AGE_SECONDS",
     "DEFAULT_HISTORY_PATH",
+    "HISTORY_MAX_FILE_SIZE",
     "HistorySample",
     "append_history_sample",
     "compact_history",

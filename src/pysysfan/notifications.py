@@ -186,6 +186,10 @@ class NotificationManager:
                 self._add_to_history(alert)
                 logger.info(f"Alert triggered: {message}")
 
+        # Trim history once after all rules are checked, not once per alert.
+        if len(self._alert_history) > self._max_history:
+            self._alert_history = self._alert_history[-self._max_history :]
+
         return new_alerts
 
     def _check_rule(self, rule: AlertRule, value: float) -> tuple[bool, str]:
@@ -223,10 +227,8 @@ class NotificationManager:
         return False, ""
 
     def _add_to_history(self, alert: Alert) -> None:
-        """Add alert to history, maintaining max size."""
+        """Add alert to history without trimming (caller is responsible)."""
         self._alert_history.append(alert)
-        if len(self._alert_history) > self._max_history:
-            self._alert_history = self._alert_history[-self._max_history :]
 
     def get_history(self, limit: int = 50) -> list[dict[str, Any]]:
         """Get recent alert history."""

@@ -104,20 +104,24 @@ class Config:
         # any boolean curve keys to the string 'on'/'off' to avoid mixed-type
         # dict keys causing issues elsewhere.
         normalized_curves: dict[str, CurveConfig] = {}
-        existing_names = set()
         for key, cfg in curves.items():
             if isinstance(key, bool):
                 new_key = "on" if key else "off"
-                # Ensure uniqueness if a string key already exists
-                if new_key in normalized_curves or new_key in curves:
-                    new_key = _generate_unique_name(
-                        new_key,
-                        set(list(normalized_curves.keys()) + list(curves.keys())),
+                # If both a boolean key (True/'on', False/'off') and the equivalent
+                # string key exist in the same YAML, the boolean-parsed key would
+                # silently overwrite or be renamed, making one curve inaccessible.
+                # Raise explicitly so the user can fix the config.
+                if new_key in normalized_curves or new_key in {
+                    str(k) for k in curves if not isinstance(k, bool)
+                }:
+                    raise ValueError(
+                        f"Conflicting curve keys: YAML boolean {key!r} normalizes to "
+                        f"'{new_key}' but a string key '{new_key}' also exists. "
+                        f"Rename one of the curves to resolve the conflict."
                     )
             else:
                 new_key = str(key)
             normalized_curves[new_key] = cfg
-            existing_names.add(new_key)
 
         curves = normalized_curves
 

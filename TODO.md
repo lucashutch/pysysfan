@@ -1,32 +1,38 @@
 # TODO
 
-## Recently completed
+## Bug Fixes
 
-- [x] 2026-03-10 — Stop the dashboard page from polling while hidden so Qt GUI tests do not accumulate background refresh timers and intermittently time out in CI.
-- [x] 2026-03-10 — Replace the Windows scheduled-task inline command with a generated launcher script so service install stays below the Task Scheduler `/TR` length limit.
-- [x] 2026-03-10 — Repair the Windows Service tab flow so GUI-triggered service actions request elevation clearly and scheduled tasks run with the installing user's home-directory context.
-- [x] 2026-03-10 — Refresh the Windows installer to support daemon-only or GUI installs, create a Start Menu app shortcut, and remove the obsolete Linux installer script.
-- [x] 2026-03-10 — Add a desktop GUI minimize-to-tray preference on the Service page and cover it with targeted GUI tests.
-- [x] 2026-03-10 — Rework the README and Windows guide for the polished Windows-first installer and GUI launch story.
 
-### Desktop GUI
-- [ ] Continue dashboard stat-card polish and information hierarchy cleanup.
-- [ ] Refine curve plotting visuals and small-screen scaling behavior.
-- [ ] Improve fan assignment UX with clearer sensor labels and multi-sensor editing.
-- [ ] Expand profile management and profile switching polish in the desktop app.
+---
 
-### Core behavior
-- [ ] Continue modularizing larger files in the desktop GUI and daemon paths.
-- [ ] Keep type coverage improving across the codebase.
-- [ ] Tighten config validation around aggregation values and user-facing error messages.
+## Performance Enhancements
 
-### Tooling and packaging
-- [ ] Review whether future standalone GUI packaging should ship a generated `.ico` and bundled third-party notice set.
-- [ ] Keep installer scripts aligned with the public installation story.
-- [ ] Revisit any remaining legacy GUI or packaging paths and remove them once fully superseded.
-- [ ] Consider splitting CI into separate core and GUI pytest invocations so Qt-related failures are isolated, easier to triage, and reset with a fresh Python process.
+- **[!] Lazy CLR runtime initialisation** — `lhm/__init__.py` calls `_ensure_clr()` at import time, adding ~200 ms to any CLI subcommand that touches `pysysfan.hardware`. Defer until the first `load_lhm()` call inside `WindowsHardwareManager.open()`.
 
-## Improve Daemon and GUI idle resource usage
-- [ ] Profile the daemon and desktop app to identify any remaining CPU or memory usage optimizations, especially around idle periods.
-- [ ] Ensure gui doesnt needlessly refresh or poll when the daemon is idle or when the dashboard is not visible.
-- [ ] Consider adding a dynamic polling adjustment in the daemon based on system load or idle state to further reduce resource usage when the system is not under heavy load.
+- **Skip state file write when nothing has changed** — The daemon calls `write_state()` every poll cycle. Add an equality check against the last written snapshot and skip the atomic write when the payload is unchanged.
+
+- **Selective LHM hardware `Update()` per poll cycle** — Build a set of required hardware nodes from the active config at load time and only call `Update()` on those nodes each cycle, skipping unused hardware.
+
+- **Dashboard diff-read for state and history files** — Cache each file's `mtime` and skip full deserialisation when the file has not changed, halving file I/O on the GUI process during idle.
+
+- **Pre-sort and cache temp sensor lookup index** — `lookup_and_aggregate()` does a linear scan over all sensors every poll cycle. Build an `identifier → SensorInfo` dict once per `read_sensors()` call for O(1) lookups.
+
+- **Reduce GUI idle polling** — Ensure the dashboard does not refresh or poll the daemon state when the window is not visible or the daemon is idle. Consider dynamic poll-interval scaling based on system activity.
+
+---
+
+## New Features
+
+- **[!] Dashboard UI rework** — Redesign the dashboard with a compact header bar (daemon status, active profile, uptime, fan count), a responsive fan card grid, collapsible temperature/fan sections, an at-a-glance system health row (highest temp, highest fan speed vs. thresholds), and an improved graph with axis labels, per-series colour legends, and a visible time-range control.
+
+- **[!] Minimum fan PWM** — Add `min_pwm` to `FanConfig`, applied whenever the curve output is above 0%. Add a CLI command that ramps PWM from 0% upward to detect each fan's spin-up threshold and surface this in the GUI curve configuration flow.
+
+- **Windows toast notifications for alerts** — Emit a native Windows toast via `winrt`/`winsdk` when a `high_temp` or `fan_failure` alert fires, wired into `NotificationManager` as an optional output channel alongside the existing in-process history.
+
+- **Auto-profile switching on power state** — Extend `ProfileMetadata.rules` to support `on_battery`, `plugged_in`, and time-of-day conditions. Add a background watcher in the daemon that activates the matching profile and logs the switch to the state file.
+
+- **Sensor sanity checks and dead-sensor detection** — Add `sensor_timeout_seconds` to `FanConfig`. If a sensor returns `None` or an impossible value (e.g. 0 °C or > 110 °C) beyond the timeout, log a warning, optionally raise an alert, and fall back to a configured safe speed.
+
+- **Config import/export wizard in the GUI** — Add Import/Export buttons to `CurvesPage`. The import flow validates the incoming YAML against daemon rules and shows a human-readable diff before writing to disk.
+
+- **Per-fan speed ramping rate limits** — Add `ramp_up_rate` and `ramp_down_rate` (percent/second) to `FanConfig` so speed transitions are audibly smoother when hysteresis alone is insufficient.
