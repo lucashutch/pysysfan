@@ -227,6 +227,52 @@ class TestWindowsHardwareManagerUpdateAll:
         hw2.Update.assert_called_once()
         sub_hw.Update.assert_called_once()
 
+    def test_refresh_updates_only_required_hardware(self, mock_lhm):
+        """Configured sensor scope should limit per-poll Update() calls."""
+        _, mock_computer = mock_lhm
+
+        hw1 = MagicMock()
+        hw2 = MagicMock()
+        hw1.SubHardware = []
+        hw2.SubHardware = []
+
+        sensor1 = MagicMock()
+        sensor1.Identifier = "/cpu/0/temp/0"
+        sensor2 = MagicMock()
+        sensor2.Identifier = "/gpu/0/temp/0"
+        hw1.Sensors = [sensor1]
+        hw2.Sensors = [sensor2]
+        mock_computer.Hardware = [hw1, hw2]
+
+        hw = WindowsHardwareManager()
+        hw.open()
+        hw.set_required_sensor_ids({"/cpu/0/temp/0"})
+
+        hw.refresh()
+
+        hw1.Update.assert_called_once()
+        hw2.Update.assert_not_called()
+
+    def test_refresh_without_scope_updates_all_hardware(self, mock_lhm):
+        """Without configured scope, refresh should behave like full update."""
+        _, mock_computer = mock_lhm
+
+        hw1 = MagicMock()
+        hw2 = MagicMock()
+        hw1.SubHardware = []
+        hw2.SubHardware = []
+        hw1.Sensors = []
+        hw2.Sensors = []
+        mock_computer.Hardware = [hw1, hw2]
+
+        hw = WindowsHardwareManager()
+        hw.open()
+
+        hw.refresh()
+
+        hw1.Update.assert_called_once()
+        hw2.Update.assert_called_once()
+
 
 class TestWindowsHardwareManagerIterSensors:
     """Tests for _iter_sensors() method."""

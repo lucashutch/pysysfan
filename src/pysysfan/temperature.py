@@ -73,6 +73,7 @@ def lookup_and_aggregate(
     temp_ids: list[str],
     temperatures: list[SensorInfo],
     method: str = "max",
+    sensor_index: dict[str, SensorInfo] | None = None,
 ) -> float | None:
     """
     Look up multiple temperature sensors and aggregate their values.
@@ -85,17 +86,24 @@ def lookup_and_aggregate(
     Returns:
         Aggregated temperature or None if no sensors found
     """
+    if sensor_index is None:
+        sensor_index = {sensor.identifier: sensor for sensor in temperatures}
+
     values = []
     for temp_id in temp_ids:
-        for sensor in temperatures:
-            if sensor.identifier == temp_id and sensor.value is not None:
-                values.append(sensor.value)
-                break
+        sensor = sensor_index.get(temp_id)
+        if sensor is not None and sensor.value is not None:
+            values.append(sensor.value)
 
     if not values:
         return None
 
     return aggregate_temperatures(values, method)
+
+
+def build_temperature_index(temperatures: list[SensorInfo]) -> dict[str, SensorInfo]:
+    """Build an identifier-indexed sensor lookup map for a polling cycle."""
+    return {sensor.identifier: sensor for sensor in temperatures}
 
 
 def get_valid_aggregation_methods() -> list[str]:

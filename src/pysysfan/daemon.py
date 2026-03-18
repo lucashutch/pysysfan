@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import atexit
+import json
 import logging
 import os
 import signal
@@ -31,7 +32,11 @@ from pysysfan.state_file import (
     delete_state,
     write_state,
 )
-from pysysfan.temperature import lookup_and_aggregate, get_valid_aggregation_methods
+from pysysfan.temperature import (
+    build_temperature_index,
+    lookup_and_aggregate,
+    get_valid_aggregation_methods,
+)
 from pysysfan.watcher import ConfigWatcher
 
 logger = logging.getLogger(__name__)
@@ -91,6 +96,7 @@ class FanDaemon:
         self._latest_temperatures: list = []
         self._latest_fan_speeds: list = []
         self._latest_controls: list = []
+        self._last_state_signature: str | None = None
 
         # Notification manager
         self._notification_manager = NotificationManager()
@@ -191,6 +197,7 @@ class FanDaemon:
             self._cfg = new_cfg
             self._curves = self._build_curves(new_cfg)
             self._unconfigured_fans.clear()
+            self._apply_hardware_update_scope(new_cfg)
             self._config_error = None
             logger.info("Configuration reloaded successfully")
             logger.info(
@@ -247,6 +254,23 @@ class FanDaemon:
                 f"Loaded curve '{name}' with {len(c.points)} points, hysteresis={c.hysteresis}°C"
             )
         return curves
+
+    @staticmethod
+    def _collect_required_sensor_ids(cfg: Config) -> set[str]:
+        """Collect sensor/control identifiers required by the active config."""
+        required: set[str] = set()
+        for fan_cfg in cfg.fans.values():
+            required.add(fan_cfg.fan_id)
+            required.update(fan_cfg.temp_ids)
+        return required
+
+    def _apply_hardware_update_scope(self, cfg: Config) -> None:
+        """Limit hardware refreshes to nodes used by the active config."""
+        if self._hw is None:
+            return
+        set_scope = getattr(self._hw, "set_required_sensor_ids", None)
+        if callable(set_scope):
+            set_scope(self._collect_required_sensor_ids(cfg))
 
     def _open_hardware(self):
         import time as time_module
@@ -626,9 +650,13 @@ class FanDaemon:
         """Perform a single control pass. Returns {fan_name: speed_percent}."""
         applied: dict[str, float] = {}
 
-        temps = self._hw.get_temperatures()
-        fans = self._hw.get_fan_speeds()
-        controls = self._hw.get_controls()
+        refresh = getattr(self._hw, "refresh", None)
+        if callable(refresh):
+            refresh()
+        temps = self._hw.get_temperatures(refresh=False)
+        fans = self._hw.get_fan_speeds(refresh=False)
+        controls = self._hw.get_controls(refresh=False)
+        temp_index = build_temperature_index(temps)
         self._latest_temperatures = list(temps)
         self._latest_fan_speeds = list(fans)
         self._latest_controls = list(controls)
@@ -648,7 +676,10 @@ class FanDaemon:
 
             # Aggregate temperatures from multiple sensors
             agg_temp = lookup_and_aggregate(
-                fan_cfg.temp_ids, temps, fan_cfg.aggregation
+                fan_cfg.temp_ids,
+                temps,
+                fan_cfg.aggregation,
+                sensor_index=temp_index,
             )
 
             if agg_temp is None:
@@ -697,21 +728,37 @@ class FanDaemon:
     def _update_state(self) -> None:
         """Persist the latest daemon runtime snapshot to disk."""
         update_time = time.time()
-        write_state(self._build_state_snapshot(timestamp=update_time), self.state_path)
-        append_history_sample(
-            self._build_history_sample(timestamp=update_time),
-            self.history_path,
-        )
+        snapshot = self._build_state_snapshot(timestamp=update_time)
+        payload = snapshot.to_dict()
+        # Ignore monotonic fields so we can skip writes when logical state is unchanged.
+        payload["timestamp"] = 0.0
+        payload["uptime_seconds"] = 0.0
+        signature = json.dumps(payload, sort_keys=True, separators=(",", ":"))
+        if signature != self._last_state_signature:
+            write_state(snapshot, self.state_path)
+            self._last_state_signature = signature
+
+        try:
+            append_history_sample(
+                self._build_history_sample(timestamp=update_time),
+                self.history_path,
+            )
+        except OSError as exc:
+            logger.warning("Failed to append history sample: %s", exc)
+
         if (
             self._last_history_compaction == 0.0
             or update_time - self._last_history_compaction >= 60.0
         ):
-            compact_history(
-                self.history_path,
-                max_age_seconds=DEFAULT_HISTORY_MAX_AGE_SECONDS,
-                now=update_time,
-            )
-            self._last_history_compaction = update_time
+            try:
+                compact_history(
+                    self.history_path,
+                    max_age_seconds=DEFAULT_HISTORY_MAX_AGE_SECONDS,
+                    now=update_time,
+                )
+                self._last_history_compaction = update_time
+            except OSError as exc:
+                logger.warning("Failed to compact history file: %s", exc)
 
     # ── Public API ────────────────────────────────────────────────────
 
@@ -731,6 +778,7 @@ class FanDaemon:
         try:
             scan_result = self._use_cached_scan()
             self._initialize_unconfigured_fans(scan_result)
+            self._apply_hardware_update_scope(self._cfg)
             result = self._run_once(self._cfg)
         finally:
             self._hw.restore_defaults()
@@ -783,6 +831,7 @@ class FanDaemon:
             )
 
             self._initialize_unconfigured_fans(scan_result)
+            self._apply_hardware_update_scope(cfg)
 
             # Start config watcher after hardware is ready
             self._start_watcher()

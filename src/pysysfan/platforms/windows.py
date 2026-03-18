@@ -39,6 +39,8 @@ class WindowsHardwareManager(BaseHardwareManager):
         self._computer = None
         self._lhm = None
         self._controls: dict[str, object] = {}  # identifier -> ISensor with IControl
+        self._required_sensor_ids: set[str] = set()
+        self._required_hardware_nodes: list[object] = []
 
     def open(self) -> None:
         """Initialize and open the LHM computer instance."""
@@ -89,6 +91,7 @@ class WindowsHardwareManager(BaseHardwareManager):
                 logger.warning(f"Error closing LHM computer: {e}")
             self._computer = None
             self._controls.clear()
+            self._required_hardware_nodes = []
             logger.info("WindowsHardwareManager closed")
 
     def _ensure_open(self) -> None:
@@ -103,6 +106,52 @@ class WindowsHardwareManager(BaseHardwareManager):
             hw.Update()
             for sub in hw.SubHardware:
                 sub.Update()
+
+    def _iter_hardware_nodes(self):
+        """Iterate root hardware and sub-hardware nodes."""
+        self._ensure_open()
+        for hw in self._computer.Hardware:
+            yield hw
+            for sub in hw.SubHardware:
+                yield sub
+
+    def _rebuild_required_hardware_nodes(self) -> None:
+        """Build a minimal set of hardware nodes that must be updated each poll."""
+        if not self._required_sensor_ids:
+            self._required_hardware_nodes = []
+            return
+
+        selected: list[object] = []
+        seen_nodes: set[int] = set()
+        for node in self._iter_hardware_nodes():
+            has_required_sensor = False
+            for sensor in node.Sensors:
+                if str(sensor.Identifier) in self._required_sensor_ids:
+                    has_required_sensor = True
+                    break
+            if has_required_sensor:
+                key = id(node)
+                if key not in seen_nodes:
+                    selected.append(node)
+                    seen_nodes.add(key)
+
+        self._required_hardware_nodes = selected
+
+    def set_required_sensor_ids(self, sensor_ids: set[str]) -> None:
+        """Set configured sensor/control identifiers needed by the active profile."""
+        self._required_sensor_ids = {sensor_id for sensor_id in sensor_ids if sensor_id}
+        if self._computer is not None:
+            self._rebuild_required_hardware_nodes()
+
+    def refresh(self) -> None:
+        """Refresh only required hardware nodes when a filter is configured."""
+        self._ensure_open()
+        if not self._required_hardware_nodes:
+            self._update_all()
+            return
+
+        for node in self._required_hardware_nodes:
+            node.Update()
 
     def _iter_sensors(self):
         """Iterate over all sensors across all hardware and sub-hardware."""
@@ -183,11 +232,14 @@ class WindowsHardwareManager(BaseHardwareManager):
                 if has_ctrl:
                     self._controls[identifier] = sensor
 
+        self._rebuild_required_hardware_nodes()
+
         return result
 
-    def get_temperatures(self) -> list[SensorInfo]:
+    def get_temperatures(self, *, refresh: bool = True) -> list[SensorInfo]:
         """Get all current temperature readings."""
-        self._update_all()
+        if refresh:
+            self.refresh()
         temps = []
         for hw, sensor in self._iter_sensors():
             if int(sensor.SensorType) == SensorKind.TEMPERATURE:
@@ -203,9 +255,10 @@ class WindowsHardwareManager(BaseHardwareManager):
                 )
         return temps
 
-    def get_fan_speeds(self) -> list[SensorInfo]:
+    def get_fan_speeds(self, *, refresh: bool = True) -> list[SensorInfo]:
         """Get all current fan speed readings (RPM)."""
-        self._update_all()
+        if refresh:
+            self.refresh()
         fans = []
         for hw, sensor in self._iter_sensors():
             if int(sensor.SensorType) == SensorKind.FAN:
@@ -221,13 +274,14 @@ class WindowsHardwareManager(BaseHardwareManager):
                 )
         return fans
 
-    def get_controls(self) -> list[ControlInfo]:
+    def get_controls(self, *, refresh: bool = True) -> list[ControlInfo]:
         """Get all controllable fan outputs.
 
         Returns:
             List of ControlInfo objects for fan controls.
         """
-        self._update_all()
+        if refresh:
+            self.refresh()
         controls = []
         for hw, sensor in self._iter_sensors():
             if int(sensor.SensorType) == SensorKind.CONTROL:

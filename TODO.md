@@ -7,17 +7,17 @@
 
 ## Performance Enhancements
 
-- **[!] Lazy CLR runtime initialisation** — `lhm/__init__.py` calls `_ensure_clr()` at import time, adding ~200 ms to any CLI subcommand that touches `pysysfan.hardware`. Defer until the first `load_lhm()` call inside `WindowsHardwareManager.open()`.
+- [x] **Lazy CLR runtime initialisation** — `lhm/__init__.py` now performs CLR and assembly initialization only on the first `load_lhm()` call and caches the loaded hardware namespace for reuse.
 
-- **Skip state file write when nothing has changed** — The daemon calls `write_state()` every poll cycle. Add an equality check against the last written snapshot and skip the atomic write when the payload is unchanged.
+- [x] **Skip state file write when nothing has changed** — The daemon now hashes a normalized snapshot payload and skips `write_state()` when only volatile fields (timestamp/uptime) changed.
 
-- **Selective LHM hardware `Update()` per poll cycle** — Build a set of required hardware nodes from the active config at load time and only call `Update()` on those nodes each cycle, skipping unused hardware.
+- [x] **Selective LHM hardware `Update()` per poll cycle** — The daemon now passes configured sensor/control IDs to `WindowsHardwareManager`, which updates only matching hardware nodes each poll cycle.
 
-- **Dashboard diff-read for state and history files** — Cache each file's `mtime` and skip full deserialisation when the file has not changed, halving file I/O on the GUI process during idle.
+- [x] **Dashboard diff-read for state and history files** — The desktop local backend now caches file `mtime` and reuses parsed state/history payloads when unchanged.
 
-- **Pre-sort and cache temp sensor lookup index** — `lookup_and_aggregate()` does a linear scan over all sensors every poll cycle. Build an `identifier → SensorInfo` dict once per `read_sensors()` call for O(1) lookups.
+- [x] **Pre-sort and cache temp sensor lookup index** — The daemon now builds a per-cycle `identifier → SensorInfo` map once and passes it into `lookup_and_aggregate()` for O(1) lookups.
 
-- **Reduce GUI idle polling** — Ensure the dashboard does not refresh or poll the daemon state when the window is not visible or the daemon is idle. Consider dynamic poll-interval scaling based on system activity.
+- [x] **Reduce GUI idle polling** — Dashboard polling remains disabled while hidden and now scales refresh intervals dynamically for active, idle/unchanged, and offline states.
 
 ---
 

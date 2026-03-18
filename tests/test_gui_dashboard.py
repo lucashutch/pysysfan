@@ -27,13 +27,14 @@ from pysysfan.state_file import (
 def _sample_state(
     timestamp: float | None = None,
     *,
+    running: bool = True,
     config_path: str = "C:/Users/test/.pysysfan/profiles/gaming.yaml",
 ) -> DaemonStateFile:
     timestamp = time.time() if timestamp is None else timestamp
     return DaemonStateFile(
         timestamp=timestamp,
         pid=4321,
-        running=True,
+        running=running,
         uptime_seconds=25.0,
         active_profile="gaming",
         poll_interval=1.0,
@@ -260,8 +261,31 @@ def test_dashboard_shows_offline_message_without_state(qtbot, tmp_path) -> None:
 
     assert page.daemon_indicator.text() == "●"
     assert page.alerts_button.text() == "⚠ 0"
+    assert page._refresh_timer.interval() == page.OFFLINE_REFRESH_INTERVAL_MS
     assert "state file" in page.message_label.text().lower()
     assert page.fan_summary_empty_label.isVisible() is True
+
+
+def test_dashboard_scales_poll_interval_for_idle_daemon(qtbot, tmp_path) -> None:
+    """Dashboard should back off polling when daemon state stays unchanged."""
+    profile_manager = _create_profile_manager(tmp_path)
+    config_path = profile_manager.get_profile_config_path("gaming")
+    state_path = tmp_path / "daemon_state.json"
+    history_path = tmp_path / "daemon_history.ndjson"
+    write_state(_sample_state(config_path=str(config_path)), state_path)
+    page = DashboardPage(
+        state_path=state_path,
+        history_path=history_path,
+        service_status_getter=lambda: _task_status(),
+        profile_manager=profile_manager,
+    )
+    qtbot.addWidget(page)
+
+    page.refresh_data()
+    assert page._refresh_timer.interval() == page.REFRESH_INTERVAL_MS
+
+    page.refresh_data()
+    assert page._refresh_timer.interval() == page.IDLE_REFRESH_INTERVAL_MS
 
 
 def test_dashboard_only_polls_while_visible(qtbot, tmp_path) -> None:

@@ -28,6 +28,14 @@ from pysysfan.temperature import get_valid_aggregation_methods
 
 ELEVATION_REQUESTED_SENTINEL = "Windows asked for Administrator permission"
 
+_STATE_CACHE_PATH: Path | None = None
+_STATE_CACHE_MTIME_NS: int | None = None
+_STATE_CACHE_VALUE: DaemonStateFile | None = None
+
+_HISTORY_CACHE_PATH: Path | None = None
+_HISTORY_CACHE_MTIME_NS: int | None = None
+_HISTORY_CACHE_VALUE: list[HistorySample] | None = None
+
 
 def _hidden_process_kwargs() -> dict[str, object]:
     """Return subprocess kwargs that suppress console windows on Windows."""
@@ -144,14 +152,52 @@ def build_curve_preview_series(
 
 def read_daemon_state(state_path: Path = DEFAULT_STATE_PATH) -> DaemonStateFile | None:
     """Read the latest daemon state snapshot if one is available."""
-    return read_state(state_path)
+    global _STATE_CACHE_PATH, _STATE_CACHE_MTIME_NS, _STATE_CACHE_VALUE
+
+    state_path = Path(state_path)
+    try:
+        stat = state_path.stat()
+    except OSError:
+        _STATE_CACHE_PATH = state_path
+        _STATE_CACHE_MTIME_NS = None
+        _STATE_CACHE_VALUE = None
+        return None
+
+    mtime_ns = stat.st_mtime_ns
+    if _STATE_CACHE_PATH == state_path and _STATE_CACHE_MTIME_NS == mtime_ns:
+        return _STATE_CACHE_VALUE
+
+    value = read_state(state_path)
+    _STATE_CACHE_PATH = state_path
+    _STATE_CACHE_MTIME_NS = mtime_ns
+    _STATE_CACHE_VALUE = value
+    return value
 
 
 def read_daemon_history(
     history_path: Path = DEFAULT_HISTORY_PATH,
 ) -> list[HistorySample]:
     """Read recent daemon history samples from the shared NDJSON file."""
-    return read_history(history_path)
+    global _HISTORY_CACHE_PATH, _HISTORY_CACHE_MTIME_NS, _HISTORY_CACHE_VALUE
+
+    history_path = Path(history_path)
+    try:
+        stat = history_path.stat()
+    except OSError:
+        _HISTORY_CACHE_PATH = history_path
+        _HISTORY_CACHE_MTIME_NS = None
+        _HISTORY_CACHE_VALUE = []
+        return []
+
+    mtime_ns = stat.st_mtime_ns
+    if _HISTORY_CACHE_PATH == history_path and _HISTORY_CACHE_MTIME_NS == mtime_ns:
+        return list(_HISTORY_CACHE_VALUE or [])
+
+    value = read_history(history_path)
+    _HISTORY_CACHE_PATH = history_path
+    _HISTORY_CACHE_MTIME_NS = mtime_ns
+    _HISTORY_CACHE_VALUE = list(value)
+    return list(value)
 
 
 def run_service_command(action: str) -> tuple[bool, str]:

@@ -637,6 +637,28 @@ class TestHardwareErrors:
         speeds = daemon._run_once(cfg)
         assert speeds == {}
 
+    def test_refreshes_hardware_once_per_cycle(self, tmp_path):
+        """Should refresh hardware once, then reuse readings in the cycle."""
+        daemon = FanDaemon(config_path=tmp_path / "c.yaml")
+        cfg = _sample_config()
+        daemon._curves = daemon._build_curves(cfg)
+
+        mock_hw = MagicMock()
+        temp_sensor = MagicMock()
+        temp_sensor.identifier = "/cpu/temp/0"
+        temp_sensor.value = 45.0
+        mock_hw.get_temperatures.return_value = [temp_sensor]
+        mock_hw.get_fan_speeds.return_value = []
+        mock_hw.get_controls.return_value = []
+        daemon._hw = mock_hw
+
+        daemon._run_once(cfg)
+
+        mock_hw.refresh.assert_called_once()
+        mock_hw.get_temperatures.assert_called_once_with(refresh=False)
+        mock_hw.get_fan_speeds.assert_called_once_with(refresh=False)
+        mock_hw.get_controls.assert_called_once_with(refresh=False)
+
     def test_run_once_with_no_matching_temp(self, tmp_path):
         """Should handle when configured temp sensor not found."""
         daemon = FanDaemon(config_path=tmp_path / "c.yaml")
