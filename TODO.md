@@ -95,6 +95,8 @@
 
 - [x] **Dashboard UI rework** — Redesigned dashboard with V2 row-based layout (header bar, health summary, table rows with accent bars), G5 tabbed-focus graphs page (interactive legend, Temperature/Fan RPM tabs, plot item reuse), and shared DashboardDataProvider.
 
+- [ ] **Flatten the rest of the UI** — Rework the remaining desktop pages and shared chrome to match the flatter dashboard aesthetic.
+
 - **[!] Minimum fan PWM** — Add `min_pwm` to `FanConfig`, applied whenever the curve output is above 0%. Add a CLI command that ramps PWM from 0% upward to detect each fan's spin-up threshold and surface this in the GUI curve configuration flow.
 
 - **Windows toast notifications for alerts** — Emit a native Windows toast via `winrt`/`winsdk` when a `high_temp` or `fan_failure` alert fires, wired into `NotificationManager` as an optional output channel alongside the existing in-process history.
