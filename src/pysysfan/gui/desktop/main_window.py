@@ -36,7 +36,7 @@ class MainWindow(QMainWindow):
 
         self.data_provider = DashboardDataProvider(parent=self)
         self.dashboard_page = DashboardPage(provider=self.data_provider, parent=self)
-        self.graphs_page = GraphsPage(parent=self)
+        self.graphs_page = GraphsPage(provider=self.data_provider, parent=self)
         self.curves_page = CurvesPage(parent=self)
         self.service_page = ServicePage(parent=self)
 
