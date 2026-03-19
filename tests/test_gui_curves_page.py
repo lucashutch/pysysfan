@@ -60,6 +60,7 @@ def test_curves_page_refresh_populates_curve_and_fan_data(qtbot, tmp_path) -> No
     assert page.fan_selector.count() == 1
     assert page.fan_curve_selector.currentText() == "balanced"
     assert page.temp_ids_edit.text() == "/cpu/temp/0"
+    assert page.preview_plot.minimumWidth() >= 300
     assert page.preview_plot.minimumHeight() >= 400
     assert page.points_table.columnWidth(0) >= 180
     assert getattr(page, "allow_fan_off_checkbox", None) is None

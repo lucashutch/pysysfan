@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from PySide6.QtCore import QEvent, QTimer, Qt
 from PySide6.QtGui import QCloseEvent
-from PySide6.QtWidgets import QMainWindow, QSystemTrayIcon, QTabWidget, QWidget
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QMainWindow,
+    QStackedWidget,
+    QSystemTrayIcon,
+    QWidget,
+)
 
 from pysysfan.gui.desktop.curves_page import CurvesPage
 from pysysfan.gui.desktop.dashboard_page import DashboardPage
@@ -13,6 +19,7 @@ from pysysfan.gui.desktop.graphs_page import GraphsPage
 from pysysfan.gui.desktop.icons import app_icon
 from pysysfan.gui.desktop.preferences import get_minimize_to_tray
 from pysysfan.gui.desktop.service_page import ServicePage
+from pysysfan.gui.desktop.sidebar import SidebarWidget
 from pysysfan.gui.desktop.theme import main_window_stylesheet
 
 
@@ -24,30 +31,50 @@ class MainWindow(QMainWindow):
         self.setObjectName("mainWindow")
         self.setWindowTitle("PySysFan")
         self.setWindowIcon(app_icon())
-        self.resize(1520, 980)
+        self.resize(1100, 800)
+        self.setMinimumSize(800, 800)
         self._allow_close = False
         self._tray_notice_shown = False
         self._tray_icon: QSystemTrayIcon | None = None
 
-        self.tab_widget = QTabWidget(self)
-        self.tab_widget.setObjectName("mainTabs")
-        self.tab_widget.setDocumentMode(True)
-        self.setCentralWidget(self.tab_widget)
+        shell = QWidget(self)
+        shell_layout = QHBoxLayout(shell)
+        shell_layout.setContentsMargins(0, 0, 0, 0)
+        shell_layout.setSpacing(0)
+        self.setCentralWidget(shell)
 
         self.data_provider = DashboardDataProvider(parent=self)
-        self.dashboard_page = DashboardPage(provider=self.data_provider, parent=self)
-        self.graphs_page = GraphsPage(provider=self.data_provider, parent=self)
+
+        self.sidebar = SidebarWidget(
+            provider=self.data_provider, active_tab=0, parent=self
+        )
+        shell_layout.addWidget(self.sidebar)
+
+        self.page_stack = QStackedWidget(self)
+        self.page_stack.setObjectName("mainStack")
+        shell_layout.addWidget(self.page_stack, stretch=1)
+
+        self.dashboard_page = DashboardPage(
+            provider=self.data_provider,
+            tab_switcher=None,
+            include_sidebar=False,
+            parent=self,
+        )
+        self.graphs_page = GraphsPage(
+            provider=self.data_provider,
+            tab_switcher=None,
+            include_sidebar=False,
+            parent=self,
+        )
         self.curves_page = CurvesPage(parent=self)
         self.service_page = ServicePage(parent=self)
 
-        self.tab_widget.addTab(self.dashboard_page, "Dashboard")
-        self.tab_widget.addTab(self.graphs_page, "Graphs")
-        self.tab_widget.addTab(self.curves_page, "Config")
-        self.tab_widget.addTab(self.service_page, "Service")
-        self.tab_widget.setCornerWidget(
-            self.dashboard_page.status_corner_widget,
-            Qt.Corner.TopRightCorner,
-        )
+        self.page_stack.addWidget(self.dashboard_page)
+        self.page_stack.addWidget(self.graphs_page)
+        self.page_stack.addWidget(self.curves_page)
+        self.page_stack.addWidget(self.service_page)
+        self.page_stack.currentChanged.connect(self._on_page_changed)
+        self.sidebar.tabRequested.connect(self.page_stack.setCurrentIndex)
 
         self.statusBar().showMessage("Local desktop GUI ready")
         self._first_show_done = False
@@ -80,13 +107,33 @@ class MainWindow(QMainWindow):
         super().showEvent(event)
         if not self._first_show_done:
             self._first_show_done = True
-            for page in (self.curves_page, self.service_page):
+            for page in (
+                self.dashboard_page,
+                self.graphs_page,
+                self.curves_page,
+                self.service_page,
+            ):
                 refresh = getattr(page, "refresh_data", None)
                 if callable(refresh):
                     try:
                         refresh()
                     except Exception:
                         continue
+
+    def _refresh_current_page(self, index: int) -> None:
+        page = self.page_stack.widget(index)
+        if page is None:
+            return
+        refresh = getattr(page, "refresh_data", None)
+        if callable(refresh):
+            try:
+                refresh()
+            except Exception:
+                pass
+
+    def _on_page_changed(self, index: int) -> None:
+        self.sidebar.set_active_tab(index)
+        self._refresh_current_page(index)
 
     def changeEvent(self, event) -> None:  # noqa: N802
         """Optionally minimize to the tray instead of the taskbar."""

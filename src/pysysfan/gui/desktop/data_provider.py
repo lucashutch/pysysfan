@@ -559,7 +559,17 @@ class DashboardDataProvider(QObject):
         combined = (
             f"{sensor.hardware_name} {sensor.sensor_name} {sensor.identifier}"
         ).lower()
-        blocked_terms = ("alarm", "limit")
+        blocked_terms = (
+            "alarm",
+            "limit",
+            "critical",
+            "warning",
+            "threshold",
+            "max",
+            "tjmax",
+            "tj max",
+            "distance",
+        )
         return not any(term in combined for term in blocked_terms)
 
     @staticmethod

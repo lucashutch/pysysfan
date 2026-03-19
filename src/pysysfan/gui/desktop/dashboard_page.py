@@ -3,25 +3,23 @@
 from __future__ import annotations
 
 import re
+from typing import Callable
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
-    QMenu,
     QScrollArea,
     QSizePolicy,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
 
 from pysysfan.config import Config, FanConfig
 from pysysfan.gui.desktop.data_provider import DashboardDataProvider
+from pysysfan.gui.desktop.sidebar import SidebarWidget
 from pysysfan.gui.desktop.theme import (
-    badge_stylesheet,
     dashboard_page_stylesheet,
     message_stylesheet,
 )
@@ -45,6 +43,8 @@ class DashboardPage(QWidget):
     def __init__(
         self,
         provider: DashboardDataProvider,
+        tab_switcher: Callable[[int], None] | None = None,
+        include_sidebar: bool = True,
         parent: QWidget | None = None,
     ):
         super().__init__(parent)
@@ -53,35 +53,32 @@ class DashboardPage(QWidget):
         self._applying_theme = False
 
         self.setObjectName("dashboardRoot")
-        root_layout = QVBoxLayout(self)
+        root_layout = QHBoxLayout(self)
         root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
 
-        # -- Status corner widget (for MainWindow tab bar) ----------------
-        self.status_corner_widget = QWidget(self)
-        self.status_corner_widget.setObjectName("dashboardStatusCorner")
-        status_layout = QHBoxLayout(self.status_corner_widget)
-        status_layout.setContentsMargins(0, 0, 0, 0)
-        status_layout.setSpacing(8)
+        # -- Sidebar -------------------------------------------------------
+        self.sidebar: SidebarWidget | None = None
+        if include_sidebar:
+            self.sidebar = SidebarWidget(provider=provider, active_tab=0, parent=self)
+            if tab_switcher is not None:
+                self.sidebar.tabRequested.connect(tab_switcher)
+            root_layout.addWidget(self.sidebar)
 
-        self.daemon_indicator = QLabel("●", self.status_corner_widget)
-        self.daemon_indicator.setObjectName("daemonIndicator")
-        self.daemon_indicator.setToolTip("Waiting for daemon state")
-        status_layout.addWidget(self.daemon_indicator)
-
-        self.alerts_button = QToolButton(self.status_corner_widget)
-        self.alerts_button.setObjectName("alertsButton")
-        self.alerts_button.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
-        self.alerts_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
-        self.alerts_menu = QMenu(self.alerts_button)
-        self.alerts_button.setMenu(self.alerts_menu)
-        status_layout.addWidget(self.alerts_button)
+        # -- Main content area --------------------------------------------
+        main_area = QWidget(self)
+        main_area.setObjectName("dashboardMainArea")
+        main_layout = QVBoxLayout(main_area)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+        root_layout.addWidget(main_area, stretch=1)
 
         # -- Scroll area ---------------------------------------------------
-        self.scroll_area = QScrollArea(self)
+        self.scroll_area = QScrollArea(main_area)
         self.scroll_area.setObjectName("dashboardScrollArea")
         self.scroll_area.setWidgetResizable(True)
         self.scroll_area.setFrameShape(QFrame.Shape.NoFrame)
-        root_layout.addWidget(self.scroll_area)
+        main_layout.addWidget(self.scroll_area)
 
         self.content = QWidget(self.scroll_area)
         self.content.setObjectName("dashboardContent")
@@ -98,13 +95,10 @@ class DashboardPage(QWidget):
         self.message_label.hide()
         self._content_layout.addWidget(self.message_label)
 
-        # -- Header bar -----------------------------------------------------
-        self.header_bar = self._build_header_bar()
-        self._content_layout.addWidget(self.header_bar)
-
-        # -- Health summary row --------------------------------------------
-        self.health_row = self._build_health_summary()
-        self._content_layout.addWidget(self.health_row)
+        # -- "Fan Groups" heading ------------------------------------------
+        fan_groups_title = QLabel("Fan Groups", self.content)
+        fan_groups_title.setProperty("sectionRole", "title")
+        self._content_layout.addWidget(fan_groups_title)
 
         # -- Table header row ----------------------------------------------
         self.table_header = self._build_table_header()
@@ -123,11 +117,9 @@ class DashboardPage(QWidget):
         # -- Connect provider signals --------------------------------------
         self._provider.stateUpdated.connect(self._update_from_state)
         self._provider.offlineDetected.connect(self._update_offline)
-        self._provider.alertsChanged.connect(self._update_alerts)
 
         # -- Initial theme -------------------------------------------------
         self._apply_theme()
-        self._apply_initial_state()
 
     # ------------------------------------------------------------------
     # Show / hide → tell provider to start / stop polling
@@ -153,24 +145,7 @@ class DashboardPage(QWidget):
             return
         self._applying_theme = True
         self.setStyleSheet(dashboard_page_stylesheet(self.palette()))
-        self._style_status_widgets()
         self._applying_theme = False
-
-    def _style_status_widgets(self) -> None:
-        palette = self.palette()
-        tone = self._provider.alerts_badge_tone
-        self.alerts_button.setStyleSheet(badge_stylesheet(tone, palette))
-        indicator_tone = self._provider.daemon_indicator_tone
-        daemon_colors = {
-            "success": "#22c55e",
-            "warning": "#f59e0b",
-            "critical": "#ef4444",
-            "neutral": palette.color(palette.ColorRole.Text).name(),
-        }
-        self.daemon_indicator.setStyleSheet(
-            "font-size: 14px; font-weight: 900; "
-            f"color: {daemon_colors.get(indicator_tone, daemon_colors['neutral'])};"
-        )
 
     # ------------------------------------------------------------------
     # Service helper
@@ -181,70 +156,6 @@ class DashboardPage(QWidget):
         self._show_message(message, is_error=not success)
 
     # ------------------------------------------------------------------
-    # Header bar
-    # ------------------------------------------------------------------
-    def _build_header_bar(self) -> QFrame:
-        bar = QFrame(self.content)
-        bar.setObjectName("headerBar")
-        bar.setFrameShape(QFrame.Shape.NoFrame)
-        layout = QHBoxLayout(bar)
-        layout.setContentsMargins(12, 8, 12, 8)
-        layout.setSpacing(16)
-
-        self._hdr_status_dot = QLabel("●", bar)
-        self._hdr_status_dot.setObjectName("headerStatusDot")
-        layout.addWidget(self._hdr_status_dot)
-
-        self._hdr_profile = QLabel("—", bar)
-        self._hdr_profile.setObjectName("headerProfileBadge")
-        layout.addWidget(self._hdr_profile)
-
-        self._hdr_uptime = QLabel("Uptime: —", bar)
-        self._hdr_uptime.setObjectName("headerUptime")
-        layout.addWidget(self._hdr_uptime)
-
-        self._hdr_fans = QLabel("Fans: —", bar)
-        self._hdr_fans.setObjectName("headerFans")
-        layout.addWidget(self._hdr_fans)
-
-        self._hdr_sensors = QLabel("Sensors: —", bar)
-        self._hdr_sensors.setObjectName("headerSensors")
-        layout.addWidget(self._hdr_sensors)
-
-        self._hdr_poll = QLabel("Poll: —", bar)
-        self._hdr_poll.setObjectName("headerPoll")
-        layout.addWidget(self._hdr_poll)
-
-        layout.addStretch(1)
-        return bar
-
-    # ------------------------------------------------------------------
-    # Health summary
-    # ------------------------------------------------------------------
-    def _build_health_summary(self) -> QFrame:
-        row = QFrame(self.content)
-        row.setObjectName("healthSummary")
-        row.setFrameShape(QFrame.Shape.NoFrame)
-        layout = QHBoxLayout(row)
-        layout.setContentsMargins(12, 6, 12, 6)
-        layout.setSpacing(24)
-
-        self._health_hottest = QLabel("🌡 Hottest: —", row)
-        self._health_hottest.setObjectName("healthHottest")
-        layout.addWidget(self._health_hottest)
-
-        self._health_max_speed = QLabel("💨 Max Speed: —", row)
-        self._health_max_speed.setObjectName("healthMaxSpeed")
-        layout.addWidget(self._health_max_speed)
-
-        self._health_alerts = QLabel("⚠ Alerts: 0", row)
-        self._health_alerts.setObjectName("healthAlerts")
-        layout.addWidget(self._health_alerts)
-
-        layout.addStretch(1)
-        return row
-
-    # ------------------------------------------------------------------
     # Table header
     # ------------------------------------------------------------------
     def _build_table_header(self) -> QFrame:
@@ -252,21 +163,30 @@ class DashboardPage(QWidget):
         header.setObjectName("tableHeader")
         header.setFrameShape(QFrame.Shape.NoFrame)
         layout = QHBoxLayout(header)
-        layout.setContentsMargins(12, 6, 12, 6)
+        layout.setContentsMargins(0, 6, 12, 6)
         layout.setSpacing(0)
 
         columns = [
-            ("", 4),  # accent spacer
+            ("", 15),  # accent bar + spacing
             ("GROUP", 120),
             ("CURVE", 80),
             ("TARGET", 70),
             ("ACTUAL", 70),
             ("RPM", 80),
+            ("", 18),  # extra gap before sensors
             ("SENSORS", 0),  # stretch
         ]
         for text, width in columns:
             label = QLabel(text, header)
             label.setProperty("cardTextRole", "eyebrow")
+            if text in {"GROUP", "SENSORS"}:
+                label.setAlignment(
+                    Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft
+                )
+            else:
+                label.setAlignment(
+                    Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignCenter
+                )
             if width > 0:
                 label.setFixedWidth(width)
             else:
@@ -292,32 +212,48 @@ class DashboardPage(QWidget):
         row.setProperty("cardRole", "fan-summary")
         row.setFrameShape(QFrame.Shape.NoFrame)
         layout = QHBoxLayout(row)
-        layout.setContentsMargins(0, 4, 12, 4)
+        layout.setContentsMargins(0, 0, 12, 0)
         layout.setSpacing(0)
+        row.setMinimumHeight(56)
 
-        # Accent bar
+        # Accent bar — flush left, full height
         accent = QFrame(row)
-        accent.setFixedWidth(4)
-        accent.setStyleSheet(f"background: {color}; border-radius: 2px;")
+        accent.setFixedWidth(3)
+        accent.setStyleSheet(f"background: {color}; border-radius: 0;")
         accent.setSizePolicy(
             QSizePolicy.Policy.Fixed,
             QSizePolicy.Policy.Expanding,
         )
         layout.addWidget(accent)
+        layout.addSpacing(12)
 
         # Group name
         group_label = QLabel(self._display_group_name(group_name), row)
         group_label.setObjectName("fanRowGroup")
         group_label.setFixedWidth(120)
         group_label.setProperty("cardTextRole", "title")
+        group_label.setAlignment(
+            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft
+        )
         layout.addWidget(group_label)
 
-        # Curve badge
-        curve_label = QLabel(fan_config.curve or "—", row)
+        # Curve badge — pill-shaped, tightly wrapped
+        curve_container = QWidget(row)
+        curve_container.setFixedWidth(80)
+        curve_container_layout = QHBoxLayout(curve_container)
+        curve_container_layout.setContentsMargins(0, 0, 0, 0)
+        curve_container_layout.setSpacing(0)
+        curve_label = QLabel(fan_config.curve or "—", curve_container)
         curve_label.setObjectName("fanRowCurve")
-        curve_label.setFixedWidth(80)
-        curve_label.setStyleSheet(badge_stylesheet("info", self.palette()))
-        layout.addWidget(curve_label)
+        curve_label.setProperty("cardTextRole", "body")
+        curve_label.setStyleSheet(
+            "font-size: 11px; font-weight: 800; color: #ffffff; padding: 0;"
+        )
+        curve_label.setSizePolicy(
+            QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred
+        )
+        curve_container_layout.addWidget(curve_label)
+        layout.addWidget(curve_container)
 
         # Target %
         target_value = state.fan_targets.get(fan_config.fan_id)
@@ -326,6 +262,9 @@ class DashboardPage(QWidget):
         target_label.setObjectName("fanRowTarget")
         target_label.setFixedWidth(70)
         target_label.setProperty("cardTextRole", "metricValue")
+        target_label.setAlignment(
+            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignCenter
+        )
         layout.addWidget(target_label)
 
         # Actual %
@@ -338,6 +277,9 @@ class DashboardPage(QWidget):
         actual_label.setObjectName("fanRowActual")
         actual_label.setFixedWidth(70)
         actual_label.setProperty("cardTextRole", "metricValue")
+        actual_label.setAlignment(
+            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignCenter
+        )
         layout.addWidget(actual_label)
 
         # RPM
@@ -347,7 +289,12 @@ class DashboardPage(QWidget):
         rpm_label.setObjectName("fanRowRpm")
         rpm_label.setFixedWidth(80)
         rpm_label.setProperty("cardTextRole", "metricValue")
+        rpm_label.setAlignment(
+            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignCenter
+        )
         layout.addWidget(rpm_label)
+
+        layout.addSpacing(18)
 
         # Sensors
         sensor_details = self._resolve_sensor_details(state, fan_config.temp_ids)
@@ -370,68 +317,8 @@ class DashboardPage(QWidget):
         self._show_message("", is_error=False)
         active_config = self._provider.active_config
 
-        # Header bar
-        indicator_tone = self._provider.daemon_indicator_tone
-        dot_colors = {
-            "success": "#22c55e",
-            "warning": "#f59e0b",
-            "critical": "#ef4444",
-        }
-        self._hdr_status_dot.setStyleSheet(
-            "font-size: 14px; font-weight: 900; "
-            f"color: {dot_colors.get(indicator_tone, '#888')};"
-        )
-        self.daemon_indicator.setToolTip(
-            "Daemon connected" if not state.config_error else state.config_error
-        )
-
-        profile_name, _ = self._provider.load_profile_metadata(state)
-        self._hdr_profile.setText(profile_name)
-        self._hdr_profile.setStyleSheet(badge_stylesheet("info", self.palette()))
-        self._hdr_uptime.setText(f"Uptime: {self._format_uptime(state.uptime_seconds)}")
-        self._hdr_fans.setText(f"Fans: {state.fans_configured}")
-        sensor_count = self._sensor_count(active_config)
-        self._hdr_sensors.setText(f"Sensors: {sensor_count}")
-        self._hdr_poll.setText(f"Poll: {state.poll_interval:.1f}s")
-
-        # Health summary
-        self._update_health_summary(state)
-
         # Fan rows
         self._rebuild_fan_rows(state, active_config)
-
-        # Status widgets
-        self._style_status_widgets()
-
-    def _update_health_summary(self, state: DaemonStateFile) -> None:
-        relevant = [
-            t
-            for t in state.temperatures
-            if self._is_relevant_temperature(t) and t.value is not None
-        ]
-        if relevant:
-            hottest = max(relevant, key=lambda t: t.value)
-            color = self._temperature_color(hottest.value)
-            self._health_hottest.setText(
-                f"🌡 Hottest: {hottest.hardware_name} {hottest.sensor_name} "
-                f"{hottest.value:.1f}°C"
-            )
-            self._health_hottest.setStyleSheet(f"color: {color}; font-weight: 700;")
-        else:
-            self._health_hottest.setText("🌡 Hottest: —")
-            self._health_hottest.setStyleSheet("")
-
-        fans_with_rpm = [f for f in state.fan_speeds if f.rpm is not None]
-        if fans_with_rpm:
-            fastest = max(fans_with_rpm, key=lambda f: f.rpm)
-            self._health_max_speed.setText(
-                f"💨 Max Speed: {fastest.sensor_name} {fastest.rpm:.0f} RPM"
-            )
-        else:
-            self._health_max_speed.setText("💨 Max Speed: —")
-
-        alert_count = len(state.recent_alerts)
-        self._health_alerts.setText(f"⚠ Alerts: {alert_count}")
 
     def _rebuild_fan_rows(
         self,
@@ -468,7 +355,6 @@ class DashboardPage(QWidget):
     # ------------------------------------------------------------------
     def _update_offline(self, service_status: object | None) -> None:
         installed = bool(getattr(service_status, "task_installed", False))
-        self.daemon_indicator.setToolTip("Daemon is not running")
 
         while self._fan_rows_layout.count():
             item = self._fan_rows_layout.takeAt(0)
@@ -476,21 +362,6 @@ class DashboardPage(QWidget):
             if widget is not None:
                 widget.deleteLater()
         self._fan_rows.clear()
-
-        self._hdr_status_dot.setStyleSheet(
-            "font-size: 14px; font-weight: 900; color: #f59e0b;"
-        )
-        self._hdr_profile.setText("—")
-        self._hdr_uptime.setText("Uptime: —")
-        self._hdr_fans.setText("Fans: —")
-        self._hdr_sensors.setText("Sensors: —")
-        self._hdr_poll.setText("Poll: —")
-        self._health_hottest.setText("🌡 Hottest: —")
-        self._health_hottest.setStyleSheet("")
-        self._health_max_speed.setText("💨 Max Speed: —")
-        self._health_alerts.setText("⚠ Alerts: 0")
-
-        self._style_status_widgets()
 
         if installed:
             self._show_message(
@@ -504,32 +375,6 @@ class DashboardPage(QWidget):
             )
 
     # ------------------------------------------------------------------
-    # Alerts (from provider signal)
-    # ------------------------------------------------------------------
-    def _update_alerts(self, alerts: list[str]) -> None:
-        self.alerts_menu.clear()
-        if not alerts:
-            empty_action = QAction("No recent alerts", self.alerts_menu)
-            empty_action.setEnabled(False)
-            self.alerts_menu.addAction(empty_action)
-            self.alerts_button.setText("⚠ 0")
-            self.alerts_button.setToolTip("No recent alerts")
-        else:
-            for line in alerts:
-                action = QAction(line, self.alerts_menu)
-                action.setEnabled(False)
-                self.alerts_menu.addAction(action)
-            self.alerts_button.setText(f"⚠ {len(alerts)}")
-            self.alerts_button.setToolTip("Recent alerts")
-        self._style_status_widgets()
-
-    # ------------------------------------------------------------------
-    # Initial state (before first poll)
-    # ------------------------------------------------------------------
-    def _apply_initial_state(self) -> None:
-        self._update_alerts([])
-        self.daemon_indicator.setToolTip("Waiting for daemon state")
-
     # ------------------------------------------------------------------
     # Message display
     # ------------------------------------------------------------------
@@ -655,7 +500,17 @@ class DashboardPage(QWidget):
         combined = (
             f"{sensor.hardware_name} {sensor.sensor_name} {sensor.identifier}"
         ).lower()
-        blocked_terms = ("alarm", "limit")
+        blocked_terms = (
+            "alarm",
+            "limit",
+            "critical",
+            "warning",
+            "threshold",
+            "max",
+            "tjmax",
+            "tj max",
+            "distance",
+        )
         return not any(term in combined for term in blocked_terms)
 
     @staticmethod

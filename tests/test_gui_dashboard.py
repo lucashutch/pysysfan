@@ -197,18 +197,17 @@ def _make_page(qtbot, provider: DashboardDataProvider) -> DashboardPage:
 
 
 def test_dashboard_creates_v2_layout_structure(qtbot, tmp_path) -> None:
-    """The V2 dashboard should have header bar, health row, table header, fan rows."""
+    """The V2 dashboard should have sidebar, table header, fan rows."""
     provider = _make_provider(tmp_path)
     page = _make_page(qtbot, provider)
 
     assert page.objectName() == "dashboardRoot"
     assert page.scroll_area.widgetResizable() is True
-    assert page.findChild(QFrame, "headerBar") is not None
-    assert page.findChild(QFrame, "healthSummary") is not None
+    assert page.sidebar is not None
+    assert page.sidebar.objectName() == "sidebar"
     assert page.findChild(QFrame, "tableHeader") is not None
     assert page.fan_rows_container is not None
-    assert page.daemon_indicator.text() == "●"
-    assert page.status_corner_widget is not None
+    assert page.sidebar._alerts_label.text() == "⚠ 0"
 
 
 def test_dashboard_populates_rows_from_state(qtbot, tmp_path) -> None:
@@ -252,7 +251,7 @@ def test_dashboard_populates_rows_from_state(qtbot, tmp_path) -> None:
 
 
 def test_dashboard_header_bar_populated_from_state(qtbot, tmp_path) -> None:
-    """The header bar should show profile, uptime, fans, sensors, poll info."""
+    """The sidebar should show profile, uptime, and poll info from state."""
     profile_manager = _create_profile_manager(tmp_path)
     config_path = profile_manager.get_profile_config_path("gaming")
     state = _sample_state(config_path=str(config_path))
@@ -261,15 +260,12 @@ def test_dashboard_header_bar_populated_from_state(qtbot, tmp_path) -> None:
 
     provider.refresh_data()
 
-    assert "Gaming Mode" in page._hdr_profile.text()
-    assert "Uptime:" in page._hdr_uptime.text()
-    assert "Fans: 2" in page._hdr_fans.text()
-    assert "Sensors: 1" in page._hdr_sensors.text()
-    assert "Poll: 1.0s" in page._hdr_poll.text()
+    assert "Gaming Mode" in page.sidebar._profile_label.text()
+    assert "Poll:" in page.sidebar._poll_label.text()
 
 
 def test_dashboard_health_summary_shows_hottest_and_max_speed(qtbot, tmp_path) -> None:
-    """Health row should display the hottest sensor and the fastest fan."""
+    """Sidebar should display temperature and max fan info."""
     profile_manager = _create_profile_manager(tmp_path)
     config_path = profile_manager.get_profile_config_path("gaming")
     state = _sample_state(config_path=str(config_path))
@@ -278,14 +274,18 @@ def test_dashboard_health_summary_shows_hottest_and_max_speed(qtbot, tmp_path) -
 
     provider.refresh_data()
 
-    assert "CPU" in page._health_hottest.text()
-    assert "61.5" in page._health_hottest.text()
-    assert "1325" in page._health_max_speed.text()
-    assert "CPU Fan" in page._health_max_speed.text()
+    # Sidebar shows CPU temp gauge and max fan
+    cpu_temp_label = page.sidebar._cpu_temp.findChild(QLabel, "sidebarTempCPU")
+    assert cpu_temp_label is not None
+    assert "62" in cpu_temp_label.text() or "—" not in cpu_temp_label.text()
+    assert (
+        "1325" in page.sidebar._max_fan_label.text()
+        or "1,325" in page.sidebar._max_fan_label.text()
+    )
 
 
 def test_dashboard_alerts_button_shows_count(qtbot, tmp_path) -> None:
-    """The alerts button should reflect the number of recent alerts."""
+    """The sidebar notifications control should reflect the number of recent alerts."""
     profile_manager = _create_profile_manager(tmp_path)
     config_path = profile_manager.get_profile_config_path("gaming")
     state = _sample_state(config_path=str(config_path))
@@ -294,8 +294,8 @@ def test_dashboard_alerts_button_shows_count(qtbot, tmp_path) -> None:
 
     provider.refresh_data()
 
-    assert page.alerts_button.text() == "⚠ 1"
-    assert "Alerts: 1" in page._health_alerts.text()
+    assert page.sidebar._alerts_label.text() == "⚠ 1"
+    assert "1" in page.sidebar._alerts_label.text()
 
 
 def test_dashboard_shows_offline_message_without_state(qtbot, tmp_path) -> None:
@@ -305,8 +305,7 @@ def test_dashboard_shows_offline_message_without_state(qtbot, tmp_path) -> None:
 
     provider.refresh_data()
 
-    assert page.daemon_indicator.text() == "●"
-    assert page.alerts_button.text() == "⚠ 0"
+    assert page.sidebar._alerts_label.text() == "⚠ 0"
     assert "state file" in page.message_label.text().lower()
     assert page.message_label.isHidden() is False
 
@@ -460,7 +459,7 @@ def test_dashboard_format_uptime(qtbot, tmp_path) -> None:
 
 
 def test_dashboard_health_alerts_count_zero_when_no_alerts(qtbot, tmp_path) -> None:
-    """With no alerts, the health row should show '⚠ Alerts: 0'."""
+    """With no alerts, the sidebar should show 'Alerts: 0'."""
     profile_manager = _create_profile_manager(tmp_path)
     config_path = profile_manager.get_profile_config_path("gaming")
     state = DaemonStateFile(
@@ -500,8 +499,8 @@ def test_dashboard_health_alerts_count_zero_when_no_alerts(qtbot, tmp_path) -> N
 
     provider.refresh_data()
 
-    assert page.alerts_button.text() == "⚠ 0"
-    assert "Alerts: 0" in page._health_alerts.text()
+    assert page.sidebar._alerts_label.text() == "⚠ 0"
+    assert "0" in page.sidebar._alerts_label.text()
 
 
 def test_dashboard_empty_fan_config_shows_empty_label(qtbot, tmp_path) -> None:

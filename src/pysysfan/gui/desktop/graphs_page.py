@@ -7,6 +7,8 @@ individual series visibility.
 
 from __future__ import annotations
 
+from typing import Callable
+
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
@@ -19,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from pysysfan.gui.desktop.data_provider import DashboardDataProvider
+from pysysfan.gui.desktop.sidebar import SidebarWidget
 from pysysfan.gui.desktop.theme import (
     desktop_colors,
     graphs_page_stylesheet,
@@ -116,6 +119,8 @@ class GraphsPage(QWidget):
     def __init__(
         self,
         provider: DashboardDataProvider,
+        tab_switcher: Callable[[int], None] | None = None,
+        include_sidebar: bool = True,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -131,10 +136,26 @@ class GraphsPage(QWidget):
         self._active_tab: str = self._DEFAULT_TAB
         self._applying_theme: bool = False
 
-        # Build the layout
-        root_layout = QVBoxLayout(self)
+        # Build the outer layout: sidebar + main content
+        outer_layout = QHBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
+
+        # -- Sidebar ---
+        self.sidebar: SidebarWidget | None = None
+        if include_sidebar:
+            self.sidebar = SidebarWidget(provider=provider, active_tab=1, parent=self)
+            if tab_switcher is not None:
+                self.sidebar.tabRequested.connect(tab_switcher)
+            outer_layout.addWidget(self.sidebar)
+
+        # -- Main content ---
+        main_area = QWidget(self)
+        main_area.setObjectName("graphsMainArea")
+        root_layout = QVBoxLayout(main_area)
         root_layout.setContentsMargins(16, 12, 16, 12)
         root_layout.setSpacing(8)
+        outer_layout.addWidget(main_area, stretch=1)
 
         # --- top controls row ---
         self._controls_row = QFrame(self)

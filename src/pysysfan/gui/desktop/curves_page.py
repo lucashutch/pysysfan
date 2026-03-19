@@ -65,8 +65,8 @@ class CurvesPage(QWidget):
         self._profile_display_names: dict[str, str] = {}
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(16)
+        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(12)
 
         heading = QLabel("Config", self)
         heading.setObjectName("curvesTitle")
@@ -74,7 +74,7 @@ class CurvesPage(QWidget):
         layout.addWidget(heading)
 
         profile_row = QHBoxLayout()
-        profile_row.setSpacing(12)
+        profile_row.setSpacing(8)
         profile_row.addWidget(QLabel("Profile", self))
 
         self.profile_selector = QComboBox(self)
@@ -236,6 +236,7 @@ class CurvesPage(QWidget):
         preview_layout.addWidget(self.preview_result_label)
 
         self.preview_plot = self._create_plot_widget()
+        self.preview_plot.setMinimumWidth(300)
         self.preview_plot.setMinimumHeight(400)
         self.preview_plot.setSizePolicy(
             QSizePolicy.Policy.Expanding,
@@ -246,11 +247,11 @@ class CurvesPage(QWidget):
 
         content_splitter.addWidget(self.left_column)
         content_splitter.addWidget(self.right_column)
-        self.left_column.setMinimumWidth(660)
-        self.right_column.setMinimumWidth(420)
+        self.left_column.setMinimumWidth(0)
+        self.right_column.setMinimumWidth(0)
         content_splitter.setStretchFactor(0, 1)
         content_splitter.setStretchFactor(1, 1)
-        content_splitter.setSizes([900, 620])
+        content_splitter.setSizes([1, 1])
 
         self.points_table.itemChanged.connect(self._handle_curve_inputs_changed)
         self.hysteresis_spin.valueChanged.connect(self._handle_curve_inputs_changed)
