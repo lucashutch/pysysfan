@@ -14,6 +14,8 @@ from pysysfan.config import Config, CurveConfig, FanConfig, UpdateConfig
 from pysysfan.gui.desktop.data_provider import DashboardDataProvider
 from pysysfan.gui.desktop.graphs_page import GraphsPage, LegendItem
 from pysysfan.profiles import ProfileManager
+
+import pyqtgraph as pg
 from pysysfan.state_file import (
     DaemonStateFile,
     FanSpeedState,
@@ -425,3 +427,148 @@ def test_legend_muted_color_from_theme(qtbot, tmp_path) -> None:
     item = items[0]
     item.mousePressEvent(None)
     assert expected_muted in item.text_label.styleSheet()
+
+
+# ------------------------------------------------------------------
+# DashboardPlotWidget series management
+# ------------------------------------------------------------------
+
+
+def test_plot_widget_update_series_creates_item(qtbot) -> None:
+    """update_series creates a PlotDataItem on first call."""
+    from pysysfan.gui.desktop.plotting import DashboardPlotWidget
+
+    pw = DashboardPlotWidget()
+    qtbot.addWidget(pw)
+
+    pw.update_series("temp_0", [0, 1], [30, 40], pg.mkPen("r"))
+    assert "temp_0" in pw._series_items
+    assert len(pw._series_items) == 1
+
+
+def test_plot_widget_update_series_reuses_item(qtbot) -> None:
+    """update_series reuses the same PlotDataItem on subsequent calls."""
+    from pysysfan.gui.desktop.plotting import DashboardPlotWidget
+
+    pw = DashboardPlotWidget()
+    qtbot.addWidget(pw)
+
+    pw.update_series("temp_0", [0, 1], [30, 40], pg.mkPen("r"))
+    first_item = pw._series_items["temp_0"]
+
+    pw.update_series("temp_0", [0, 1, 2], [30, 40, 50], pg.mkPen("b"))
+    assert pw._series_items["temp_0"] is first_item
+    assert len(pw._series_items) == 1
+
+
+def test_plot_widget_remove_stale_series(qtbot) -> None:
+    """remove_stale_series removes items not in the active set."""
+    from pysysfan.gui.desktop.plotting import DashboardPlotWidget
+
+    pw = DashboardPlotWidget()
+    qtbot.addWidget(pw)
+
+    pw.update_series("a", [0], [1], pg.mkPen("r"))
+    pw.update_series("b", [0], [2], pg.mkPen("g"))
+    pw.update_series("c", [0], [3], pg.mkPen("b"))
+
+    pw.remove_stale_series({"a", "c"})
+    assert "b" not in pw._series_items
+    assert set(pw._series_items.keys()) == {"a", "c"}
+
+
+def test_plot_widget_clear_all_series(qtbot) -> None:
+    """clear_all_series empties the series dict."""
+    from pysysfan.gui.desktop.plotting import DashboardPlotWidget
+
+    pw = DashboardPlotWidget()
+    qtbot.addWidget(pw)
+
+    pw.update_series("x", [0], [1], pg.mkPen("r"))
+    pw.update_series("y", [0], [2], pg.mkPen("g"))
+    assert len(pw._series_items) == 2
+
+    pw.clear_all_series()
+    assert len(pw._series_items) == 0
+
+
+# ------------------------------------------------------------------
+# GraphsPage series reuse integration
+# ------------------------------------------------------------------
+
+
+def test_refresh_reuses_series_items(qtbot, tmp_path) -> None:
+    """Repeated _refresh_plot calls reuse the same PlotDataItem objects."""
+    profile_manager = _create_profile_manager(tmp_path)
+    config_path = profile_manager.get_profile_config_path("gaming")
+    state = _sample_state(config_path=str(config_path))
+    provider = _make_provider(tmp_path, state=state, profile_manager=profile_manager)
+    page = _make_page(qtbot, provider)
+
+    provider.refresh_data()
+
+    if page._plot_widget is None:
+        pytest.skip("pyqtgraph not available")
+
+    # Capture items after first refresh
+    first_items = dict(page._plot_widget._series_items)
+    assert len(first_items) > 0
+
+    # Refresh again — same objects should be reused
+    page._refresh_plot()
+    for sid, item in first_items.items():
+        assert page._plot_widget._series_items.get(sid) is item
+
+
+def test_stale_series_removed_on_disable(qtbot, tmp_path) -> None:
+    """Disabling a series via legend removes its PlotDataItem."""
+    profile_manager = _create_profile_manager(tmp_path)
+    config_path = profile_manager.get_profile_config_path("gaming")
+    state = _sample_state(config_path=str(config_path))
+    provider = _make_provider(tmp_path, state=state, profile_manager=profile_manager)
+    page = _make_page(qtbot, provider)
+
+    provider.refresh_data()
+
+    if page._plot_widget is None:
+        pytest.skip("pyqtgraph not available")
+
+    items_before = set(page._plot_widget._series_items.keys())
+    assert len(items_before) > 0
+
+    # Toggle off the first legend item
+    legend_item = page._legend_items[0]
+    disabled_sid = legend_item.series_id
+    legend_item.mousePressEvent(None)
+
+    assert disabled_sid not in page._plot_widget._series_items
+
+
+def test_tab_switch_clears_series(qtbot, tmp_path) -> None:
+    """Switching tabs clears old series from the plot widget."""
+    profile_manager = _create_profile_manager(tmp_path)
+    config_path = profile_manager.get_profile_config_path("gaming")
+    state = _sample_state(config_path=str(config_path))
+    provider = _make_provider(tmp_path, state=state, profile_manager=profile_manager)
+    page = _make_page(qtbot, provider)
+
+    provider.refresh_data()
+
+    if page._plot_widget is None:
+        pytest.skip("pyqtgraph not available")
+
+    # Temperature tab has items
+    assert len(page._plot_widget._series_items) > 0
+
+    # Switch to fan_rpm — old items should be cleared
+    page.findChild(QPushButton, "graphTab_fan_rpm").click()
+
+    # After switch, only fan_rpm series should be present (or empty if no history)
+    temp_ids = {
+        sid
+        for sid in page._plot_widget._series_items
+        if not sid.startswith("group::") and not sid.startswith("series::")
+    }
+    # Temperature sensor IDs (plain paths) should not remain
+    for sid in temp_ids:
+        assert sid not in provider.build_temperature_catalog()

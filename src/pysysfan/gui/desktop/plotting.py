@@ -46,10 +46,39 @@ class DashboardPlotWidget(pg.PlotWidget if pg is not None else object):
         self.setMouseEnabled(x=False, y=False)
         self.getPlotItem().vb.setMouseEnabled(x=False, y=False)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self._series_items: dict[str, pg.PlotDataItem] = {}
 
     def wheelEvent(self, event: QWheelEvent) -> None:  # noqa: N802
         """Ignore wheel events so charts do not zoom unexpectedly."""
         event.ignore()
+
+    def update_series(self, series_id: str, xs: list, ys: list, pen) -> None:
+        """Update an existing series or create a new one."""
+        if series_id in self._series_items:
+            self._series_items[series_id].setData(xs, ys)
+            self._series_items[series_id].setPen(pen)
+        else:
+            item = pg.PlotDataItem(xs, ys, pen=pen, antialias=True)
+            self._series_items[series_id] = item
+            self.addItem(item)
+
+    def remove_series(self, series_id: str) -> None:
+        """Remove a series by ID."""
+        item = self._series_items.pop(series_id, None)
+        if item is not None:
+            self.removeItem(item)
+
+    def remove_stale_series(self, active_ids: set[str]) -> None:
+        """Remove all series not in the active set."""
+        stale = [sid for sid in self._series_items if sid not in active_ids]
+        for sid in stale:
+            self.remove_series(sid)
+
+    def clear_all_series(self) -> None:
+        """Remove all tracked series items."""
+        for item in self._series_items.values():
+            self.removeItem(item)
+        self._series_items.clear()
 
 
 class CurveEditorPlotWidget(pg.PlotWidget if pg is not None else object):

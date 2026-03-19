@@ -125,6 +125,7 @@ class GraphsPage(QWidget):
         }
         self._initialized_tabs: set[str] = set()
         self._active_tab: str = self._DEFAULT_TAB
+        self._applying_theme: bool = False
 
         # Build the layout
         root_layout = QVBoxLayout(self)
@@ -152,6 +153,7 @@ class GraphsPage(QWidget):
             controls_layout.addWidget(btn)
             self._tab_buttons[tab_key] = btn
         self._tab_buttons[self._active_tab].setChecked(True)
+        self._showgrid_applied = False
 
         controls_layout.addStretch()
 
@@ -221,6 +223,11 @@ class GraphsPage(QWidget):
     # Show / hide lifecycle
     # ------------------------------------------------------------------
 
+    def changeEvent(self, event) -> None:  # noqa: N802
+        super().changeEvent(event)
+        if event.type() == event.Type.PaletteChange:
+            self._apply_theme()
+
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
         self._refresh_plot()
@@ -239,6 +246,8 @@ class GraphsPage(QWidget):
         self._active_tab = tab_key
         for key, btn in self._tab_buttons.items():
             btn.setChecked(key == tab_key)
+        if self._plot_widget is not None:
+            self._plot_widget.clear_all_series()
         self._rebuild_legend()
         self._refresh_plot()
 
@@ -336,25 +345,11 @@ class GraphsPage(QWidget):
         if self._plot_widget is None or pg is None:
             return
 
-        self._plot_widget.clear()
-        theme = plot_theme(self.palette())
-        colors = theme.get("series", [])
-        bg = theme.get("background", "#ffffff")
-        fg = theme.get("foreground", "#111827")
-        muted = theme.get("muted", "#6b7280")
-
-        self._plot_widget.setBackground(bg)
-        plot_item = self._plot_widget.getPlotItem()
-        for axis_name in ("left", "bottom"):
-            plot_item.getAxis(axis_name).setTextPen(fg)
-            plot_item.getAxis(axis_name).setPen(muted)
-
         catalog = self._current_catalog()
         history = self._current_history()
         enabled = self._enabled_series.get(self._active_tab, set())
-
-        if not history or not enabled:
-            return
+        colors = self._series_colors()
+        catalog_keys = list(catalog.keys())
 
         # Find latest timestamp across all enabled series
         latest_ts = 0.0
@@ -364,24 +359,26 @@ class GraphsPage(QWidget):
                 latest_ts = max(latest_ts, max(t for t, _ in series_data))
 
         if latest_ts == 0.0:
+            self._plot_widget.remove_stale_series(set())
             return
 
-        catalog_keys = list(catalog.keys())
+        active_ids: set[str] = set()
         for sid in enabled:
             series_data = self._resolve_series_data(sid, history)
             if not series_data:
                 continue
-
             idx = catalog_keys.index(sid) if sid in catalog_keys else 0
             color = colors[idx % len(colors)] if colors else "#888888"
-
             x_vals = [t - latest_ts for t, _ in series_data]
             y_vals = [v for _, v in series_data]
-
             pen = pg.mkPen(color=color, width=2.5)
-            self._plot_widget.plot(x_vals, y_vals, pen=pen)
+            self._plot_widget.update_series(sid, x_vals, y_vals, pen)
+            active_ids.add(sid)
 
-        # Axis labels
+        self._plot_widget.remove_stale_series(active_ids)
+
+        # Axis labels (lightweight)
+        plot_item = self._plot_widget.getPlotItem()
         if self._active_tab == "temperature":
             plot_item.setLabel("left", "\u00b0C")
         else:
@@ -435,8 +432,26 @@ class GraphsPage(QWidget):
     # Theming
     # ------------------------------------------------------------------
 
+    def _apply_plot_theme(self) -> None:
+        """Apply theme to the plot widget — called once, not per refresh."""
+        if self._plot_widget is None or pg is None:
+            return
+        theme = plot_theme(self.palette())
+        self._plot_widget.setBackground(theme["background"])
+        plot_item = self._plot_widget.getPlotItem()
+        for axis_name in ("left", "bottom"):
+            plot_item.getAxis(axis_name).setTextPen(theme["foreground"])
+            plot_item.getAxis(axis_name).setPen(theme["muted"])
+        if not self._showgrid_applied:
+            plot_item.showGrid(x=True, y=True, alpha=0.25)
+            self._showgrid_applied = True
+
     def _apply_theme(self) -> None:
         """Apply palette-aware colors to controls and legend."""
+        if self._applying_theme:
+            return
+        self._applying_theme = True
+        self._apply_plot_theme()
         palette = self.palette()
         colors = desktop_colors(palette)
 
@@ -482,3 +497,4 @@ class GraphsPage(QWidget):
                 background: {colors["raised"]};
             }}
         """)
+        self._applying_theme = False
