@@ -8,6 +8,8 @@ from PySide6.QtWidgets import QMainWindow, QSystemTrayIcon, QTabWidget, QWidget
 
 from pysysfan.gui.desktop.curves_page import CurvesPage
 from pysysfan.gui.desktop.dashboard_page import DashboardPage
+from pysysfan.gui.desktop.data_provider import DashboardDataProvider
+from pysysfan.gui.desktop.graphs_page import GraphsPage
 from pysysfan.gui.desktop.icons import app_icon
 from pysysfan.gui.desktop.preferences import get_minimize_to_tray
 from pysysfan.gui.desktop.service_page import ServicePage
@@ -32,11 +34,14 @@ class MainWindow(QMainWindow):
         self.tab_widget.setDocumentMode(True)
         self.setCentralWidget(self.tab_widget)
 
-        self.dashboard_page = DashboardPage(parent=self)
+        self.data_provider = DashboardDataProvider(parent=self)
+        self.dashboard_page = DashboardPage(provider=self.data_provider, parent=self)
+        self.graphs_page = GraphsPage(parent=self)
         self.curves_page = CurvesPage(parent=self)
         self.service_page = ServicePage(parent=self)
 
         self.tab_widget.addTab(self.dashboard_page, "Dashboard")
+        self.tab_widget.addTab(self.graphs_page, "Graphs")
         self.tab_widget.addTab(self.curves_page, "Config")
         self.tab_widget.addTab(self.service_page, "Service")
         self.tab_widget.setCornerWidget(
@@ -71,19 +76,17 @@ class MainWindow(QMainWindow):
         self.close()
 
     def showEvent(self, event) -> None:  # noqa: N802
-        """Refresh pages once when the window is first shown."""
+        """Start provider polling and refresh pages on first show."""
         super().showEvent(event)
-        if self._first_show_done:
-            return
-
-        self._first_show_done = True
-        for page in (self.dashboard_page, self.curves_page, self.service_page):
-            refresh = getattr(page, "refresh_data", None)
-            if callable(refresh):
-                try:
-                    refresh()
-                except Exception:
-                    continue
+        if not self._first_show_done:
+            self._first_show_done = True
+            for page in (self.curves_page, self.service_page):
+                refresh = getattr(page, "refresh_data", None)
+                if callable(refresh):
+                    try:
+                        refresh()
+                    except Exception:
+                        continue
 
     def changeEvent(self, event) -> None:  # noqa: N802
         """Optionally minimize to the tray instead of the taskbar."""

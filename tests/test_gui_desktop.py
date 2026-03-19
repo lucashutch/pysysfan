@@ -30,9 +30,10 @@ def test_main_window_has_expected_tabs(qtbot) -> None:
     qtbot.addWidget(window)
 
     assert window.windowTitle() == "PySysFan"
-    assert window.tab_widget.count() == 3
-    assert [window.tab_widget.tabText(index) for index in range(3)] == [
+    assert window.tab_widget.count() == 4
+    assert [window.tab_widget.tabText(index) for index in range(4)] == [
         "Dashboard",
+        "Graphs",
         "Config",
         "Service",
     ]

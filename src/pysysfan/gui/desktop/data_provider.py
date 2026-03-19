@@ -319,7 +319,8 @@ class DashboardDataProvider(QObject):
                 return None
         return None
 
-    def _load_profile_metadata(self, state: DaemonStateFile) -> tuple[str, str]:
+    def load_profile_metadata(self, state: DaemonStateFile) -> tuple[str, str]:
+        """Return ``(display_name, description)`` for the state's active profile."""
         try:
             profile = self._profile_manager.get_profile(state.active_profile)
         except Exception:
