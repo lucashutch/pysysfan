@@ -19,7 +19,11 @@ from PySide6.QtWidgets import (
 )
 
 from pysysfan.gui.desktop.data_provider import DashboardDataProvider
-from pysysfan.gui.desktop.theme import desktop_colors, plot_theme
+from pysysfan.gui.desktop.theme import (
+    desktop_colors,
+    graphs_page_stylesheet,
+    plot_theme,
+)
 
 try:  # pragma: no cover - optional GUI dependency
     import pyqtgraph as pg
@@ -452,49 +456,5 @@ class GraphsPage(QWidget):
             return
         self._applying_theme = True
         self._apply_plot_theme()
-        palette = self.palette()
-        colors = desktop_colors(palette)
-
-        active_bg = colors["accent"]
-        active_fg = "#ffffff"
-        inactive_bg = colors["raised"]
-        inactive_fg = colors["muted"]
-        border = colors["border"]
-
-        self.setStyleSheet(f"""
-            QWidget#graphsRoot {{
-                background: {colors["window"]};
-            }}
-            QPushButton[graphTab="true"] {{
-                border: 1px solid {border};
-                border-radius: 10px;
-                padding: 6px 16px;
-                font-weight: 700;
-                font-size: 13px;
-                background: {inactive_bg};
-                color: {inactive_fg};
-            }}
-            QPushButton[graphTab="true"]:checked {{
-                background: {active_bg};
-                color: {active_fg};
-            }}
-            QPushButton[historyBtn="true"] {{
-                border: 1px solid {border};
-                border-radius: 10px;
-                padding: 5px 12px;
-                font-weight: 600;
-                font-size: 12px;
-                background: {inactive_bg};
-                color: {inactive_fg};
-            }}
-            QPushButton[historyBtn="true"]:checked {{
-                background: {active_bg};
-                color: {active_fg};
-            }}
-            QFrame#graphsLegendBar {{
-                border: 1px solid {border};
-                border-radius: 10px;
-                background: {colors["raised"]};
-            }}
-        """)
+        self.setStyleSheet(graphs_page_stylesheet(self.palette()))
         self._applying_theme = False

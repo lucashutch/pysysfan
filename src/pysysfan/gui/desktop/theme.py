@@ -79,22 +79,25 @@ QWidget#dashboardContent {{
     background: {colors["window"]};
 }}
 
-QGroupBox {{
-    border: 1px solid {colors["border"]};
-    border-radius: 18px;
-    margin-top: 14px;
-    padding-top: 8px;
+QFrame#headerBar {{
     background: {colors["raised"]};
-    color: {colors["text"]};
-    font-size: 15px;
-    font-weight: 800;
+    border: 1px solid {colors["border"]};
+    border-radius: 12px;
+    padding: 8px 16px;
 }}
 
-QGroupBox::title {{
-    subcontrol-origin: margin;
-    left: 16px;
-    padding: 0 8px;
-    color: {colors["text"]};
+QFrame#healthSummary {{
+    background: {colors["card"]};
+    border: 1px solid {colors["border"]};
+    border-radius: 12px;
+    padding: 8px 16px;
+}}
+
+QFrame#tableHeader {{
+    background: {colors["raised"]};
+    border: 1px solid {colors["border"]};
+    border-radius: 8px;
+    padding: 6px 12px;
 }}
 
 QFrame[cardRole="fan-summary"],
@@ -104,13 +107,12 @@ QWidget#dashboardStatusCorner {{
 
 QFrame[cardRole="fan-summary"] {{
     border: 1px solid {colors["border"]};
-    border-radius: 18px;
+    border-radius: 10px;
+    padding: 8px 12px;
     background: {colors["card"]};
 }}
 
-QFrame[cardRole="fan-metric"] {{
-    border: 1px solid {colors["border"]};
-    border-radius: 14px;
+QFrame[cardRole="fan-summary"]:hover {{
     background: {colors["raised"]};
 }}
 
@@ -184,9 +186,7 @@ QLabel[cardTextRole="icon"] {{
     font-size: 18px;
 }}
 
-QToolButton#alertsButton,
-QComboBox#historySelector,
-QToolButton[graphControl="selector"] {{
+QToolButton#alertsButton {{
     border: 1px solid {colors["border"]};
     border-radius: 12px;
     padding: 5px 10px;
@@ -195,57 +195,63 @@ QToolButton[graphControl="selector"] {{
     font-weight: 700;
 }}
 
-QComboBox#historySelector {{
-    min-width: 72px;
-    max-width: 98px;
-    padding: 5px 24px 5px 10px;
-}}
-
-QComboBox#historySelector::drop-down {{
-    subcontrol-origin: padding;
-    subcontrol-position: center right;
-    width: 22px;
-    border: 0;
-}}
-
-QComboBox#historySelector::down-arrow,
-QComboBox::down-arrow {{
-    width: 12px;
-    height: 12px;
-}}
-
-QToolButton[graphControl="selector"] {{
-    min-width: 108px;
-    padding: 4px 28px 4px 10px;
-}}
-
 QToolButton#alertsButton::menu-indicator {{
     image: none;
     width: 0;
 }}
+"""
 
-QToolButton[graphControl="selector"]::menu-indicator {{
-    subcontrol-origin: padding;
-    subcontrol-position: center right;
-    width: 14px;
-    right: 8px;
+
+def graphs_page_stylesheet(palette: QPalette) -> str:
+    """Return a palette-aware stylesheet for the graphs page."""
+    colors = desktop_colors(palette)
+    active_border = colors["accent"]
+    return f"""
+QWidget#graphsRoot {{
+    background: {colors["window"]};
+    color: {colors["text"]};
 }}
 
-QTableWidget, QListWidget {{
+QPushButton[graphTab="true"] {{
     border: 1px solid {colors["border"]};
-    border-radius: 12px;
-    background: {colors["base"]};
-    color: {colors["text"]};
-    gridline-color: {colors["border"]};
+    border-radius: 8px;
+    padding: 6px 16px;
+    font-weight: 700;
+    font-size: 12px;
+    background: {colors["raised"]};
+    color: {colors["muted"]};
 }}
 
-QHeaderView::section {{
-    background: {colors["raised"]};
+QPushButton[graphTab="true"]:checked {{
+    background: {colors["panel"]};
+    border-color: {active_border};
     color: {colors["text"]};
-    border: 0;
-    border-bottom: 1px solid {colors["border"]};
-    padding: 8px;
-    font-weight: 700;
+}}
+
+QPushButton[historyBtn="true"] {{
+    border: 1px solid {colors["border"]};
+    border-radius: 8px;
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    background: {colors["raised"]};
+    color: {colors["muted"]};
+}}
+
+QPushButton[historyBtn="true"]:checked {{
+    background: {colors["panel"]};
+    border-color: {active_border};
+    color: {colors["text"]};
+}}
+
+QFrame#graphsLegendBar {{
+    background: {colors["raised"]};
+    border: 1px solid {colors["border"]};
+    border-radius: 8px;
+}}
+
+QFrame#graphsControlsRow {{
+    background: transparent;
 }}
 """
 
