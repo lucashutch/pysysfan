@@ -79,22 +79,26 @@ QWidget#dashboardContent {{
     background: {colors["window"]};
 }}
 
-QGroupBox {{
-    border: 1px solid {colors["border"]};
-    border-radius: 18px;
-    margin-top: 14px;
-    padding-top: 8px;
+QFrame#headerBar {{
     background: {colors["raised"]};
-    color: {colors["text"]};
-    font-size: 15px;
-    font-weight: 800;
+    border: 1px solid {colors["border"]};
+    border-radius: 12px;
+    padding: 8px 16px;
 }}
 
-QGroupBox::title {{
-    subcontrol-origin: margin;
-    left: 16px;
-    padding: 0 8px;
-    color: {colors["text"]};
+QFrame#healthSummary {{
+    background: {colors["card"]};
+    border: 1px solid {colors["border"]};
+    border-radius: 12px;
+    padding: 8px 16px;
+}}
+
+QFrame#tableHeader {{
+    background: transparent;
+    border: none;
+    border-bottom: 1px solid {colors["border"]};
+    border-radius: 0;
+    padding: 6px 0;
 }}
 
 QFrame[cardRole="fan-summary"],
@@ -103,14 +107,13 @@ QWidget#dashboardStatusCorner {{
 }}
 
 QFrame[cardRole="fan-summary"] {{
-    border: 1px solid {colors["border"]};
-    border-radius: 18px;
+    border: none;
+    border-radius: 0;
+    padding: 0;
     background: {colors["card"]};
 }}
 
-QFrame[cardRole="fan-metric"] {{
-    border: 1px solid {colors["border"]};
-    border-radius: 14px;
+QFrame[cardRole="fan-summary"]:hover {{
     background: {colors["raised"]};
 }}
 
@@ -165,14 +168,14 @@ QLabel[cardTextRole="metricTitle"] {{
 }}
 
 QLabel[cardTextRole="metricValue"] {{
-    font-size: 18px;
+    font-size: 15px;
     font-weight: 800;
     color: {colors["text"]};
 }}
 
 QLabel[cardTextRole="body"] {{
     font-size: 12px;
-    color: {colors["text"]};
+    color: {colors["muted"]};
 }}
 
 QLabel[cardTextRole="muted"] {{
@@ -184,9 +187,7 @@ QLabel[cardTextRole="icon"] {{
     font-size: 18px;
 }}
 
-QToolButton#alertsButton,
-QComboBox#historySelector,
-QToolButton[graphControl="selector"] {{
+QToolButton#alertsButton {{
     border: 1px solid {colors["border"]};
     border-radius: 12px;
     padding: 5px 10px;
@@ -195,57 +196,64 @@ QToolButton[graphControl="selector"] {{
     font-weight: 700;
 }}
 
-QComboBox#historySelector {{
-    min-width: 72px;
-    max-width: 98px;
-    padding: 5px 24px 5px 10px;
-}}
-
-QComboBox#historySelector::drop-down {{
-    subcontrol-origin: padding;
-    subcontrol-position: center right;
-    width: 22px;
-    border: 0;
-}}
-
-QComboBox#historySelector::down-arrow,
-QComboBox::down-arrow {{
-    width: 12px;
-    height: 12px;
-}}
-
-QToolButton[graphControl="selector"] {{
-    min-width: 108px;
-    padding: 4px 28px 4px 10px;
-}}
-
 QToolButton#alertsButton::menu-indicator {{
     image: none;
     width: 0;
 }}
+"""
 
-QToolButton[graphControl="selector"]::menu-indicator {{
-    subcontrol-origin: padding;
-    subcontrol-position: center right;
-    width: 14px;
-    right: 8px;
+
+def graphs_page_stylesheet(palette: QPalette) -> str:
+    """Return a palette-aware stylesheet for the graphs page."""
+    colors = desktop_colors(palette)
+    active_border = colors["accent"]
+    return f"""
+QWidget#graphsRoot {{
+    background: {colors["window"]};
+    color: {colors["text"]};
 }}
 
-QTableWidget, QListWidget {{
+QPushButton[graphTab="true"] {{
     border: 1px solid {colors["border"]};
-    border-radius: 12px;
-    background: {colors["base"]};
-    color: {colors["text"]};
-    gridline-color: {colors["border"]};
+    border-radius: 8px;
+    padding: 6px 16px;
+    font-weight: 700;
+    font-size: 12px;
+    background: {colors["raised"]};
+    color: {colors["muted"]};
 }}
 
-QHeaderView::section {{
-    background: {colors["raised"]};
+QPushButton[graphTab="true"]:checked {{
+    background: {colors["panel"]};
+    border-color: {active_border};
     color: {colors["text"]};
-    border: 0;
-    border-bottom: 1px solid {colors["border"]};
-    padding: 8px;
-    font-weight: 700;
+}}
+
+QPushButton[historyBtn="true"] {{
+    border: 1px solid {colors["border"]};
+    border-radius: 8px;
+    padding: 4px 12px;
+    font-size: 11px;
+    font-weight: 600;
+    background: {colors["raised"]};
+    color: {colors["muted"]};
+}}
+
+QPushButton[historyBtn="true"]:checked {{
+    background: {colors["panel"]};
+    border-color: {active_border};
+    color: {colors["text"]};
+}}
+
+QFrame#graphsLegendBar {{
+    background: {colors["raised"]};
+    border: 1px solid {colors["border"]};
+    border-radius: 8px;
+    min-height: 32px;
+}}
+
+QFrame#graphsControlsRow {{
+    background: transparent;
 }}
 """
 
@@ -412,7 +420,7 @@ def badge_stylesheet(tone: str, palette: QPalette) -> str:
     dark = is_dark_palette(palette)
     tone_map = {
         "neutral": (colors["raised"], colors["text"]),
-        "info": ("#1d4ed8" if dark else "#dbeafe", "#dbeafe" if dark else "#1d4ed8"),
+        "info": ("#1e3a5f" if dark else "#e0e7f1", "#8eafd0" if dark else "#3b6fa0"),
         "success": ("#166534" if dark else "#dcfce7", "#dcfce7" if dark else "#166534"),
         "warning": ("#92400e" if dark else "#fef3c7", "#fef3c7" if dark else "#92400e"),
         "critical": (
@@ -423,7 +431,7 @@ def badge_stylesheet(tone: str, palette: QPalette) -> str:
     background, foreground = tone_map.get(tone, tone_map["neutral"])
     return (
         "border-radius: 999px;"
-        "padding: 4px 10px;"
+        "padding: 2px 8px;"
         "font-size: 11px;"
         "font-weight: 800;"
         f"background: {background};"
@@ -436,6 +444,58 @@ def message_stylesheet(*, is_error: bool, palette: QPalette) -> str:
     colors = desktop_colors(palette)
     accent = "#ef4444" if is_error else colors["accent"]
     return f"font-size: 12px;font-weight: 700;color: {accent};"
+
+
+def sidebar_stylesheet(palette: QPalette) -> str:
+    """Return a palette-aware stylesheet for the shared sidebar."""
+    colors = desktop_colors(palette)
+    dark = is_dark_palette(palette)
+    sidebar_bg = _hex(
+        _mix(QColor(colors["window"]), QColor("#000000"), 0.15 if dark else 0.03)
+    )
+    return f"""
+QFrame#sidebar {{
+    background: {sidebar_bg};
+    border-right: 1px solid {colors["border"]};
+}}
+QLabel#sidebarBrand {{
+    font-size: 16px;
+    font-weight: 800;
+    color: {colors["text"]};
+}}
+QLabel#sidebarSubtitle {{
+    font-size: 10px;
+    color: {colors["muted"]};
+}}
+QPushButton[sidebarNav="true"] {{
+    text-align: left;
+    padding: 8px 16px;
+    border: none;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: {colors["muted"]};
+    background: transparent;
+}}
+QPushButton[sidebarNav="true"]:checked {{
+    background: rgba(37, 99, 235, 0.12);
+    color: {colors["accent"]};
+    font-weight: 700;
+}}
+QLabel#sidebarSeparator {{
+    background: {colors["border"]};
+    max-height: 1px;
+}}
+QLabel.sidebarMuted {{
+    font-size: 10px;
+    color: {colors["muted"]};
+}}
+QLabel.sidebarValue {{
+    font-size: 11px;
+    font-weight: 700;
+    color: {colors["text"]};
+}}
+"""
 
 
 def plot_theme(palette: QPalette) -> dict[str, str | list[str]]:

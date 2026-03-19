@@ -8,8 +8,6 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtCore import Qt
-
 from pysysfan.gui.desktop.app import get_or_create_application
 from pysysfan.gui.desktop.main_window import MainWindow
 
@@ -24,24 +22,21 @@ def test_get_or_create_application_reuses_instance() -> None:
     assert app_one.windowIcon().isNull() is False
 
 
-def test_main_window_has_expected_tabs(qtbot) -> None:
-    """The initial desktop shell should expose the core top-level tabs."""
+def test_main_window_uses_sidebar_stack_navigation(qtbot) -> None:
+    """The desktop shell should expose a shared sidebar and stacked pages."""
     window = MainWindow()
     qtbot.addWidget(window)
 
     assert window.windowTitle() == "PySysFan"
-    assert window.tab_widget.count() == 3
-    assert [window.tab_widget.tabText(index) for index in range(3)] == [
-        "Dashboard",
-        "Config",
-        "Service",
-    ]
+    assert window.sidebar.objectName() == "sidebar"
+    assert window.page_stack.count() == 4
+    assert window.page_stack.currentIndex() == 0
+    assert window.sidebar._nav_buttons[0].isChecked() is True
+    assert window.sidebar._nav_buttons[1].text() == "Graphs"
+    assert window.sidebar._nav_buttons[2].text() == "Config"
+    assert window.sidebar._nav_buttons[3].text() == "Service"
     assert window.windowIcon().isNull() is False
-    assert (
-        window.tab_widget.cornerWidget(Qt.Corner.TopRightCorner)
-        is window.dashboard_page.status_corner_widget
-    )
-    assert "QTabBar::tab" in window.styleSheet()
+    assert "QFrame#sidebar" in window.sidebar.styleSheet()
 
 
 def test_main_window_hides_to_tray_when_minimized_preference_enabled(qtbot) -> None:

@@ -1,4 +1,4 @@
-"""Tests for the PySide6 dashboard page."""
+"""Tests for the PySide6 dashboard page (V2 row-based layout)."""
 
 from __future__ import annotations
 
@@ -9,11 +9,11 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QFrame, QLabel, QPushButton
+from PySide6.QtWidgets import QFrame, QLabel
 
 from pysysfan.config import Config, CurveConfig, FanConfig, UpdateConfig
 from pysysfan.gui.desktop.dashboard_page import DashboardPage
-from pysysfan.history_file import HistorySample, append_history_sample
+from pysysfan.gui.desktop.data_provider import DashboardDataProvider
 from pysysfan.profiles import ProfileManager
 from pysysfan.state_file import (
     AlertState,
@@ -22,6 +22,11 @@ from pysysfan.state_file import (
     TemperatureState,
     write_state,
 )
+
+
+# ------------------------------------------------------------------
+# Fixtures / helpers
+# ------------------------------------------------------------------
 
 
 def _sample_state(
@@ -69,7 +74,7 @@ def _sample_state(
                 message="High temperature: 90.0°C",
                 value=90.0,
                 threshold=80.0,
-                timestamp=timestamp,
+                timestamp=timestamp or time.time(),
             )
         ],
     )
@@ -159,201 +164,177 @@ def _create_multi_fan_profile_manager(tmp_path) -> ProfileManager:
     return manager
 
 
-def _create_cpu_gpu_profile_manager(tmp_path) -> ProfileManager:
-    manager = ProfileManager(config_dir=tmp_path)
-    config = Config(
-        poll_interval=1.0,
-        fans={
-            "cpu_fan": FanConfig(
-                fan_id="/mb/control/0",
-                curve="balanced",
-                temp_ids=["/cpu/temp/0"],
-                aggregation="max",
-                header_name="CPU Fan",
-                allow_fan_off=False,
-            ),
-            "gpu_fan": FanConfig(
-                fan_id="/gpu-nvidia/0/control/0",
-                curve="balanced",
-                temp_ids=["/gpu/temp/0"],
-                aggregation="max",
-                header_name="GPU Fan",
-                allow_fan_off=False,
-            ),
-        },
-        curves={
-            "balanced": CurveConfig(
-                points=[(30.0, 30.0), (60.0, 60.0), (85.0, 100.0)],
-                hysteresis=2.0,
-            )
-        },
-        update=UpdateConfig(auto_check=False),
-    )
-    manager.create_profile(
-        "gaming",
-        display_name="Gaming Mode",
-        description="Aggressive cooling for high sustained load.",
-        config=config,
-    )
-    manager.set_active_profile("gaming")
-    return manager
-
-
-def test_dashboard_refresh_populates_snapshot(qtbot, tmp_path) -> None:
-    """Refreshing the dashboard should populate grouped fan mapping widgets."""
-    profile_manager = _create_profile_manager(tmp_path)
-    config_path = profile_manager.get_profile_config_path("gaming")
+def _make_provider(
+    tmp_path,
+    *,
+    state: DaemonStateFile | None = None,
+    profile_manager: ProfileManager | None = None,
+    installed: bool = True,
+) -> DashboardDataProvider:
+    """Build a ``DashboardDataProvider`` with mocked backends."""
     state_path = tmp_path / "daemon_state.json"
     history_path = tmp_path / "daemon_history.ndjson"
-    write_state(_sample_state(config_path=str(config_path)), state_path)
-    page = DashboardPage(
+    if state is not None:
+        write_state(state, state_path)
+    return DashboardDataProvider(
         state_path=state_path,
         history_path=history_path,
-        service_status_getter=lambda: _task_status(),
-        profile_manager=profile_manager,
+        service_status_getter=lambda: _task_status(installed=installed),
+        profile_manager=profile_manager or ProfileManager(config_dir=tmp_path),
     )
+
+
+def _make_page(qtbot, provider: DashboardDataProvider) -> DashboardPage:
+    """Create a DashboardPage wired to the given provider."""
+    page = DashboardPage(provider=provider)
     qtbot.addWidget(page)
+    return page
 
-    page.refresh_data()
 
+# ------------------------------------------------------------------
+# Tests
+# ------------------------------------------------------------------
+
+
+def test_dashboard_creates_v2_layout_structure(qtbot, tmp_path) -> None:
+    """The V2 dashboard should have sidebar, table header, fan rows."""
+    provider = _make_provider(tmp_path)
+    page = _make_page(qtbot, provider)
+
+    assert page.objectName() == "dashboardRoot"
     assert page.scroll_area.widgetResizable() is True
-    assert page.main_splitter.count() == 2
-    assert page.daemon_indicator.text() == "●"
-    assert page.alerts_button.text() == "⚠ 1"
-    assert page.findChild(QFrame, "statusStrip") is None
-    assert page.findChild(QFrame, "profileSummaryCard") is None
-    assert page.fan_summary_layout.count() == 1
-    assert page.fan_summary_scroll_area.widgetResizable() is True
-    group_card = page.fan_summary_layout.itemAt(0).widget()
-    assert group_card.objectName() == "cpuFanGroupCard"
-    assert group_card.minimumHeight() >= 178
-    assert group_card.findChild(QLabel, "fanGroupTitleLabel").text() == "CPU Fan"
-    assert "CPU Fan" in group_card.findChild(QLabel, "fanGroupMembersLabel").text()
-    assert group_card.findChild(QLabel, "fanGroupTargetValueLabel").text() == "60%"
-    assert group_card.findChild(QLabel, "fanGroupActualValueLabel").text() == "55.0%"
-    assert group_card.findChild(QLabel, "fanGroupRpmValueLabel").text() == "1325 RPM"
+    assert page.sidebar is not None
+    assert page.sidebar.objectName() == "sidebar"
+    assert page.findChild(QFrame, "tableHeader") is not None
+    assert page.fan_rows_container is not None
+    assert page.sidebar._alerts_label.text() == "⚠ 0"
+
+
+def test_dashboard_populates_rows_from_state(qtbot, tmp_path) -> None:
+    """Refreshing the provider should populate fan rows in the page."""
+    profile_manager = _create_profile_manager(tmp_path)
+    config_path = profile_manager.get_profile_config_path("gaming")
+    state = _sample_state(config_path=str(config_path))
+    provider = _make_provider(tmp_path, state=state, profile_manager=profile_manager)
+    page = _make_page(qtbot, provider)
+
+    provider.refresh_data()
+
+    assert len(page._fan_rows) == 1
+    row = page._fan_rows[0]
+    assert row.objectName() == "cpuFanRow"
+
+    # Check cells in the row
+    group_label = row.findChild(QLabel, "fanRowGroup")
+    assert group_label is not None
+    assert group_label.text() == "CPU Fan"
+
+    curve_label = row.findChild(QLabel, "fanRowCurve")
+    assert curve_label is not None
+    assert curve_label.text() == "balanced"
+
+    target_label = row.findChild(QLabel, "fanRowTarget")
+    assert target_label is not None
+    assert target_label.text() == "60%"
+
+    actual_label = row.findChild(QLabel, "fanRowActual")
+    assert actual_label is not None
+    assert actual_label.text() == "55.0%"
+
+    rpm_label = row.findChild(QLabel, "fanRowRpm")
+    assert rpm_label is not None
+    assert rpm_label.text() == "1325 RPM"
+
+    sensors_label = row.findChild(QLabel, "fanRowSensors")
+    assert sensors_label is not None
+    assert "CPU / Package · 61.5°C" in sensors_label.text()
+
+
+def test_dashboard_header_bar_populated_from_state(qtbot, tmp_path) -> None:
+    """The sidebar should show profile, uptime, and poll info from state."""
+    profile_manager = _create_profile_manager(tmp_path)
+    config_path = profile_manager.get_profile_config_path("gaming")
+    state = _sample_state(config_path=str(config_path))
+    provider = _make_provider(tmp_path, state=state, profile_manager=profile_manager)
+    page = _make_page(qtbot, provider)
+
+    provider.refresh_data()
+
+    assert "Gaming Mode" in page.sidebar._profile_label.text()
+    assert "Poll:" in page.sidebar._poll_label.text()
+
+
+def test_dashboard_health_summary_shows_hottest_and_max_speed(qtbot, tmp_path) -> None:
+    """Sidebar should display temperature and max fan info."""
+    profile_manager = _create_profile_manager(tmp_path)
+    config_path = profile_manager.get_profile_config_path("gaming")
+    state = _sample_state(config_path=str(config_path))
+    provider = _make_provider(tmp_path, state=state, profile_manager=profile_manager)
+    page = _make_page(qtbot, provider)
+
+    provider.refresh_data()
+
+    # Sidebar shows CPU temp gauge and max fan
+    cpu_temp_label = page.sidebar._cpu_temp.findChild(QLabel, "sidebarTempCPU")
+    assert cpu_temp_label is not None
+    assert "62" in cpu_temp_label.text() or "—" not in cpu_temp_label.text()
     assert (
-        "CPU / Package · 61.5°C"
-        in group_card.findChild(
-            QLabel,
-            "fanGroupSensorsLabel",
-        ).text()
+        "1325" in page.sidebar._max_fan_label.text()
+        or "1,325" in page.sidebar._max_fan_label.text()
     )
-    assert page._graph_controls["temperature"]["legend"].text().count("Package") == 1
-    assert page.main_splitter.minimumHeight() >= 800
-    assert page.temperature_plot.minimumHeight() >= 220
-    assert page.fan_rpm_plot.minimumHeight() >= 180
-    assert page.fan_target_plot.minimumHeight() >= 180
-    assert page.findChild(QPushButton, "refreshButton") is None
+
+
+def test_dashboard_alerts_button_shows_count(qtbot, tmp_path) -> None:
+    """The sidebar notifications control should reflect the number of recent alerts."""
+    profile_manager = _create_profile_manager(tmp_path)
+    config_path = profile_manager.get_profile_config_path("gaming")
+    state = _sample_state(config_path=str(config_path))
+    provider = _make_provider(tmp_path, state=state, profile_manager=profile_manager)
+    page = _make_page(qtbot, provider)
+
+    provider.refresh_data()
+
+    assert page.sidebar._alerts_label.text() == "⚠ 1"
+    assert "1" in page.sidebar._alerts_label.text()
 
 
 def test_dashboard_shows_offline_message_without_state(qtbot, tmp_path) -> None:
     """Dashboard should report offline state when no state file exists."""
-    page = DashboardPage(
-        state_path=tmp_path / "missing.json",
-        history_path=tmp_path / "daemon_history.ndjson",
-        service_status_getter=lambda: _task_status(installed=True),
-    )
-    qtbot.addWidget(page)
-    page.show()
+    provider = _make_provider(tmp_path, installed=True)
+    page = _make_page(qtbot, provider)
 
-    page.refresh_data()
+    provider.refresh_data()
 
-    assert page.daemon_indicator.text() == "●"
-    assert page.alerts_button.text() == "⚠ 0"
-    assert page._refresh_timer.interval() == page.OFFLINE_REFRESH_INTERVAL_MS
+    assert page.sidebar._alerts_label.text() == "⚠ 0"
     assert "state file" in page.message_label.text().lower()
-    assert page.fan_summary_empty_label.isVisible() is True
+    assert page.message_label.isHidden() is False
 
 
-def test_dashboard_scales_poll_interval_for_idle_daemon(qtbot, tmp_path) -> None:
-    """Dashboard should back off polling when daemon state stays unchanged."""
+def test_dashboard_offline_clears_rows(qtbot, tmp_path) -> None:
+    """Going offline should remove all fan rows."""
     profile_manager = _create_profile_manager(tmp_path)
     config_path = profile_manager.get_profile_config_path("gaming")
-    state_path = tmp_path / "daemon_state.json"
-    history_path = tmp_path / "daemon_history.ndjson"
-    write_state(_sample_state(config_path=str(config_path)), state_path)
-    page = DashboardPage(
-        state_path=state_path,
-        history_path=history_path,
-        service_status_getter=lambda: _task_status(),
-        profile_manager=profile_manager,
-    )
-    qtbot.addWidget(page)
+    state = _sample_state(config_path=str(config_path))
+    provider = _make_provider(tmp_path, state=state, profile_manager=profile_manager)
+    page = _make_page(qtbot, provider)
 
-    page.refresh_data()
-    assert page._refresh_timer.interval() == page.REFRESH_INTERVAL_MS
+    provider.refresh_data()
+    assert len(page._fan_rows) == 1
 
-    page.refresh_data()
-    assert page._refresh_timer.interval() == page.IDLE_REFRESH_INTERVAL_MS
+    # Remove state file to trigger offline
+    state_path = provider._state_path
+    state_path.unlink()
+    provider.refresh_data()
+
+    assert len(page._fan_rows) == 0
 
 
-def test_dashboard_only_polls_while_visible(qtbot, tmp_path) -> None:
-    """The dashboard page should only run its refresh timer while visible."""
-    page = DashboardPage(
-        state_path=tmp_path / "missing.json",
-        history_path=tmp_path / "daemon_history.ndjson",
-        service_status_getter=lambda: _task_status(installed=True),
-    )
-    qtbot.addWidget(page)
-
-    assert page._refresh_timer.isActive() is False
-
-    page.show()
-    qtbot.waitUntil(page._refresh_timer.isActive)
-
-    page.hide()
-    qtbot.waitUntil(lambda: not page._refresh_timer.isActive())
-
-
-def test_dashboard_start_service_uses_runner(qtbot, tmp_path) -> None:
-    """Starting the service from the dashboard should use the injected runner."""
-    calls: list[str] = []
-    page = DashboardPage(
-        state_path=tmp_path / "missing.json",
-        history_path=tmp_path / "daemon_history.ndjson",
-        service_status_getter=lambda: _task_status(installed=True),
-        service_action_runner=lambda action: (calls.append(action) or True, "Started"),
-    )
-    qtbot.addWidget(page)
-
-    page.start_service()
-
-    assert calls == ["start"]
-    assert page.message_label.text() == "Started"
-
-
-def test_dashboard_history_selector_updates_window(qtbot, tmp_path) -> None:
-    """Changing the history selector should update the active history window."""
-    profile_manager = _create_profile_manager(tmp_path)
-    config_path = profile_manager.get_profile_config_path("gaming")
-    state_path = tmp_path / "daemon_state.json"
-    history_path = tmp_path / "daemon_history.ndjson"
-    write_state(_sample_state(config_path=str(config_path)), state_path)
-    page = DashboardPage(
-        state_path=state_path,
-        history_path=history_path,
-        service_status_getter=lambda: _task_status(),
-        profile_manager=profile_manager,
-    )
-    qtbot.addWidget(page)
-
-    page.refresh_data()
-    page.history_selector.setCurrentText("15 min")
-
-    assert page._history_seconds == 900
-
-
-def test_dashboard_graphs_default_to_grouped_and_controlled_series(
-    qtbot,
-    tmp_path,
-) -> None:
-    """Dashboard graphs should default to grouped fans and configured sensors."""
+def test_dashboard_multi_fan_creates_multiple_rows(qtbot, tmp_path) -> None:
+    """Multiple fan groups should result in multiple rows."""
     profile_manager = _create_multi_fan_profile_manager(tmp_path)
     config_path = profile_manager.get_profile_config_path("gaming")
-    timestamp = time.time()
     state = DaemonStateFile(
-        timestamp=timestamp,
+        timestamp=time.time(),
         pid=4321,
         running=True,
         uptime_seconds=25.0,
@@ -374,12 +355,6 @@ def test_dashboard_graphs_default_to_grouped_and_controlled_series(
                 hardware_name="GPU",
                 sensor_name="Edge",
                 value=58.0,
-            ),
-            TemperatureState(
-                identifier="/cpu/temp/limit",
-                hardware_name="CPU",
-                sensor_name="Package Limit",
-                value=95.0,
             ),
         ],
         fan_speeds=[
@@ -408,246 +383,149 @@ def test_dashboard_graphs_default_to_grouped_and_controlled_series(
         },
         recent_alerts=[],
     )
-    state_path = tmp_path / "daemon_state.json"
-    write_state(state, state_path)
-    page = DashboardPage(
-        state_path=state_path,
+    provider = _make_provider(tmp_path, state=state, profile_manager=profile_manager)
+    page = _make_page(qtbot, provider)
+
+    provider.refresh_data()
+
+    assert len(page._fan_rows) == 2
+    group_names = [
+        row.findChild(QLabel, "fanRowGroup").text() for row in page._fan_rows
+    ]
+    assert "Chassis Fan" in group_names
+    assert "CPU Fan" in group_names
+
+
+def test_dashboard_start_service_uses_provider(qtbot, tmp_path) -> None:
+    """Starting the service from the dashboard should delegate to the provider."""
+    calls: list[str] = []
+    provider = DashboardDataProvider(
+        state_path=tmp_path / "missing.json",
         history_path=tmp_path / "daemon_history.ndjson",
-        service_status_getter=lambda: _task_status(),
-        profile_manager=profile_manager,
+        service_status_getter=lambda: _task_status(installed=True),
+        service_action_runner=lambda action: (calls.append(action) or True, "Started"),
     )
-    qtbot.addWidget(page)
+    page = _make_page(qtbot, provider)
 
-    page.refresh_data()
+    page.start_service()
 
-    assert page._graph_enabled_series["temperature"] == {
-        "/cpu/temp/0",
-        "/gpu/temp/0",
-    }
-    assert page._graph_enabled_series["fan_rpm"] == {
-        "group::chassis_fan",
-        "group::cpu_fan",
-    }
-    assert page._graph_enabled_series["fan_target"] == {
-        "group::chassis_fan",
-        "group::cpu_fan",
-    }
-
-    temperature_menu = page._graph_controls["temperature"]["menu"]
-    fan_menu = page._graph_controls["fan_rpm"]["menu"]
-    temperature_actions = [action.text() for action in temperature_menu.actions()]
-    fan_actions = [action.text() for action in fan_menu.actions()]
-
-    assert "CPU / Package" in temperature_actions
-    assert "GPU / Edge" in temperature_actions
-    assert all("Limit" not in text for text in temperature_actions)
-    assert "Chassis Fan" in fan_actions
-    assert "CPU Fan" in fan_actions
-    assert any(text.startswith("Fan · CPU Fan") for text in fan_actions)
-    assert page._graph_controls["fan_rpm"]["button"].text() == "Show Lines"
-    assert "CPU Fan" in page._graph_controls["fan_rpm"]["legend"].text()
+    assert calls == ["start"]
+    assert page.message_label.text() == "Started"
 
 
-def test_dashboard_reads_preexisting_daemon_history_on_startup(
-    qtbot,
-    tmp_path,
-) -> None:
-    """Dashboard history should come from the daemon file, not only UI runtime."""
+def test_dashboard_polling_controlled_by_show_hide(qtbot, tmp_path) -> None:
+    """The dashboard should start/stop provider polling on show/hide."""
+    provider = _make_provider(tmp_path, installed=True)
+    page = _make_page(qtbot, provider)
+
+    assert provider._refresh_timer.isActive() is False
+
+    page.show()
+    qtbot.waitUntil(provider._refresh_timer.isActive)
+
+    page.hide()
+    qtbot.waitUntil(lambda: not provider._refresh_timer.isActive())
+
+
+def test_dashboard_temperature_color_thresholds(qtbot, tmp_path) -> None:
+    """Temperature color should follow the green/amber/red thresholds."""
+    provider = _make_provider(tmp_path)
+    page = _make_page(qtbot, provider)
+
+    assert page._temperature_color(59.9) == "#22c55e"
+    assert page._temperature_color(60.0) == "#f59e0b"
+    assert page._temperature_color(79.9) == "#f59e0b"
+    assert page._temperature_color(80.0) == "#ef4444"
+
+
+def test_dashboard_display_group_name_formatting(qtbot, tmp_path) -> None:
+    """Group names should be title-cased with known acronyms uppercased."""
+    provider = _make_provider(tmp_path)
+    page = _make_page(qtbot, provider)
+
+    assert page._display_group_name("cpu_fan") == "CPU Fan"
+    assert page._display_group_name("gpu_pump") == "GPU Pump"
+    assert page._display_group_name("chassis_fan") == "Chassis Fan"
+
+
+def test_dashboard_format_uptime(qtbot, tmp_path) -> None:
+    """Uptime formatter should produce human-readable strings."""
+    provider = _make_provider(tmp_path)
+    page = _make_page(qtbot, provider)
+
+    assert page._format_uptime(25.0) == "0m"
+    assert page._format_uptime(3600.0 + 120.0) == "1h 02m"
+    assert page._format_uptime(2 * 3600.0 + 14 * 60.0) == "2h 14m"
+
+
+def test_dashboard_health_alerts_count_zero_when_no_alerts(qtbot, tmp_path) -> None:
+    """With no alerts, the sidebar should show 'Alerts: 0'."""
     profile_manager = _create_profile_manager(tmp_path)
     config_path = profile_manager.get_profile_config_path("gaming")
-    state_path = tmp_path / "daemon_state.json"
-    history_path = tmp_path / "daemon_history.ndjson"
-    write_state(_sample_state(config_path=str(config_path)), state_path)
-    append_history_sample(
-        HistorySample(
-            timestamp=time.time() - 5.0,
-            temperatures={"/cpu/temp/0": 58.0},
-            fan_rpm={"/mb/control/0": 1200.0},
-            fan_targets={"/mb/control/0": 52.0},
-        ),
-        history_path,
+    state = DaemonStateFile(
+        timestamp=time.time(),
+        pid=4321,
+        running=True,
+        uptime_seconds=60.0,
+        active_profile="gaming",
+        poll_interval=1.0,
+        config_path=str(config_path),
+        fans_configured=1,
+        curves_configured=1,
+        temperatures=[
+            TemperatureState(
+                identifier="/cpu/temp/0",
+                hardware_name="CPU",
+                sensor_name="Package",
+                value=55.0,
+            )
+        ],
+        fan_speeds=[
+            FanSpeedState(
+                identifier="/mb/fan/0",
+                control_identifier="/mb/control/0",
+                hardware_name="Motherboard",
+                sensor_name="CPU Fan",
+                rpm=900.0,
+                current_control_pct=40.0,
+                controllable=True,
+            )
+        ],
+        fan_targets={"/mb/control/0": 40.0},
+        recent_alerts=[],
     )
-    append_history_sample(
-        HistorySample(
-            timestamp=time.time(),
-            temperatures={"/cpu/temp/0": 61.5},
-            fan_rpm={"/mb/control/0": 1325.0},
-            fan_targets={"/mb/control/0": 60.0},
-        ),
-        history_path,
+    provider = _make_provider(tmp_path, state=state, profile_manager=profile_manager)
+    page = _make_page(qtbot, provider)
+
+    provider.refresh_data()
+
+    assert page.sidebar._alerts_label.text() == "⚠ 0"
+    assert "0" in page.sidebar._alerts_label.text()
+
+
+def test_dashboard_empty_fan_config_shows_empty_label(qtbot, tmp_path) -> None:
+    """When the config has no fans, an empty-state label should appear."""
+    state = DaemonStateFile(
+        timestamp=time.time(),
+        pid=4321,
+        running=True,
+        uptime_seconds=5.0,
+        active_profile="default",
+        poll_interval=1.0,
+        config_path="nonexistent.yaml",
+        fans_configured=0,
+        curves_configured=0,
+        temperatures=[],
+        fan_speeds=[],
+        fan_targets={},
+        recent_alerts=[],
     )
+    provider = _make_provider(tmp_path, state=state)
+    page = _make_page(qtbot, provider)
 
-    page = DashboardPage(
-        state_path=state_path,
-        history_path=history_path,
-        service_status_getter=lambda: _task_status(),
-        profile_manager=profile_manager,
-    )
-    qtbot.addWidget(page)
+    provider.refresh_data()
 
-    page.refresh_data()
-
-    assert len(page._temperature_history["/cpu/temp/0"]) == 2
-    assert len(page._fan_rpm_history["/mb/control/0"]) == 2
-    assert len(page._fan_target_history["/mb/control/0"]) == 2
-
-
-def test_dashboard_target_graph_includes_configured_gpu_group(
-    qtbot,
-    tmp_path,
-) -> None:
-    """Configured target groups should appear even if a fan-speed sensor is absent."""
-    profile_manager = _create_cpu_gpu_profile_manager(tmp_path)
-    config_path = profile_manager.get_profile_config_path("gaming")
-    state_path = tmp_path / "daemon_state.json"
-    write_state(
-        DaemonStateFile(
-            timestamp=time.time(),
-            pid=4321,
-            running=True,
-            uptime_seconds=25.0,
-            active_profile="gaming",
-            poll_interval=1.0,
-            config_path=str(config_path),
-            fans_configured=2,
-            curves_configured=1,
-            temperatures=[
-                TemperatureState(
-                    identifier="/cpu/temp/0",
-                    hardware_name="CPU",
-                    sensor_name="Package",
-                    value=61.5,
-                ),
-                TemperatureState(
-                    identifier="/gpu/temp/0",
-                    hardware_name="GPU",
-                    sensor_name="Edge",
-                    value=56.0,
-                ),
-            ],
-            fan_speeds=[
-                FanSpeedState(
-                    identifier="/mb/fan/0",
-                    control_identifier="/mb/control/0",
-                    hardware_name="Motherboard",
-                    sensor_name="CPU Fan",
-                    rpm=1325.0,
-                    current_control_pct=55.0,
-                    controllable=True,
-                )
-            ],
-            fan_targets={
-                "/mb/control/0": 60.0,
-                "/gpu-nvidia/0/control/0": 35.0,
-            },
-            recent_alerts=[],
-        ),
-        state_path,
-    )
-    page = DashboardPage(
-        state_path=state_path,
-        history_path=tmp_path / "daemon_history.ndjson",
-        service_status_getter=lambda: _task_status(),
-        profile_manager=profile_manager,
-    )
-    qtbot.addWidget(page)
-
-    page.refresh_data()
-
-    assert "group::gpu_fan" in page._graph_enabled_series["fan_target"]
-    target_actions = [
-        action.text() for action in page._graph_controls["fan_target"]["menu"].actions()
-    ]
-    assert "GPU Fan" in target_actions
-
-
-def test_dashboard_graph_series_menu_toggles_visibility(qtbot, tmp_path) -> None:
-    """Users should be able to enable and disable individual graph series."""
-    profile_manager = _create_multi_fan_profile_manager(tmp_path)
-    config_path = profile_manager.get_profile_config_path("gaming")
-    state_path = tmp_path / "daemon_state.json"
-    write_state(
-        DaemonStateFile(
-            timestamp=time.time(),
-            pid=4321,
-            running=True,
-            uptime_seconds=25.0,
-            active_profile="gaming",
-            poll_interval=1.0,
-            config_path=str(config_path),
-            fans_configured=2,
-            curves_configured=1,
-            temperatures=[
-                TemperatureState(
-                    identifier="/cpu/temp/0",
-                    hardware_name="CPU",
-                    sensor_name="Package",
-                    value=61.5,
-                )
-            ],
-            fan_speeds=[
-                FanSpeedState(
-                    identifier="/mb/fan/0",
-                    control_identifier="/mb/control/0",
-                    hardware_name="Motherboard",
-                    sensor_name="CPU Fan",
-                    rpm=1325.0,
-                    current_control_pct=55.0,
-                    controllable=True,
-                ),
-                FanSpeedState(
-                    identifier="/mb/fan/1",
-                    control_identifier="/mb/control/1",
-                    hardware_name="Motherboard",
-                    sensor_name="Chassis Fan",
-                    rpm=980.0,
-                    current_control_pct=42.0,
-                    controllable=True,
-                ),
-            ],
-            fan_targets={
-                "/mb/control/0": 60.0,
-                "/mb/control/1": 45.0,
-            },
-            recent_alerts=[],
-        ),
-        state_path,
-    )
-    page = DashboardPage(
-        state_path=state_path,
-        history_path=tmp_path / "daemon_history.ndjson",
-        service_status_getter=lambda: _task_status(),
-        profile_manager=profile_manager,
-    )
-    qtbot.addWidget(page)
-
-    page.refresh_data()
-
-    fan_menu = page._graph_controls["fan_rpm"]["menu"]
-    group_action = next(
-        action for action in fan_menu.actions() if action.text() == "CPU Fan"
-    )
-    cpu_fan_action = next(
-        action
-        for action in fan_menu.actions()
-        if action.text().startswith("Fan · CPU Fan")
-    )
-
-    assert group_action.isChecked() is True
-    assert cpu_fan_action.isChecked() is False
-
-    cpu_fan_action.setChecked(True)
-    fan_menu = page._graph_controls["fan_rpm"]["menu"]
-    group_action = next(
-        action for action in fan_menu.actions() if action.text() == "CPU Fan"
-    )
-    group_action.setChecked(False)
-
-    fan_menu = page._graph_controls["fan_rpm"]["menu"]
-    chassis_action = next(
-        action for action in fan_menu.actions() if action.text() == "Chassis Fan"
-    )
-    chassis_action.setChecked(False)
-
-    assert page._graph_enabled_series["fan_rpm"] == {"series::/mb/control/0"}
-    assert page._graph_controls["fan_rpm"]["button"].text() == "Show Lines"
+    assert len(page._fan_rows) == 0
+    empty_label = page.fan_rows_container.findChild(QLabel, "fanRowsEmpty")
+    assert empty_label is not None
+    assert "No active fan mappings" in empty_label.text()
