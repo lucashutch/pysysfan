@@ -64,7 +64,7 @@ class AccordionSection(QFrame):
         self.header_button.clicked.connect(self._on_header_clicked)
         top_row_layout.addWidget(self.header_button, stretch=1)
 
-        self.indicator_label = QLabel("▸", top_row)
+        self.indicator_label = QLabel("+", top_row)
         self.indicator_label.setObjectName("accordionIndicator")
         self.indicator_label.setProperty("accordionIndicator", True)
         self.indicator_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -73,6 +73,7 @@ class AccordionSection(QFrame):
         )
         self.indicator_label.setFixedWidth(34)
         self.indicator_label.setFixedHeight(34)
+        self.indicator_label.setStyleSheet("font-size: 16px; font-weight: 700;")
         top_row_layout.addWidget(self.indicator_label)
 
         self.summary_label = QLabel(summary, header)
@@ -133,7 +134,7 @@ class AccordionSection(QFrame):
         self.toggled.emit(checked)
 
     def _apply_state(self, open_: bool) -> None:
-        self.indicator_label.setText("▾" if open_ else "▸")
+        self.indicator_label.setText("−" if open_ else "+")
         self.header_button.setText(self._title)
         self.body_widget.setVisible(open_)
         self.summary_label.setVisible(not open_)

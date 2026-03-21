@@ -36,7 +36,7 @@ from pysysfan.gui.desktop.local_backend import (
 from pysysfan.gui.desktop.plotting import CurveEditorPlotWidget, pg
 from pysysfan.gui.desktop.theme import (
     PAGE_HEADING_STYLE,
-    management_page_stylesheet,
+    flat_management_page_stylesheet,
     plot_theme,
 )
 from pysysfan.profiles import DEFAULT_PROFILE_NAME, ProfileManager
@@ -66,23 +66,34 @@ class CurvesPage(QWidget):
         self._profile_display_names: dict[str, str] = {}
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(10)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(14)
 
-        heading = QLabel("Config", self)
+        heading = QLabel("Configuration", self)
         heading.setObjectName("curvesTitle")
         heading.setStyleSheet(PAGE_HEADING_STYLE)
         layout.addWidget(heading)
 
+        toolbar = QHBoxLayout()
+        toolbar.setSpacing(12)
+
+        self.status_label = QLabel("● default · Poll 1.0s · Hysteresis 3.0°C", self)
+        self.status_label.setObjectName("serviceConnectionLabel")
+        toolbar.addWidget(self.status_label)
+
+        toolbar.addStretch(1)
+
+        self.refresh_button = QPushButton("Refresh", self)
+        self.refresh_button.setObjectName("serviceRefreshBtn")
+        self.refresh_button.clicked.connect(self.refresh_data)
+        toolbar.addWidget(self.refresh_button)
+
         self.message_label = QLabel("", self)
         self.message_label.setObjectName("curvesMessageLabel")
-        self.message_label.setWordWrap(True)
+        self.message_label.setWordWrap(False)
         self.message_label.hide()
-        layout.addWidget(self.message_label)
-
-        self.config_path_label = QLabel("Config path: N/A", self)
-        self.config_path_label.setWordWrap(True)
-        layout.addWidget(self.config_path_label)
+        toolbar.addWidget(self.message_label)
+        layout.addLayout(toolbar)
 
         content_row = QHBoxLayout()
         content_row.setSpacing(12)
@@ -325,7 +336,7 @@ class CurvesPage(QWidget):
 
         self.points_table.itemChanged.connect(self._handle_curve_inputs_changed)
         self.hysteresis_spin.valueChanged.connect(self._handle_curve_inputs_changed)
-        self.setStyleSheet(management_page_stylesheet(self.palette()))
+        self.setStyleSheet(flat_management_page_stylesheet(self.palette()))
 
     def refresh_data(self) -> None:
         """Load the active profile config from disk."""
@@ -338,7 +349,6 @@ class CurvesPage(QWidget):
             return
 
         self._show_message("", is_error=False)
-        self.config_path_label.setText(f"Config path: {self._config_path}")
         self.poll_interval_spin.setValue(
             self._normalized_poll_interval(self._config.poll_interval)
         )
@@ -348,6 +358,7 @@ class CurvesPage(QWidget):
         self.preview_curve()
         self._update_live_preview_summary()
         self._update_section_summaries()
+        self._update_status_label()
 
     def switch_profile(self) -> None:
         """Switch the active profile and reload the editor."""
@@ -850,6 +861,14 @@ class CurvesPage(QWidget):
             self.profile_selector.currentText().strip() or self._active_profile
         )
         self.profiles_section.set_summary(active_profile or "No profile selected")
+
+    def _update_status_label(self) -> None:
+        profile = self._active_profile or "default"
+        poll = self.poll_interval_spin.value()
+        hyst = self.hysteresis_spin.value()
+        self.status_label.setText(
+            f"● {profile} · Poll {poll:.1f}s · Hysteresis {hyst:.1f}°C"
+        )
 
     def _selected_profile_name(self) -> str:
         value = self.profile_selector.currentData()

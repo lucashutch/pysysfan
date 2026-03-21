@@ -32,7 +32,10 @@ from pysysfan.gui.desktop.preferences import (
     get_minimize_to_tray,
     set_minimize_to_tray,
 )
-from pysysfan.gui.desktop.theme import PAGE_HEADING_STYLE, management_page_stylesheet
+from pysysfan.gui.desktop.theme import (
+    PAGE_HEADING_STYLE,
+    flat_management_page_stylesheet,
+)
 from pysysfan.platforms import windows_service
 from pysysfan.state_file import DEFAULT_STATE_PATH
 
@@ -353,7 +356,7 @@ class ServicePage(QWidget):
         self._refresh_timer.timeout.connect(self.refresh_data)
         self._diagnostic_lines: list[tuple[str, str, str]] = []
         self.setStyleSheet(
-            management_page_stylesheet(self.palette()) + _action_state_stylesheet()
+            flat_management_page_stylesheet(self.palette()) + _action_state_stylesheet()
         )
 
     def showEvent(self, event) -> None:  # noqa: N802

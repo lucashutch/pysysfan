@@ -629,6 +629,298 @@ QWidget[accordionBody="true"] {{
 """
 
 
+def flat_management_page_stylesheet(palette: QPalette) -> str:
+    """Return a flat, borderless stylesheet for Config and Service pages."""
+    colors = desktop_colors(palette)
+    button_text = colors["text"]
+    return f"""
+QWidget#managementPageRoot {{
+    background: {colors["window"]};
+    color: {colors["text"]};
+}}
+
+QGroupBox {{
+    border: none;
+    border-radius: 0;
+    margin-top: 0;
+    padding-top: 0;
+    background: {colors["raised"]};
+    color: {colors["text"]};
+    font-size: 15px;
+    font-weight: 800;
+}}
+
+QGroupBox::title {{
+    subcontrol-origin: margin;
+    left: 16px;
+    padding: 0 8px;
+}}
+
+QLabel[serviceSectionHeader="true"] {{
+    color: {colors["muted"]};
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+}}
+
+QLabel#serviceConnectionLabel {{
+    color: {colors["muted"]};
+    font-size: 11px;
+}}
+
+QLabel#serviceMessageLabel {{
+    color: {colors["text"]};
+    font-size: 11px;
+    padding: 2px 8px;
+}}
+
+QFrame#serviceSidebar,
+QFrame#serviceDiagnosticsPanel {{
+    background: {colors["window"]};
+    border: none;
+}}
+
+QFrame#serviceDivider {{
+    background: {colors["raised"]};
+}}
+
+QFrame[serviceCard="true"] {{
+    background: {colors["raised"]};
+    border: none;
+}}
+
+QFrame#serviceStatusBox {{
+    background: {colors["raised"]};
+    border: none;
+}}
+
+QFrame#serviceStatusDot {{
+    border-radius: 0;
+    background: {colors["muted"]};
+}}
+
+QFrame#serviceStatusDot[status="running"] {{
+    background: #22c55e;
+}}
+
+QFrame#serviceStatusDot[status="stopped"] {{
+    background: #ef4444;
+}}
+
+QLabel#servicePidLabel {{
+    color: {colors["muted"]};
+    font-size: 11px;
+}}
+
+QLabel#detailValue {{
+    color: {colors["text"]};
+    font-size: 11px;
+    font-weight: 600;
+}}
+
+QCheckBox#traySwitch {{
+    spacing: 0;
+}}
+
+QCheckBox#traySwitch::indicator {{
+    width: 36px;
+    height: 18px;
+    border-radius: 0;
+    background: {colors["raised"]};
+    border: none;
+}}
+
+QCheckBox#traySwitch::indicator:checked {{
+    background: {colors["accent"]};
+}}
+
+QFrame#serviceComponentCard {{
+    background: {colors["raised"]};
+    border: none;
+}}
+
+QFrame#serviceComponentCard[componentAccent="lhm"] QFrame#componentAccentBar {{
+    background: #60a5fa;
+}}
+
+QFrame#serviceComponentCard[componentAccent="pawnio"] QFrame#componentAccentBar {{
+    background: #a78bfa;
+}}
+
+QPushButton#serviceInstallLhmBtn,
+QPushButton#serviceInstallPawnioBtn {{
+    background: transparent;
+    border: none;
+    color: {colors["text"]};
+    font-size: 14px;
+    padding: 4px 8px;
+}}
+
+QPushButton#serviceInstallLhmBtn:hover,
+QPushButton#serviceInstallPawnioBtn:hover {{
+    color: {colors["accent"]};
+}}
+
+QLabel#serviceComponentTitle {{
+    color: {colors["text"]};
+    font-size: 12px;
+    font-weight: 600;
+    padding-left: 8px;
+}}
+
+QFrame#serviceComponentCard[componentAccent="pawnio"] QLabel#serviceComponentTitle {{
+    color: {colors["text"]};
+}}
+
+QLabel#serviceComponentDetail {{
+    color: {colors["muted"]};
+    font-size: 11px;
+}}
+
+QLabel#serviceDiagnosticsTitle {{
+    color: {colors["muted"]};
+    font-size: 11px;
+    font-weight: 700;
+    padding-top: 8px;
+}}
+
+QSplitter::handle {{
+    background: transparent;
+    width: 0px;
+}}
+
+QPlainTextEdit#diagnosticsView {{
+    background: {colors["base"]};
+    border: none;
+    font-family: Consolas, monospace;
+    font-size: 11px;
+}}
+
+QFrame[liveValueCard="true"] {{
+    background: {colors["raised"]};
+    border: none;
+}}
+
+QLabel#liveValueTitle {{
+    color: {colors["muted"]};
+    font-size: 9px;
+    font-weight: 700;
+}}
+
+QLabel#liveTempValue,
+QLabel#liveFanValue {{
+    color: {colors["text"]};
+    font-size: 20px;
+    font-weight: 900;
+}}
+
+QLabel#curvesMessageLabel,
+QLabel#serviceMessageLabel {{
+    border-radius: 0;
+    padding: 8px 10px;
+    background: {colors["raised"]};
+}}
+
+QPushButton,
+QComboBox,
+QLineEdit,
+QDoubleSpinBox,
+QPlainTextEdit,
+QTableWidget {{
+    border: none;
+    border-radius: 0;
+    background: {colors["base"]};
+    color: {colors["text"]};
+}}
+
+QPushButton {{
+    background: {colors["raised"]};
+    border: none;
+    border-radius: 0;
+    color: {button_text};
+    padding: 8px 16px;
+}}
+
+QPushButton:hover {{
+    background: {colors["card"]};
+}}
+
+QPushButton:pressed {{
+    background: {colors["accent"]};
+    color: {colors["window"]};
+}}
+
+QComboBox,
+QLineEdit,
+QDoubleSpinBox {{
+    padding: 6px 10px;
+    background: {colors["raised"]};
+}}
+
+QComboBox::drop-down {{
+    border: 0;
+    width: 22px;
+}}
+
+QTableWidget,
+QPlainTextEdit {{
+    gridline-color: {colors["border"]};
+    background: {colors["raised"]};
+}}
+
+QHeaderView::section {{
+    background: {colors["raised"]};
+    color: {colors["text"]};
+    border: 0;
+    border-bottom: 1px solid {colors["border"]};
+    padding: 8px;
+    font-weight: 700;
+}}
+
+QFrame[accordionSection="true"] {{
+    background: {colors["raised"]};
+    border: none;
+    border-radius: 0;
+}}
+
+QToolButton[accordionHeader="true"] {{
+    border: 0;
+    background: transparent;
+    padding: 10px 12px;
+    color: {colors["text"]};
+    font-size: 13px;
+    font-weight: 800;
+    text-align: left;
+}}
+
+QToolButton[accordionHeader="true"]:hover {{
+    background: {colors["card"]};
+}}
+
+QLabel[accordionSummary="true"] {{
+    color: {colors["muted"]};
+    font-size: 11px;
+    font-weight: 600;
+}}
+
+QWidget[accordionBody="true"] {{
+    background: {colors["raised"]};
+}}
+
+QWidget#curvesLeftColumn,
+QWidget#curvesRightColumn {{
+    background: {colors["window"]};
+    border: none;
+}}
+
+QFrame#previewGroup {{
+    background: {colors["raised"]};
+    border: none;
+    border-radius: 0;
+}}
+"""
+
+
 def badge_stylesheet(tone: str, palette: QPalette) -> str:
     """Return a rounded badge stylesheet for a semantic tone."""
     colors = desktop_colors(palette)
