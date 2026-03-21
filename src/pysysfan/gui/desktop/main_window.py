@@ -5,6 +5,7 @@ from __future__ import annotations
 from PySide6.QtCore import QEvent, QTimer, Qt
 from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
+    QApplication,
     QHBoxLayout,
     QMainWindow,
     QStackedWidget,
@@ -147,6 +148,13 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
         """Hide to the tray when available unless the user explicitly quits."""
+        if not self.minimize_to_tray_enabled():
+            super().closeEvent(event)
+            app = QApplication.instance()
+            if app is not None:
+                app.quit()
+            return
+
         if self._tray_available() and not self._allow_close:
             event.ignore()
             self._hide_to_tray(
