@@ -235,9 +235,9 @@ class DashboardDataProvider(QObject):
     def build_temperature_catalog(self) -> dict[str, str]:
         """Return ``{sensor_id: display_label}`` for temperatures with data."""
         return {
-            sensor_id: self._temperature_labels.get(sensor_id, sensor_id)
+            sensor_id: self._temperature_labels[sensor_id]
             for sensor_id, series in sorted(self._temperature_history.items())
-            if series
+            if series and sensor_id in self._temperature_labels
         }
 
     def build_fan_rpm_catalog(self) -> dict[str, str]:
@@ -560,17 +560,17 @@ class DashboardDataProvider(QObject):
             f"{sensor.hardware_name} {sensor.sensor_name} {sensor.identifier}"
         ).lower()
         blocked_terms = (
-            "alarm",
-            "limit",
-            "critical",
-            "warning",
-            "threshold",
-            "max",
-            "tjmax",
-            "tj max",
-            "distance",
+            r"\balarm\b",
+            r"\blimit\b",
+            r"\bcritical\b",
+            r"\bwarning\b",
+            r"\bthreshold\b",
+            r"\bmax(?:imum)?\b",
+            r"\bmin(?:imum)?\b",
+            r"\btj[\s_-]?max\b",
+            r"\bdistance\b",
         )
-        return not any(term in combined for term in blocked_terms)
+        return not any(re.search(pattern, combined) for pattern in blocked_terms)
 
     @staticmethod
     def _object_name_token(value: str) -> str:
