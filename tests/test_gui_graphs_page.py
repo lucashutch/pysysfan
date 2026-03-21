@@ -87,6 +87,34 @@ def _sample_state(
     )
 
 
+def _sample_state_with_temperatures(count: int) -> DaemonStateFile:
+    timestamp = time.time()
+    temperatures = [
+        TemperatureState(
+            identifier=f"/cpu/temp/{index}",
+            hardware_name="CPU",
+            sensor_name=f"Sensor {index + 1}",
+            value=50.0 + index,
+        )
+        for index in range(count)
+    ]
+    return DaemonStateFile(
+        timestamp=timestamp,
+        pid=4321,
+        running=True,
+        uptime_seconds=25.0,
+        active_profile="gaming",
+        poll_interval=1.0,
+        config_path="C:/Users/test/.pysysfan/profiles/gaming.yaml",
+        fans_configured=0,
+        curves_configured=0,
+        temperatures=temperatures,
+        fan_speeds=[],
+        fan_targets={},
+        recent_alerts=[],
+    )
+
+
 def _task_status(installed: bool = True):
     from types import SimpleNamespace
 
@@ -177,7 +205,10 @@ def test_graphs_page_structure(qtbot, tmp_path) -> None:
     page = _make_page(qtbot, provider)
 
     assert page.objectName() == "graphsRoot"
+    assert page.findChild(QFrame, "graphsHeader") is not None
+    assert page.findChild(QFrame, "graphsDrawer") is not None
     assert page.findChild(QFrame, "graphsControlsRow") is not None
+    assert page.findChild(QFrame, "graphsStatsRow") is not None
     assert page.findChild(QFrame, "graphsLegendBar") is not None
     assert page.findChild(QPushButton, "graphTab_temperature") is not None
     assert page.findChild(QPushButton, "graphTab_fan_rpm") is not None
@@ -245,6 +276,24 @@ def test_legend_items_for_temperature(qtbot, tmp_path) -> None:
     # Should have labels for available temperature sensors
     labels = [item.text_label.text() for item in items]
     assert any("CPU" in label for label in labels)
+
+
+def test_legend_items_flow_down_columns(qtbot, tmp_path) -> None:
+    """The legend should fill top-to-bottom before moving to the next column."""
+    profile_manager = _create_profile_manager(tmp_path)
+    config_path = profile_manager.get_profile_config_path("gaming")
+    state = _sample_state_with_temperatures(6)
+    state.config_path = str(config_path)
+    provider = _make_provider(tmp_path, state=state, profile_manager=profile_manager)
+    page = _make_page(qtbot, provider)
+
+    provider.refresh_data()
+
+    positions = [
+        page._legend_layout.getItemPosition(index)[:2]
+        for index in range(page._legend_layout.count())
+    ]
+    assert positions == [(0, 0), (1, 0), (0, 1), (1, 1), (0, 2), (1, 2)]
 
 
 def test_legend_toggle_changes_visibility(qtbot, tmp_path) -> None:
@@ -427,6 +476,27 @@ def test_legend_muted_color_from_theme(qtbot, tmp_path) -> None:
     item = items[0]
     item.mousePressEvent(None)
     assert expected_muted in item.text_label.styleSheet()
+
+
+def test_hover_summary_lists_visible_series_values(qtbot, tmp_path) -> None:
+    """Hovering the plot should show sampled values for each visible series."""
+    profile_manager = _create_profile_manager(tmp_path)
+    config_path = profile_manager.get_profile_config_path("gaming")
+    state = _sample_state(config_path=str(config_path))
+    provider = _make_provider(tmp_path, state=state, profile_manager=profile_manager)
+    page = _make_page(qtbot, provider)
+
+    provider.refresh_data()
+
+    page._handle_plot_hover_changed((0.0, 0.0))
+
+    hover_text = page._hover_label.text()
+    assert hover_text.startswith("Hover @")
+    assert "CPU / Package: 61.5 °C" in hover_text
+    assert "GPU / Edge: 58 °C" in hover_text
+    assert page._hover_marker_item is not None
+    assert page._hover_marker_item.isVisible() is True
+    assert len(page._hover_marker_item.points()) == 2
 
 
 # ------------------------------------------------------------------

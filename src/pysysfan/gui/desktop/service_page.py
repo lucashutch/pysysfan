@@ -2,20 +2,22 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from pathlib import Path
 from typing import Any, Callable
 
-from PySide6.QtCore import QTimer
+from PySide6.QtCore import QTimer, Qt
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
+    QFrame,
     QGridLayout,
-    QGroupBox,
     QHBoxLayout,
     QLabel,
     QMessageBox,
     QPlainTextEdit,
     QPushButton,
-    QSystemTrayIcon,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -33,6 +35,19 @@ from pysysfan.gui.desktop.preferences import (
 from pysysfan.gui.desktop.theme import PAGE_HEADING_STYLE, management_page_stylesheet
 from pysysfan.platforms import windows_service
 from pysysfan.state_file import DEFAULT_STATE_PATH
+
+
+def _action_state_stylesheet() -> str:
+    """Return CSS selectors for button actionState properties."""
+    return """
+QPushButton#serviceStartStopBtn[actionState="start"] {}
+QPushButton#serviceStartStopBtn[actionState="stop"] {}
+QPushButton#serviceInstallUninstallBtn[actionState="install"] {}
+QPushButton#serviceInstallUninstallBtn[actionState="uninstall"] {}
+QPushButton#serviceEnableDisableBtn[actionState="enable"] {}
+QPushButton#serviceEnableDisableBtn[actionState="disable"] {}
+QPushButton#serviceRestartBtn {}
+"""
 
 
 class ServicePage(QWidget):
@@ -68,7 +83,7 @@ class ServicePage(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 24, 24, 24)
-        layout.setSpacing(16)
+        layout.setSpacing(14)
 
         heading = QLabel("Service", self)
         heading.setObjectName("serviceTitle")
@@ -83,150 +98,263 @@ class ServicePage(QWidget):
         toolbar.addWidget(self.connection_label)
 
         self.refresh_button = QPushButton("Refresh", self)
+        self.refresh_button.setObjectName("serviceRefreshBtn")
         self.refresh_button.clicked.connect(self.refresh_data)
         toolbar.addWidget(self.refresh_button)
-        toolbar.addStretch(1)
-        layout.addLayout(toolbar)
 
         self.message_label = QLabel("", self)
         self.message_label.setObjectName("serviceMessageLabel")
-        self.message_label.setWordWrap(True)
+        self.message_label.setWordWrap(False)
         self.message_label.hide()
-        layout.addWidget(self.message_label)
+        toolbar.addWidget(self.message_label)
+        toolbar.addStretch(1)
+        layout.addLayout(toolbar)
 
-        summary_group = QGroupBox("Task and Daemon State", self)
-        summary_layout = QGridLayout(summary_group)
-        summary_layout.setHorizontalSpacing(24)
-        summary_layout.setVerticalSpacing(8)
-
-        self.task_installed_label = QLabel("Task installed: N/A", self)
-        self.task_enabled_label = QLabel("Task enabled: N/A", self)
-        self.task_status_label = QLabel("Task status: N/A", self)
-        self.task_last_run_label = QLabel("Last run: N/A", self)
-        self.daemon_running_label = QLabel("Daemon: N/A", self)
-        self.daemon_pid_label = QLabel("Daemon PID: N/A", self)
-        self.daemon_profile_label = QLabel("Daemon profile: N/A", self)
-        self.daemon_config_label = QLabel("Daemon config: N/A", self)
-        self.daemon_config_label.setWordWrap(True)
-
-        summary_layout.addWidget(self.task_installed_label, 0, 0)
-        summary_layout.addWidget(self.task_enabled_label, 0, 1)
-        summary_layout.addWidget(self.task_status_label, 1, 0)
-        summary_layout.addWidget(self.task_last_run_label, 1, 1)
-        summary_layout.addWidget(self.daemon_running_label, 2, 0)
-        summary_layout.addWidget(self.daemon_pid_label, 2, 1)
-        summary_layout.addWidget(self.daemon_profile_label, 3, 0)
-        summary_layout.addWidget(self.daemon_config_label, 3, 1)
-        layout.addWidget(summary_group)
-
-        actions_row = QHBoxLayout()
-        actions_row.setSpacing(8)
-        self.install_button = QPushButton("Install / Repair", self)
-        self.install_button.clicked.connect(lambda: self._run_action("install"))
-        actions_row.addWidget(self.install_button)
-
-        self.uninstall_button = QPushButton("Uninstall", self)
-        self.uninstall_button.clicked.connect(
-            lambda: self._run_action(
-                "uninstall",
-                confirm_message="Uninstall the scheduled task?",
-            )
+        self.start_stop_button = QPushButton("▶ Start", self)
+        self.start_stop_button.setObjectName("serviceStartStopBtn")
+        self.start_stop_button.clicked.connect(
+            lambda: self._run_action("start_stop_toggle")
         )
-        actions_row.addWidget(self.uninstall_button)
 
-        self.enable_button = QPushButton("Enable", self)
-        self.enable_button.clicked.connect(lambda: self._run_action("enable"))
-        actions_row.addWidget(self.enable_button)
-
-        self.disable_button = QPushButton("Disable", self)
-        self.disable_button.clicked.connect(lambda: self._run_action("disable"))
-        actions_row.addWidget(self.disable_button)
-
-        self.start_button = QPushButton("Start", self)
-        self.start_button.clicked.connect(lambda: self._run_action("start"))
-        actions_row.addWidget(self.start_button)
-
-        self.stop_button = QPushButton("Stop", self)
-        self.stop_button.clicked.connect(
-            lambda: self._run_action(
-                "stop",
-                confirm_message="Stop the daemon and return fan control to BIOS?",
-            )
-        )
-        actions_row.addWidget(self.stop_button)
-
-        self.restart_button = QPushButton("Restart", self)
+        self.restart_button = QPushButton("↻ Restart", self)
+        self.restart_button.setObjectName("serviceRestartBtn")
         self.restart_button.clicked.connect(lambda: self._run_action("restart"))
-        actions_row.addWidget(self.restart_button)
-        actions_row.addStretch(1)
-        layout.addLayout(actions_row)
 
-        installers_row = QHBoxLayout()
-        installers_row.setSpacing(8)
-        self.install_lhm_button = QPushButton("Install LHM", self)
+        self.install_uninstall_button = QPushButton("Install", self)
+        self.install_uninstall_button.setObjectName("serviceInstallUninstallBtn")
+        self.install_uninstall_button.clicked.connect(
+            lambda: self._run_action("install_uninstall_toggle")
+        )
+
+        self.enable_disable_button = QPushButton("Enable Schedule", self)
+        self.enable_disable_button.setObjectName("serviceEnableDisableBtn")
+        self.enable_disable_button.clicked.connect(
+            lambda: self._run_action("enable_disable_toggle")
+        )
+
+        self.install_lhm_button = QPushButton("↓", self)
+        self.install_lhm_button.setObjectName("serviceInstallLhmBtn")
+        self.install_lhm_button.setToolTip("Download LHM")
         self.install_lhm_button.clicked.connect(
             lambda: self._run_installer("pysysfan-install-lhm")
         )
-        installers_row.addWidget(self.install_lhm_button)
 
-        self.install_pawnio_button = QPushButton("Install PawnIO", self)
+        self.install_pawnio_button = QPushButton("↓", self)
+        self.install_pawnio_button.setObjectName("serviceInstallPawnioBtn")
+        self.install_pawnio_button.setToolTip("Download PawnIO")
         self.install_pawnio_button.clicked.connect(
             lambda: self._run_installer("pysysfan-install-pawnio")
         )
-        installers_row.addWidget(self.install_pawnio_button)
 
-        self.view_log_button = QPushButton("View Service Log", self)
-        self.view_log_button.clicked.connect(self._open_service_log)
-        installers_row.addWidget(self.view_log_button)
+        content_layout = QHBoxLayout()
+        content_layout.setSpacing(0)
+        content_layout.setContentsMargins(0, 0, 0, 0)
+        layout.addLayout(content_layout, 1)
 
-        installers_row.addStretch(1)
-        layout.addLayout(installers_row)
+        left_scroll = QScrollArea(self)
+        left_scroll.setWidgetResizable(True)
+        left_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        left_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        left_scroll.setMinimumWidth(200)
+        left_scroll.setMaximumWidth(200)
 
-        desktop_group = QGroupBox("Desktop App", self)
-        desktop_layout = QVBoxLayout(desktop_group)
-        desktop_layout.setSpacing(8)
+        self._sidebar = QFrame(left_scroll)
+        self._sidebar.setObjectName("serviceSidebar")
+        sidebar_layout = QVBoxLayout(self._sidebar)
+        sidebar_layout.setContentsMargins(0, 0, 16, 0)
+        sidebar_layout.setSpacing(12)
 
-        self.minimize_to_tray_checkbox = QCheckBox(
-            "Minimize the GUI to the Windows notification area",
-            self,
+        def section_header(text: str) -> QLabel:
+            label = QLabel(text, self._sidebar)
+            label.setProperty("serviceSectionHeader", True)
+            return label
+
+        status_box = QFrame(self._sidebar)
+        status_box.setObjectName("serviceStatusBox")
+        status_box.setProperty("serviceCard", True)
+        status_layout = QVBoxLayout(status_box)
+        status_layout.setContentsMargins(16, 12, 16, 12)
+        status_layout.setSpacing(8)
+
+        status_top = QHBoxLayout()
+        status_top.setSpacing(10)
+
+        self.status_dot = QFrame(status_box)
+        self.status_dot.setObjectName("serviceStatusDot")
+        self.status_dot.setFixedSize(20, 20)
+
+        self.service_status_label = QLabel("Unknown", status_box)
+        self.service_status_label.setObjectName("serviceStatusLabel")
+
+        status_top.addWidget(self.status_dot)
+        status_top.addWidget(self.service_status_label)
+        status_top.addStretch(1)
+
+        self.service_pid_label = QLabel("PID N/A · N/A", status_box)
+        self.service_pid_label.setObjectName("servicePidLabel")
+
+        status_layout.addLayout(status_top)
+        status_layout.addWidget(self.service_pid_label)
+
+        details_box = QFrame(self._sidebar)
+        details_box.setObjectName("serviceDetailsBox")
+        details_box.setProperty("serviceCard", True)
+        details_layout = QGridLayout(details_box)
+        details_layout.setContentsMargins(12, 10, 12, 10)
+        details_layout.setHorizontalSpacing(8)
+        details_layout.setVerticalSpacing(6)
+
+        self.detail_task_label = QLabel("Task", details_box)
+        self.detail_task_value = QLabel("N/A", details_box)
+        self.detail_task_value.setObjectName("detailValue")
+
+        self.detail_schedule_label = QLabel("Schedule", details_box)
+        self.detail_schedule_value = QLabel("N/A", details_box)
+        self.detail_schedule_value.setObjectName("detailValue")
+
+        self.detail_trigger_label = QLabel("Trigger", details_box)
+        self.detail_trigger_value = QLabel("N/A", details_box)
+        self.detail_trigger_value.setObjectName("detailValue")
+
+        self.detail_tray_label = QLabel("Minimise to tray", details_box)
+        self.tray_switch = QCheckBox(details_box)
+        self.tray_switch.setObjectName("traySwitch")
+        self.tray_switch.setChecked(self._minimize_to_tray_getter())
+        self.tray_switch.toggled.connect(self._set_minimize_to_tray_preference)
+
+        details_layout.addWidget(self.detail_task_label, 0, 0)
+        details_layout.addWidget(self.detail_task_value, 0, 1)
+        details_layout.addWidget(self.detail_schedule_label, 1, 0)
+        details_layout.addWidget(self.detail_schedule_value, 1, 1)
+        details_layout.addWidget(self.detail_trigger_label, 2, 0)
+        details_layout.addWidget(self.detail_trigger_value, 2, 1)
+        details_layout.addWidget(self.detail_tray_label, 3, 0)
+        details_layout.addWidget(self.tray_switch, 3, 1)
+
+        actions_box = QFrame(self._sidebar)
+        actions_box.setObjectName("serviceActionsBox")
+        actions_box.setProperty("serviceCard", True)
+        actions_layout = QGridLayout(actions_box)
+        actions_layout.setContentsMargins(12, 10, 12, 10)
+        actions_layout.setHorizontalSpacing(8)
+        actions_layout.setVerticalSpacing(8)
+
+        actions_layout.addWidget(self.start_stop_button, 0, 0)
+        actions_layout.addWidget(self.restart_button, 1, 0)
+        actions_layout.addWidget(self.install_uninstall_button, 2, 0)
+        actions_layout.addWidget(self.enable_disable_button, 3, 0)
+
+        components_box = QFrame(self._sidebar)
+        components_box.setObjectName("serviceComponentsBox")
+        components_layout = QVBoxLayout(components_box)
+        components_layout.setContentsMargins(0, 0, 0, 0)
+        components_layout.setSpacing(10)
+
+        lhm_card = QFrame(components_box)
+        lhm_card.setObjectName("serviceComponentCard")
+        lhm_card.setProperty("serviceCard", True)
+        lhm_card.setProperty("componentAccent", "lhm")
+        lhm_layout = QHBoxLayout(lhm_card)
+        lhm_layout.setContentsMargins(0, 0, 12, 0)
+        lhm_layout.setSpacing(0)
+
+        lhm_accent = QFrame(lhm_card)
+        lhm_accent.setObjectName("componentAccentBar")
+        lhm_accent.setFixedWidth(4)
+        lhm_layout.addWidget(lhm_accent)
+
+        lhm_text = QVBoxLayout()
+        lhm_text.setSpacing(2)
+        lhm_title = QLabel("LHM v0.9.14", lhm_card)
+        lhm_title.setObjectName("serviceComponentTitle")
+        lhm_text.addWidget(lhm_title)
+        lhm_layout.addLayout(lhm_text, stretch=1)
+        lhm_layout.addWidget(self.install_lhm_button)
+
+        pawnio_card = QFrame(components_box)
+        pawnio_card.setObjectName("serviceComponentCard")
+        pawnio_card.setProperty("serviceCard", True)
+        pawnio_card.setProperty("componentAccent", "pawnio")
+        pawnio_layout = QHBoxLayout(pawnio_card)
+        pawnio_layout.setContentsMargins(0, 0, 12, 0)
+        pawnio_layout.setSpacing(0)
+
+        pawnio_accent = QFrame(pawnio_card)
+        pawnio_accent.setObjectName("componentAccentBar")
+        pawnio_accent.setFixedWidth(4)
+        pawnio_layout.addWidget(pawnio_accent)
+
+        pawnio_text = QVBoxLayout()
+        pawnio_text.setSpacing(2)
+        pawnio_title = QLabel("PawnIO v1.2.0", pawnio_card)
+        pawnio_title.setObjectName("serviceComponentTitle")
+        pawnio_text.addWidget(pawnio_title)
+        pawnio_layout.addLayout(pawnio_text, stretch=1)
+        pawnio_layout.addWidget(self.install_pawnio_button)
+
+        components_layout.addWidget(lhm_card)
+        components_layout.addWidget(pawnio_card)
+
+        sidebar_layout.addWidget(section_header("SERVICE"))
+        sidebar_layout.addWidget(status_box)
+        sidebar_layout.addWidget(section_header("DETAILS"))
+        sidebar_layout.addWidget(details_box)
+        sidebar_layout.addWidget(section_header("ACTIONS"))
+        sidebar_layout.addWidget(actions_box)
+        sidebar_layout.addWidget(section_header("COMPONENTS"))
+        sidebar_layout.addWidget(components_box)
+        sidebar_layout.addStretch(1)
+
+        left_scroll.setWidget(self._sidebar)
+        content_layout.addWidget(left_scroll)
+
+        divider = QFrame(self)
+        divider.setObjectName("serviceDivider")
+        divider.setFixedWidth(1)
+        content_layout.addWidget(divider)
+
+        self._diagnostics_panel = QFrame(self)
+        self._diagnostics_panel.setObjectName("serviceDiagnosticsPanel")
+        diagnostics_layout = QVBoxLayout(self._diagnostics_panel)
+        diagnostics_layout.setContentsMargins(16, 0, 16, 16)
+        diagnostics_layout.setSpacing(10)
+
+        diagnostics_header = QHBoxLayout()
+        diagnostics_title = QLabel("Diagnostics Log", self._diagnostics_panel)
+        diagnostics_title.setObjectName("serviceDiagnosticsTitle")
+        diagnostics_header.addWidget(diagnostics_title)
+        diagnostics_header.addStretch(1)
+
+        self.clear_diagnostics_button = QPushButton("Clear", self)
+        self.clear_diagnostics_button.setObjectName("serviceRefreshBtn")
+        self.clear_diagnostics_button.clicked.connect(
+            lambda: self.diagnostics_view.clear()
         )
-        self.minimize_to_tray_checkbox.setChecked(self._minimize_to_tray_getter())
-        self.minimize_to_tray_checkbox.toggled.connect(
-            self._set_minimize_to_tray_preference
+        diagnostics_header.addWidget(self.clear_diagnostics_button)
+
+        self.copy_diagnostics_button = QPushButton("Copy All", self)
+        self.copy_diagnostics_button.setObjectName("serviceRefreshBtn")
+        self.copy_diagnostics_button.clicked.connect(
+            self._copy_diagnostics_to_clipboard
         )
-        desktop_layout.addWidget(self.minimize_to_tray_checkbox)
+        diagnostics_header.addWidget(self.copy_diagnostics_button)
+        diagnostics_layout.addLayout(diagnostics_header)
 
-        desktop_hint = QLabel(
-            "When enabled, clicking the title-bar minimize button hides the app "
-            "to the tray instead of leaving it minimized on the taskbar.",
-            self,
-        )
-        desktop_hint.setWordWrap(True)
-        desktop_layout.addWidget(desktop_hint)
-
-        if not QSystemTrayIcon.isSystemTrayAvailable():
-            self.minimize_to_tray_checkbox.setEnabled(False)
-            desktop_hint.setText(
-                "System tray integration is unavailable on this system, so the "
-                "minimize-to-tray option is disabled."
-            )
-
-        layout.addWidget(desktop_group)
-
-        diagnostics_group = QGroupBox("Diagnostics", self)
-        diagnostics_layout = QVBoxLayout(diagnostics_group)
         self.diagnostics_view = QPlainTextEdit(self)
         self.diagnostics_view.setObjectName("diagnosticsView")
         self.diagnostics_view.setReadOnly(True)
         self.diagnostics_view.setMinimumHeight(260)
-        diagnostics_layout.addWidget(self.diagnostics_view)
-        layout.addWidget(diagnostics_group)
-        layout.addStretch(1)
+        diagnostics_layout.addWidget(self.diagnostics_view, 1)
+
+        content_layout.addWidget(self._diagnostics_panel)
 
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setInterval(self.REFRESH_INTERVAL_MS)
         self._refresh_timer.timeout.connect(self.refresh_data)
-        self.setStyleSheet(management_page_stylesheet(self.palette()))
+        self._diagnostic_lines: list[tuple[str, str, str]] = []
+        self.setStyleSheet(
+            management_page_stylesheet(self.palette()) + _action_state_stylesheet()
+        )
 
     def showEvent(self, event) -> None:  # noqa: N802
         """Refresh and poll only while the service page is visible."""
@@ -253,6 +381,7 @@ class ServicePage(QWidget):
         self.connection_label.setText("Service state: Ready")
         self._show_message("", is_error=False)
         self._apply_status(service_status, daemon_state)
+        self._apply_details(task_details, service_status)
         self._apply_diagnostics(task_details, daemon_state)
 
     def _run_action(self, action: str, confirm_message: str | None = None) -> None:
@@ -280,100 +409,170 @@ class ServicePage(QWidget):
         self._minimize_to_tray_setter(enabled)
         self._show_message("Saved desktop app preference.", is_error=False)
 
-    def _open_service_log(self) -> None:
-        """Open the service log file in the system default text editor."""
-        import os
-        from pysysfan.platforms.windows_service import SERVICE_LOG_PATH
+    def _add_diagnostic_log(
+        self, timestamp: str, message: str, level: str = "info"
+    ) -> None:
+        self._diagnostic_lines.append((timestamp, message, level))
+        if len(self._diagnostic_lines) > 100:
+            self._diagnostic_lines.pop(0)
+        self._refresh_diagnostics_view()
 
-        if not SERVICE_LOG_PATH.is_file():
-            self._show_message(
-                "No service log file found yet. "
-                "The log is created when the service starts.",
-                is_error=True,
-            )
-            return
-        try:
-            os.startfile(str(SERVICE_LOG_PATH))  # noqa: S606
-        except OSError as exc:
-            self._show_message(f"Could not open log file: {exc}", is_error=True)
+    def _refresh_diagnostics_view(self) -> None:
+        lines = []
+        for ts, msg, level in self._diagnostic_lines:
+            lines.append(f"{ts}  {msg}")
+        self.diagnostics_view.setPlainText("\n".join(lines))
+        self.diagnostics_view.verticalScrollBar().setValue(
+            self.diagnostics_view.verticalScrollBar().maximum()
+        )
+
+    def _copy_diagnostics_to_clipboard(self) -> None:
+        QApplication.clipboard().setText(self.diagnostics_view.toPlainText())
+        self._show_message("Copied diagnostics to clipboard.", is_error=False)
 
     def _apply_status(self, service_status: Any, daemon_state) -> None:
         task_installed = bool(getattr(service_status, "task_installed", False))
         task_enabled = bool(getattr(service_status, "task_enabled", False))
         daemon_running = bool(getattr(service_status, "daemon_running", False))
-        daemon_healthy = bool(getattr(service_status, "daemon_healthy", False))
         self._task_installed = task_installed
 
-        self.task_installed_label.setText(
-            f"Task installed: {self._format_bool(task_installed)}"
-        )
-        self.task_enabled_label.setText(
-            f"Task enabled: {self._format_bool(task_enabled)}"
-        )
-        self.task_status_label.setText(
-            f"Task status: {getattr(service_status, 'task_status', None) or 'N/A'}"
-        )
-        self.task_last_run_label.setText(
-            f"Last run: {getattr(service_status, 'task_last_run', None) or 'N/A'}"
-        )
+        if daemon_running:
+            self.status_dot.setProperty("status", "running")
+            self.service_status_label.setText("Running")
+            self.service_status_label.setStyleSheet(
+                "color: #34d399; font-size: 16px; font-weight: 900;"
+            )
+        else:
+            self.status_dot.setProperty("status", "stopped")
+            self.service_status_label.setText("Stopped")
+            self.service_status_label.setStyleSheet(
+                "color: #f87171; font-size: 16px; font-weight: 900;"
+            )
+
+        pid = getattr(service_status, "daemon_pid", None) or "N/A"
+        uptime_seconds = 0
+        if daemon_state is not None:
+            uptime_seconds = daemon_state.uptime_seconds
+        uptime_str = self._format_uptime(uptime_seconds)
+        self.service_pid_label.setText(f"PID {pid} · {uptime_str}")
 
         if daemon_running:
-            health_text = "healthy" if daemon_healthy else "needs attention"
-            self.daemon_running_label.setText(f"Daemon: Running ({health_text})")
-        else:
-            self.daemon_running_label.setText("Daemon: Stopped")
-        self.daemon_pid_label.setText(
-            f"Daemon PID: {getattr(service_status, 'daemon_pid', None) or 'N/A'}"
-        )
-
-        if daemon_state is not None:
-            self.daemon_profile_label.setText(
-                f"Daemon profile: {daemon_state.active_profile}"
-            )
-            self.daemon_config_label.setText(
-                f"Daemon config: {daemon_state.config_path}"
+            self.start_stop_button.setText("■ Stop")
+            self.start_stop_button.setProperty("actionState", "stop")
+            self.start_stop_button.clicked.disconnect()
+            self.start_stop_button.clicked.connect(
+                lambda: self._run_action(
+                    "stop",
+                    confirm_message="Stop the daemon and return fan control to BIOS?",
+                )
             )
         else:
-            self.daemon_profile_label.setText("Daemon profile: N/A")
-            self.daemon_config_label.setText("Daemon config: N/A")
+            self.start_stop_button.setText("▶ Start")
+            self.start_stop_button.setProperty("actionState", "start")
+            self.start_stop_button.clicked.disconnect()
+            self.start_stop_button.clicked.connect(lambda: self._run_action("start"))
 
-        self.install_button.setEnabled(True)
-        self.uninstall_button.setEnabled(task_installed)
-        self.enable_button.setEnabled(task_installed and not task_enabled)
-        self.disable_button.setEnabled(task_installed and task_enabled)
-        self.start_button.setEnabled(task_installed and not daemon_running)
-        self.stop_button.setEnabled(daemon_running)
+        if task_installed:
+            self.install_uninstall_button.setText("Uninstall")
+            self.install_uninstall_button.setProperty("actionState", "uninstall")
+            self.install_uninstall_button.clicked.disconnect()
+            self.install_uninstall_button.clicked.connect(
+                lambda: self._run_action(
+                    "uninstall",
+                    confirm_message="Uninstall the scheduled task?",
+                )
+            )
+        else:
+            self.install_uninstall_button.setText("Install")
+            self.install_uninstall_button.setProperty("actionState", "install")
+            self.install_uninstall_button.clicked.disconnect()
+            self.install_uninstall_button.clicked.connect(
+                lambda: self._run_action("install")
+            )
+
+        if task_enabled:
+            self.enable_disable_button.setText("Disable Schedule")
+            self.enable_disable_button.setProperty("actionState", "disable")
+            self.enable_disable_button.clicked.disconnect()
+            self.enable_disable_button.clicked.connect(
+                lambda: self._run_action("disable")
+            )
+        else:
+            self.enable_disable_button.setText("Enable Schedule")
+            self.enable_disable_button.setProperty("actionState", "enable")
+            self.enable_disable_button.clicked.disconnect()
+            self.enable_disable_button.clicked.connect(
+                lambda: self._run_action("enable")
+            )
+
         self.restart_button.setEnabled(task_installed and daemon_running)
 
-    def _apply_diagnostics(self, task_details: dict[str, str], daemon_state) -> None:
-        lines = ["Task Scheduler"]
-        if task_details:
-            for key in sorted(task_details):
-                lines.append(f"{key}: {task_details[key]}")
-        else:
-            lines.append("No task details available.")
+        self.status_dot.style().unpolish(self.status_dot)
+        self.status_dot.style().polish(self.status_dot)
 
-        lines.append("")
-        lines.append("Daemon State")
-        if daemon_state is None:
-            lines.append("No daemon state file available.")
-        else:
-            lines.extend(
-                [
-                    f"PID: {daemon_state.pid}",
-                    f"Running: {daemon_state.running}",
-                    f"Active profile: {daemon_state.active_profile}",
-                    f"Poll interval: {daemon_state.poll_interval:.1f}s",
-                    f"Uptime: {daemon_state.uptime_seconds:.1f}s",
-                    f"Config path: {daemon_state.config_path}",
-                    f"Config error: {daemon_state.config_error or 'none'}",
-                    f"Temperatures: {len(daemon_state.temperatures)}",
-                    f"Fans: {len(daemon_state.fan_speeds)}",
-                    f"Recent alerts: {len(daemon_state.recent_alerts)}",
-                ]
+    def _apply_details(self, task_details: dict[str, str], service_status: Any) -> None:
+        task_installed = bool(getattr(service_status, "task_installed", False))
+        task_enabled = bool(getattr(service_status, "task_enabled", False))
+
+        self.detail_task_value.setText(
+            "Installed" if task_installed else "Not installed"
+        )
+        self.detail_schedule_value.setText("Enabled" if task_enabled else "Disabled")
+
+        trigger = task_details.get("TaskTrigger", "N/A")
+        self.detail_trigger_value.setText(trigger if trigger else "N/A")
+
+    def _apply_diagnostics(self, task_details: dict[str, str], daemon_state) -> None:
+        from datetime import datetime
+
+        now = datetime.now().strftime("%H:%M:%S")
+
+        is_first_refresh = not self._diagnostic_lines
+
+        if is_first_refresh:
+            profile = daemon_state.active_profile if daemon_state else "N/A"
+            self._diagnostic_lines.append((now, "Service started", "info"))
+            self._diagnostic_lines.append((now, f"Loaded config: {profile}", "info"))
+
+        if daemon_state:
+            temp_count = (
+                len(daemon_state.temperatures) if daemon_state.temperatures else 0
+            )
+            fan_count = len(daemon_state.fan_speeds) if daemon_state.fan_speeds else 0
+            self._diagnostic_lines.append(
+                (
+                    now,
+                    f"LHM initialized — {temp_count} sensors, {fan_count} fans detected",
+                    "success",
+                )
             )
 
-        self.diagnostics_view.setPlainText("\n".join(lines))
+            if daemon_state.temperatures:
+                for temp in daemon_state.temperatures[:3]:
+                    pct = int(temp.value) if temp.value else 0
+                    self._diagnostic_lines.append(
+                        (
+                            now,
+                            f"Fan loop tick: {temp.name}={temp.value:.0f}°C → {pct}%",
+                            "success",
+                        )
+                    )
+
+            if daemon_state.recent_alerts:
+                for alert in daemon_state.recent_alerts[-3:]:
+                    self._diagnostic_lines.append(
+                        (now, f"Alert: {alert.message}", "warning")
+                    )
+        else:
+            if is_first_refresh:
+                self._diagnostic_lines.append(
+                    (now, "Daemon state unavailable", "warning")
+                )
+
+        if len(self._diagnostic_lines) > 100:
+            self._diagnostic_lines = self._diagnostic_lines[-100:]
+
+        self._refresh_diagnostics_view()
 
     def _confirm(self, message: str) -> bool:
         return (
@@ -410,5 +609,10 @@ class ServicePage(QWidget):
         )
 
     @staticmethod
-    def _format_bool(value: Any) -> str:
-        return "Yes" if value else "No"
+    def _format_uptime(seconds: float) -> str:
+        if seconds <= 0:
+            return "N/A"
+        td = timedelta(seconds=int(seconds))
+        hours, remainder = divmod(td.seconds, 3600)
+        minutes, _ = divmod(remainder, 60)
+        return f"{td.days}d {hours}h {minutes}m"

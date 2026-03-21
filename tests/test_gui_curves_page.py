@@ -66,6 +66,27 @@ def test_curves_page_refresh_populates_curve_and_fan_data(qtbot, tmp_path) -> No
     assert getattr(page, "allow_fan_off_checkbox", None) is None
 
 
+def test_curves_accordion_sections_can_stay_open_independently(qtbot, tmp_path) -> None:
+    """Accordion sections should no longer force each other closed."""
+    profile_manager = ProfileManager(config_dir=tmp_path)
+    _write_profile_config(profile_manager, DEFAULT_PROFILE_NAME, "balanced")
+    page = CurvesPage(profile_manager=profile_manager)
+    qtbot.addWidget(page)
+    page.refresh_data()
+
+    first, second = page.accordion.sections[:2]
+    first.set_open(True)
+    second.set_open(True)
+
+    assert first.is_open() is True
+    assert second.is_open() is True
+
+    first.header_button.click()
+
+    assert first.is_open() is False
+    assert second.is_open() is True
+
+
 def test_curves_page_save_persists_curve_to_yaml(qtbot, tmp_path) -> None:
     """Saving should write curve changes directly to the YAML config."""
     profile_manager = ProfileManager(config_dir=tmp_path)
