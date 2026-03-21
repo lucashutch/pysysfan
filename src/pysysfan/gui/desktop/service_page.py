@@ -37,6 +37,19 @@ from pysysfan.platforms import windows_service
 from pysysfan.state_file import DEFAULT_STATE_PATH
 
 
+def _action_state_stylesheet() -> str:
+    """Return CSS selectors for button actionState properties."""
+    return """
+QPushButton#serviceStartStopBtn[actionState="start"] {}
+QPushButton#serviceStartStopBtn[actionState="stop"] {}
+QPushButton#serviceInstallUninstallBtn[actionState="install"] {}
+QPushButton#serviceInstallUninstallBtn[actionState="uninstall"] {}
+QPushButton#serviceEnableDisableBtn[actionState="enable"] {}
+QPushButton#serviceEnableDisableBtn[actionState="disable"] {}
+QPushButton#serviceRestartBtn {}
+"""
+
+
 class ServicePage(QWidget):
     """Desktop service management page backed by local helpers."""
 
@@ -339,7 +352,9 @@ class ServicePage(QWidget):
         self._refresh_timer.setInterval(self.REFRESH_INTERVAL_MS)
         self._refresh_timer.timeout.connect(self.refresh_data)
         self._diagnostic_lines: list[tuple[str, str, str]] = []
-        self.setStyleSheet(management_page_stylesheet(self.palette()))
+        self.setStyleSheet(
+            management_page_stylesheet(self.palette()) + _action_state_stylesheet()
+        )
 
     def showEvent(self, event) -> None:  # noqa: N802
         """Refresh and poll only while the service page is visible."""
