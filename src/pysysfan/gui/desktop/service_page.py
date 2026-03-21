@@ -366,6 +366,7 @@ class ServicePage(QWidget):
         self.connection_label.setText("Service state: Ready")
         self._show_message("", is_error=False)
         self._apply_status(service_status, daemon_state)
+        self._apply_details(task_details, service_status)
         self._apply_diagnostics(task_details, daemon_state)
 
     def _run_action(self, action: str, confirm_message: str | None = None) -> None:
@@ -393,100 +394,164 @@ class ServicePage(QWidget):
         self._minimize_to_tray_setter(enabled)
         self._show_message("Saved desktop app preference.", is_error=False)
 
-    def _open_service_log(self) -> None:
-        """Open the service log file in the system default text editor."""
-        import os
-        from pysysfan.platforms.windows_service import SERVICE_LOG_PATH
+    def _add_diagnostic_log(
+        self, timestamp: str, message: str, level: str = "info"
+    ) -> None:
+        self._diagnostic_lines.append((timestamp, message, level))
+        if len(self._diagnostic_lines) > 100:
+            self._diagnostic_lines.pop(0)
+        self._refresh_diagnostics_view()
 
-        if not SERVICE_LOG_PATH.is_file():
-            self._show_message(
-                "No service log file found yet. "
-                "The log is created when the service starts.",
-                is_error=True,
-            )
-            return
-        try:
-            os.startfile(str(SERVICE_LOG_PATH))  # noqa: S606
-        except OSError as exc:
-            self._show_message(f"Could not open log file: {exc}", is_error=True)
+    def _refresh_diagnostics_view(self) -> None:
+        lines = []
+        for ts, msg, level in self._diagnostic_lines:
+            lines.append(f"{ts}  {msg}")
+        self.diagnostics_view.setPlainText("\n".join(lines))
+        self.diagnostics_view.verticalScrollBar().setValue(
+            self.diagnostics_view.verticalScrollBar().maximum()
+        )
+
+    def _copy_diagnostics_to_clipboard(self) -> None:
+        QApplication.clipboard().setText(self.diagnostics_view.toPlainText())
+        self._show_message("Copied diagnostics to clipboard.", is_error=False)
 
     def _apply_status(self, service_status: Any, daemon_state) -> None:
         task_installed = bool(getattr(service_status, "task_installed", False))
         task_enabled = bool(getattr(service_status, "task_enabled", False))
         daemon_running = bool(getattr(service_status, "daemon_running", False))
-        daemon_healthy = bool(getattr(service_status, "daemon_healthy", False))
         self._task_installed = task_installed
 
-        self.task_installed_label.setText(
-            f"Task installed: {self._format_bool(task_installed)}"
-        )
-        self.task_enabled_label.setText(
-            f"Task enabled: {self._format_bool(task_enabled)}"
-        )
-        self.task_status_label.setText(
-            f"Task status: {getattr(service_status, 'task_status', None) or 'N/A'}"
-        )
-        self.task_last_run_label.setText(
-            f"Last run: {getattr(service_status, 'task_last_run', None) or 'N/A'}"
-        )
+        if daemon_running:
+            self.status_dot.setProperty("status", "running")
+            self.service_status_label.setText("Running")
+            self.service_status_label.setStyleSheet(
+                "color: #34d399; font-size: 16px; font-weight: 900;"
+            )
+        else:
+            self.status_dot.setProperty("status", "stopped")
+            self.service_status_label.setText("Stopped")
+            self.service_status_label.setStyleSheet(
+                "color: #f87171; font-size: 16px; font-weight: 900;"
+            )
+
+        pid = getattr(service_status, "daemon_pid", None) or "N/A"
+        uptime_seconds = 0
+        if daemon_state is not None:
+            uptime_seconds = daemon_state.uptime_seconds
+        uptime_str = self._format_uptime(uptime_seconds)
+        self.service_pid_label.setText(f"PID {pid} · {uptime_str}")
 
         if daemon_running:
-            health_text = "healthy" if daemon_healthy else "needs attention"
-            self.daemon_running_label.setText(f"Daemon: Running ({health_text})")
-        else:
-            self.daemon_running_label.setText("Daemon: Stopped")
-        self.daemon_pid_label.setText(
-            f"Daemon PID: {getattr(service_status, 'daemon_pid', None) or 'N/A'}"
-        )
-
-        if daemon_state is not None:
-            self.daemon_profile_label.setText(
-                f"Daemon profile: {daemon_state.active_profile}"
-            )
-            self.daemon_config_label.setText(
-                f"Daemon config: {daemon_state.config_path}"
+            self.start_stop_button.setText("■ Stop")
+            self.start_stop_button.clicked.disconnect()
+            self.start_stop_button.clicked.connect(
+                lambda: self._run_action(
+                    "stop",
+                    confirm_message="Stop the daemon and return fan control to BIOS?",
+                )
             )
         else:
-            self.daemon_profile_label.setText("Daemon profile: N/A")
-            self.daemon_config_label.setText("Daemon config: N/A")
+            self.start_stop_button.setText("▶ Start")
+            self.start_stop_button.clicked.disconnect()
+            self.start_stop_button.clicked.connect(lambda: self._run_action("start"))
 
-        self.install_button.setEnabled(True)
-        self.uninstall_button.setEnabled(task_installed)
-        self.enable_button.setEnabled(task_installed and not task_enabled)
-        self.disable_button.setEnabled(task_installed and task_enabled)
-        self.start_button.setEnabled(task_installed and not daemon_running)
-        self.stop_button.setEnabled(daemon_running)
+        if task_installed:
+            self.install_uninstall_button.setText("Uninstall")
+            self.install_uninstall_button.clicked.disconnect()
+            self.install_uninstall_button.clicked.connect(
+                lambda: self._run_action(
+                    "uninstall",
+                    confirm_message="Uninstall the scheduled task?",
+                )
+            )
+        else:
+            self.install_uninstall_button.setText("Install")
+            self.install_uninstall_button.clicked.disconnect()
+            self.install_uninstall_button.clicked.connect(
+                lambda: self._run_action("install")
+            )
+
+        if task_enabled:
+            self.enable_disable_button.setText("Disable Schedule")
+            self.enable_disable_button.clicked.disconnect()
+            self.enable_disable_button.clicked.connect(
+                lambda: self._run_action("disable")
+            )
+        else:
+            self.enable_disable_button.setText("Enable Schedule")
+            self.enable_disable_button.clicked.disconnect()
+            self.enable_disable_button.clicked.connect(
+                lambda: self._run_action("enable")
+            )
+
         self.restart_button.setEnabled(task_installed and daemon_running)
 
-    def _apply_diagnostics(self, task_details: dict[str, str], daemon_state) -> None:
-        lines = ["Task Scheduler"]
-        if task_details:
-            for key in sorted(task_details):
-                lines.append(f"{key}: {task_details[key]}")
-        else:
-            lines.append("No task details available.")
+        self.status_dot.style().unpolish(self.status_dot)
+        self.status_dot.style().polish(self.status_dot)
 
-        lines.append("")
-        lines.append("Daemon State")
-        if daemon_state is None:
-            lines.append("No daemon state file available.")
-        else:
-            lines.extend(
-                [
-                    f"PID: {daemon_state.pid}",
-                    f"Running: {daemon_state.running}",
-                    f"Active profile: {daemon_state.active_profile}",
-                    f"Poll interval: {daemon_state.poll_interval:.1f}s",
-                    f"Uptime: {daemon_state.uptime_seconds:.1f}s",
-                    f"Config path: {daemon_state.config_path}",
-                    f"Config error: {daemon_state.config_error or 'none'}",
-                    f"Temperatures: {len(daemon_state.temperatures)}",
-                    f"Fans: {len(daemon_state.fan_speeds)}",
-                    f"Recent alerts: {len(daemon_state.recent_alerts)}",
-                ]
+    def _apply_details(self, task_details: dict[str, str], service_status: Any) -> None:
+        task_installed = bool(getattr(service_status, "task_installed", False))
+        task_enabled = bool(getattr(service_status, "task_enabled", False))
+
+        self.detail_task_value.setText(
+            "Installed" if task_installed else "Not installed"
+        )
+        self.detail_schedule_value.setText("Enabled" if task_enabled else "Disabled")
+
+        trigger = task_details.get("TaskTrigger", "N/A")
+        self.detail_trigger_value.setText(trigger if trigger else "N/A")
+
+    def _apply_diagnostics(self, task_details: dict[str, str], daemon_state) -> None:
+        from datetime import datetime
+
+        now = datetime.now().strftime("%H:%M:%S")
+
+        is_first_refresh = not self._diagnostic_lines
+
+        if is_first_refresh:
+            profile = daemon_state.active_profile if daemon_state else "N/A"
+            self._diagnostic_lines.append((now, "Service started", "info"))
+            self._diagnostic_lines.append((now, f"Loaded config: {profile}", "info"))
+
+        if daemon_state:
+            temp_count = (
+                len(daemon_state.temperatures) if daemon_state.temperatures else 0
+            )
+            fan_count = len(daemon_state.fan_speeds) if daemon_state.fan_speeds else 0
+            self._diagnostic_lines.append(
+                (
+                    now,
+                    f"LHM initialized — {temp_count} sensors, {fan_count} fans detected",
+                    "success",
+                )
             )
 
-        self.diagnostics_view.setPlainText("\n".join(lines))
+            if daemon_state.temperatures:
+                for temp in daemon_state.temperatures[:3]:
+                    pct = int(temp.value) if temp.value else 0
+                    self._diagnostic_lines.append(
+                        (
+                            now,
+                            f"Fan loop tick: {temp.name}={temp.value:.0f}°C → {pct}%",
+                            "success",
+                        )
+                    )
+
+            if daemon_state.recent_alerts:
+                for alert in daemon_state.recent_alerts[-3:]:
+                    self._diagnostic_lines.append(
+                        (now, f"Alert: {alert.message}", "warning")
+                    )
+        else:
+            if is_first_refresh:
+                self._diagnostic_lines.append(
+                    (now, "Daemon state unavailable", "warning")
+                )
+
+        if len(self._diagnostic_lines) > 100:
+            self._diagnostic_lines = self._diagnostic_lines[-100:]
+
+        self._refresh_diagnostics_view()
 
     def _confirm(self, message: str) -> bool:
         return (
@@ -523,5 +588,10 @@ class ServicePage(QWidget):
         )
 
     @staticmethod
-    def _format_bool(value: Any) -> str:
-        return "Yes" if value else "No"
+    def _format_uptime(seconds: float) -> str:
+        if seconds <= 0:
+            return "N/A"
+        td = timedelta(seconds=int(seconds))
+        hours, remainder = divmod(td.seconds, 3600)
+        minutes, _ = divmod(remainder, 60)
+        return f"{td.days}d {hours}h {minutes}m"

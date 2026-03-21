@@ -10,7 +10,7 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from PySide6.QtWidgets import QMessageBox
+from PySide6.QtWidgets import QFrame, QMessageBox
 
 from pysysfan.gui.desktop.service_page import ServicePage
 from pysysfan.state_file import DaemonStateFile, write_state
@@ -47,19 +47,24 @@ def test_service_page_refresh_populates_status_and_diagnostics(qtbot, tmp_path) 
     page = ServicePage(
         state_path=state_path,
         service_status_getter=lambda: _service_status(),
-        task_details_getter=lambda: {"Status": "Ready", "Next Run Time": "N/A"},
+        task_details_getter=lambda: {
+            "Status": "Ready",
+            "Next Run Time": "N/A",
+            "TaskTrigger": "On Logon",
+        },
     )
     qtbot.addWidget(page)
 
     page.refresh_data()
 
     assert page.connection_label.text() == "Service state: Ready"
-    assert page.task_installed_label.text() == "Task installed: Yes"
-    assert page.task_enabled_label.text() == "Task enabled: Yes"
-    assert page.daemon_running_label.text() == "Daemon: Running (healthy)"
-    assert page.daemon_profile_label.text() == "Daemon profile: gaming"
-    assert "Task Scheduler" in page.diagnostics_view.toPlainText()
-    assert "Daemon State" in page.diagnostics_view.toPlainText()
+    assert page.findChild(QFrame, "serviceSidebar") is not None
+    assert page.findChild(QFrame, "serviceDiagnosticsPanel") is not None
+    assert page.findChild(QFrame, "serviceActionsBox") is not None
+    assert page.service_status_label.text() == "Running"
+    assert page.detail_task_value.text() == "Installed"
+    assert page.detail_schedule_value.text() == "Enabled"
+    assert page.detail_trigger_value.text() == "On Logon"
 
 
 def test_service_page_sets_button_states_from_status(qtbot, tmp_path) -> None:
@@ -75,11 +80,14 @@ def test_service_page_sets_button_states_from_status(qtbot, tmp_path) -> None:
 
     page.refresh_data()
 
-    assert page.install_button.isEnabled() is True
-    assert page.uninstall_button.isEnabled() is True
-    assert page.start_button.isEnabled() is True
-    assert page.stop_button.isEnabled() is False
+    assert page.install_uninstall_button.text() == "Uninstall"
+    assert page.start_stop_button.text() == "▶ Start"
     assert page.restart_button.isEnabled() is False
+    assert page.start_stop_button.property("actionState") == "start"
+    assert page.install_uninstall_button.property("actionState") == "uninstall"
+    assert page.enable_disable_button.property("actionState") == "disable"
+    assert 'QPushButton#serviceStartStopBtn[actionState="start"]' in page.styleSheet()
+    assert "QPushButton#serviceRestartBtn" in page.styleSheet()
 
 
 def test_service_page_shows_popup_for_admin_elevation(qtbot, tmp_path) -> None:
@@ -101,7 +109,7 @@ def test_service_page_shows_popup_for_admin_elevation(qtbot, tmp_path) -> None:
     qtbot.addWidget(page)
 
     with patch.object(QMessageBox, "information") as mock_information:
-        page.install_button.click()
+        page.install_uninstall_button.click()
 
     mock_information.assert_called_once()
 
@@ -128,7 +136,7 @@ def test_service_page_confirms_repair_when_task_already_installed(
         "question",
         return_value=QMessageBox.StandardButton.No,
     ):
-        page.install_button.click()
+        page.install_uninstall_button.click()
 
     assert calls == []
 
@@ -150,7 +158,7 @@ def test_service_page_runs_stop_action(qtbot, tmp_path) -> None:
         "question",
         return_value=QMessageBox.StandardButton.Yes,
     ):
-        page.stop_button.click()
+        page.start_stop_button.click()
 
     assert calls == ["stop"]
     assert page.message_label.text() == "Stopped"
@@ -179,25 +187,21 @@ def test_service_page_runs_installer_commands(qtbot, tmp_path) -> None:
 def test_service_page_updates_minimize_to_tray_preference(qtbot, tmp_path) -> None:
     """The desktop preference toggle should persist through injected helpers."""
     calls: list[bool] = []
-    with patch(
-        "pysysfan.gui.desktop.service_page.QSystemTrayIcon.isSystemTrayAvailable",
-        return_value=True,
-    ):
-        page = ServicePage(
-            state_path=tmp_path / "missing.json",
-            service_status_getter=lambda: _service_status(
-                task_installed=False,
-                daemon_running=False,
-            ),
-            task_details_getter=lambda: {},
-            minimize_to_tray_getter=lambda: False,
-            minimize_to_tray_setter=lambda enabled: calls.append(enabled),
-        )
+    page = ServicePage(
+        state_path=tmp_path / "missing.json",
+        service_status_getter=lambda: _service_status(
+            task_installed=False,
+            daemon_running=False,
+        ),
+        task_details_getter=lambda: {},
+        minimize_to_tray_getter=lambda: False,
+        minimize_to_tray_setter=lambda enabled: calls.append(enabled),
+    )
     qtbot.addWidget(page)
 
-    assert page.minimize_to_tray_checkbox.isChecked() is False
+    assert page.tray_switch.isChecked() is False
 
-    page.minimize_to_tray_checkbox.click()
+    page.tray_switch.click()
 
     assert calls == [True]
     assert page.message_label.text() == "Saved desktop app preference."
