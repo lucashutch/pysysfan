@@ -37,6 +37,8 @@ class ElapsedSecondsAxis(pg.AxisItem if pg is not None else object):
 class DashboardPlotWidget(pg.PlotWidget if pg is not None else object):
     """Plot widget with interaction disabled for dashboard-style charts."""
 
+    hoverChanged = Signal(object)
+
     def __init__(self, *args, **kwargs) -> None:
         if pg is None:  # pragma: no cover - protected by callers
             raise RuntimeError("pyqtgraph is required for DashboardPlotWidget")
@@ -46,7 +48,16 @@ class DashboardPlotWidget(pg.PlotWidget if pg is not None else object):
         self.setMouseEnabled(x=False, y=False)
         self.getPlotItem().vb.setMouseEnabled(x=False, y=False)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+        self.setMouseTracking(True)
+        self.viewport().setMouseTracking(True)
         self._series_items: dict[str, pg.PlotDataItem] = {}
+        self._vertical_crosshair = pg.InfiniteLine(angle=90, movable=False)
+        self._horizontal_crosshair = pg.InfiniteLine(angle=0, movable=False)
+        self.addItem(self._vertical_crosshair, ignoreBounds=True)
+        self.addItem(self._horizontal_crosshair, ignoreBounds=True)
+        self._set_crosshair_visible(False)
+
+        self.scene().sigMouseMoved.connect(self._handle_scene_mouse_moved)
 
     def wheelEvent(self, event: QWheelEvent) -> None:  # noqa: N802
         """Ignore wheel events so charts do not zoom unexpectedly."""
@@ -79,6 +90,50 @@ class DashboardPlotWidget(pg.PlotWidget if pg is not None else object):
         for item in self._series_items.values():
             self.removeItem(item)
         self._series_items.clear()
+
+    def mouseMoveEvent(self, event) -> None:  # noqa: N802
+        if pg is None:  # pragma: no cover - protected by callers
+            return super().mouseMoveEvent(event)
+
+        scene_pos = self.mapToScene(event.position().toPoint())
+        data_pos = self._scene_to_data(scene_pos)
+        if data_pos is None:
+            self._set_crosshair_visible(False)
+            self.hoverChanged.emit(None)
+            return super().mouseMoveEvent(event)
+
+        self._update_hover(data_pos.x(), data_pos.y())
+        super().mouseMoveEvent(event)
+
+    def leaveEvent(self, event) -> None:  # noqa: N802
+        self._set_crosshair_visible(False)
+        self.hoverChanged.emit(None)
+        super().leaveEvent(event)
+
+    def _handle_scene_mouse_moved(self, scene_pos) -> None:
+        data_pos = self._scene_to_data(scene_pos)
+        if data_pos is None:
+            self._set_crosshair_visible(False)
+            self.hoverChanged.emit(None)
+            return
+
+        self._update_hover(data_pos.x(), data_pos.y())
+
+    def _scene_to_data(self, scene_pos) -> QPointF | None:
+        view_box = self.getPlotItem().vb
+        if not view_box.sceneBoundingRect().contains(scene_pos):
+            return None
+        return view_box.mapSceneToView(scene_pos)
+
+    def _update_hover(self, x_value: float, y_value: float) -> None:
+        self._vertical_crosshair.setPos(x_value)
+        self._horizontal_crosshair.setPos(y_value)
+        self._set_crosshair_visible(True)
+        self.hoverChanged.emit((float(x_value), float(y_value)))
+
+    def _set_crosshair_visible(self, visible: bool) -> None:
+        self._vertical_crosshair.setVisible(visible)
+        self._horizontal_crosshair.setVisible(visible)
 
 
 class CurveEditorPlotWidget(pg.PlotWidget if pg is not None else object):

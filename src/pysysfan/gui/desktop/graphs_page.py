@@ -404,6 +404,10 @@ class GraphsPage(QWidget):
             self._initialize_default_selection(catalog)
 
         enabled = self._enabled_series[self._active_tab]
+        if not catalog:
+            return
+
+        rows = max(1, ceil(len(catalog) / self._legend_columns))
 
         for idx, (series_id, label) in enumerate(catalog.items()):
             color = colors[idx % len(colors)] if colors else "#888888"
@@ -417,10 +421,10 @@ class GraphsPage(QWidget):
                 parent=self._legend_frame,
             )
             item.toggled.connect(self._on_legend_toggled)
-            self._legend_layout.addWidget(item)
+            row = idx % rows
+            column = idx // rows
+            self._legend_layout.addWidget(item, row, column)
             self._legend_items.append(item)
-
-        self._legend_layout.addStretch()
 
     def _initialize_default_selection(self, catalog: dict[str, str]) -> None:
         """Set initial enabled series for the active tab."""
@@ -469,6 +473,8 @@ class GraphsPage(QWidget):
 
         if latest_ts == 0.0:
             self._plot_widget.remove_stale_series(set())
+            self._update_drawer_stats(0, len(catalog))
+            self._clear_hover_summary()
             return
 
         active_ids: set[str] = set()
@@ -485,6 +491,7 @@ class GraphsPage(QWidget):
             active_ids.add(sid)
 
         self._plot_widget.remove_stale_series(active_ids)
+        self._update_drawer_stats(len(active_ids), len(catalog))
 
         # Axis labels (lightweight)
         plot_item = self._plot_widget.getPlotItem()
@@ -494,14 +501,25 @@ class GraphsPage(QWidget):
             plot_item.setLabel("left", "RPM")
         plot_item.setLabel("bottom", "Elapsed (s)")
 
+        if self._hover_point is not None:
+            self._update_hover_summary(self._hover_point)
+        else:
+            self._clear_hover_summary()
+
     # ------------------------------------------------------------------
     # Data helpers
     # ------------------------------------------------------------------
 
     def _current_catalog(self) -> dict[str, str]:
         if self._active_tab == "temperature":
-            return self._provider.build_temperature_catalog()
-        return self._provider.build_fan_rpm_catalog()
+            catalog = self._provider.build_temperature_catalog()
+        else:
+            catalog = self._provider.build_fan_rpm_catalog()
+        return {
+            series_id: label
+            for series_id, label in catalog.items()
+            if self._is_selectable_series_id(series_id)
+        }
 
     def _current_history(self) -> dict:
         if self._active_tab == "temperature":
@@ -536,6 +554,120 @@ class GraphsPage(QWidget):
     def _series_colors(self) -> list[str]:
         theme = plot_theme(self.palette())
         return theme.get("series", [])
+
+    def _handle_plot_hover_changed(
+        self, hover_point: tuple[float, float] | None
+    ) -> None:
+        if hover_point is None:
+            self._hover_point = None
+            self._clear_hover_summary()
+            return
+
+        self._hover_point = (float(hover_point[0]), float(hover_point[1]))
+        self._update_hover_summary(self._hover_point)
+
+    def _update_drawer_stats(self, visible_count: int, catalog_count: int) -> None:
+        self._visible_count_label.setText(f"{visible_count} visible")
+        self._range_label.setText(
+            f"{catalog_count} selectable · window {self._provider.history_seconds} s"
+        )
+
+    def _update_hover_summary(
+        self, hover_point: tuple[float, float] | None = None
+    ) -> None:
+        if self._plot_widget is None or pg is None:
+            self._clear_hover_summary()
+            return
+
+        if hover_point is None:
+            hover_point = self._hover_point
+        if hover_point is None:
+            self._clear_hover_summary()
+            return
+
+        x_value = float(hover_point[0])
+        catalog = self._current_catalog()
+        history = self._current_history()
+        enabled = self._enabled_series.get(self._active_tab, set())
+        colors = self._series_colors()
+        summary_lines = [f"Hover @ {abs(x_value):g} s ago"]
+        marker_spots: list[dict[str, object]] = []
+        unit = "°C" if self._active_tab == "temperature" else "RPM"
+
+        for idx, (series_id, label) in enumerate(catalog.items()):
+            if series_id not in enabled:
+                continue
+
+            series_data = self._resolve_series_data(series_id, history)
+            sample = self._sample_series_value(series_data, x_value)
+            if sample is None:
+                continue
+
+            sample_x, sample_y = sample
+            summary_lines.append(f"{label}: {format(sample_y, 'g')} {unit}")
+            color = colors[idx % len(colors)] if colors else "#888888"
+            marker_spots.append(
+                {
+                    "pos": (sample_x, sample_y),
+                    "size": 11,
+                    "brush": pg.mkBrush(color),
+                    "pen": pg.mkPen(color, width=2),
+                }
+            )
+
+        if len(summary_lines) == 1:
+            self._clear_hover_summary()
+            return
+
+        self._hover_label.setText("\n".join(summary_lines))
+        self._set_hover_markers(marker_spots)
+
+    def _clear_hover_summary(self) -> None:
+        self._hover_label.setText(self._default_hover_text)
+        self._set_hover_markers([])
+
+    def _set_hover_markers(self, marker_spots: list[dict[str, object]]) -> None:
+        if self._hover_marker_item is None or pg is None:
+            return
+
+        self._hover_marker_item.setData(marker_spots)
+        self._hover_marker_item.setVisible(bool(marker_spots))
+
+    @staticmethod
+    def _sample_series_value(
+        series_data: list[tuple[float, float]], x_value: float
+    ) -> tuple[float, float] | None:
+        if not series_data:
+            return None
+
+        if len(series_data) == 1:
+            sample_x, sample_y = series_data[0]
+            return (sample_x, sample_y)
+
+        first_x, _ = series_data[0]
+        last_x, _ = series_data[-1]
+        if x_value < first_x or x_value > last_x:
+            return None
+
+        previous_x, previous_y = series_data[0]
+        for current_x, current_y in series_data[1:]:
+            if x_value > current_x:
+                previous_x, previous_y = current_x, current_y
+                continue
+
+            if current_x == previous_x:
+                return (current_x, current_y)
+
+            ratio = (x_value - previous_x) / (current_x - previous_x)
+            sample_y = previous_y + (current_y - previous_y) * ratio
+            return (x_value, sample_y)
+
+        return (last_x, series_data[-1][1])
+
+    @staticmethod
+    def _is_selectable_series_id(series_id: str) -> bool:
+        blocked_prefixes = ("const::", "min::", "max::", "marker::")
+        return not series_id.startswith(blocked_prefixes)
 
     # ------------------------------------------------------------------
     # Theming
