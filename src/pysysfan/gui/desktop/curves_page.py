@@ -48,6 +48,7 @@ class CurvesPage(QWidget):
     """Desktop curve editor backed by direct YAML config access."""
 
     PRESET_CURVES = {"silent", "balanced", "performance"}
+
     def __init__(
         self,
         profile_manager: ProfileManager | None = None,
@@ -829,10 +830,14 @@ class CurvesPage(QWidget):
         self.fan_assignment_section.set_summary(fan_summary)
 
         temp_ids = [
-            item.strip() for item in self.temp_ids_edit.text().split(",") if item.strip()
+            item.strip()
+            for item in self.temp_ids_edit.text().split(",")
+            if item.strip()
         ]
         if temp_ids:
-            sensor_summary = f"{len(temp_ids)} sensors · {self.aggregation_selector.currentText()}"
+            sensor_summary = (
+                f"{len(temp_ids)} sensors · {self.aggregation_selector.currentText()}"
+            )
         else:
             sensor_summary = f"{self.aggregation_selector.currentText()} · no sensors"
         self.sensor_mapping_section.set_summary(sensor_summary)
@@ -841,7 +846,9 @@ class CurvesPage(QWidget):
             f"Poll {self.poll_interval_spin.value():.1f}s · Hysteresis {self.hysteresis_spin.value():.1f}°C"
         )
 
-        active_profile = self.profile_selector.currentText().strip() or self._active_profile
+        active_profile = (
+            self.profile_selector.currentText().strip() or self._active_profile
+        )
         self.profiles_section.set_summary(active_profile or "No profile selected")
 
     def _selected_profile_name(self) -> str:
