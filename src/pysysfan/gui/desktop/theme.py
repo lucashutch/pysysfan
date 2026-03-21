@@ -850,6 +850,19 @@ QPushButton:pressed {{
     color: {colors["window"]};
 }}
 
+QPushButton#curveActionBtn {{
+    background: {colors["card"]};
+    border: none;
+    border-radius: 0;
+    color: {button_text};
+    padding: 8px 16px;
+}}
+
+QPushButton#curveActionBtn:hover {{
+    background: {colors["accent"]};
+    color: {colors["window"]};
+}}
+
 QComboBox,
 QLineEdit,
 QDoubleSpinBox {{
@@ -857,9 +870,33 @@ QDoubleSpinBox {{
     background: {colors["raised"]};
 }}
 
+QComboBox {{
+    border: none;
+}}
+
 QComboBox::drop-down {{
     border: 0;
-    width: 22px;
+    width: 24px;
+}}
+
+QComboBox::down-arrow {{
+    image: none;
+    width: 8px;
+    height: 8px;
+}}
+
+QComboBox::down-arrow:after {{
+    content: "▼";
+    color: {colors["muted"]};
+    font-size: 8px;
+}}
+
+QComboBox:hover {{
+    background: {colors["card"]};
+}}
+
+QComboBox::item:hover {{
+    background: {colors["accent"]};
 }}
 
 QTableWidget,

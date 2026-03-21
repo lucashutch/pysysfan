@@ -96,15 +96,21 @@ class CurvesPage(QWidget):
         layout.addLayout(toolbar)
 
         content_row = QHBoxLayout()
-        content_row.setSpacing(12)
+        content_row.setSpacing(0)
         layout.addLayout(content_row, 1)
 
         self.left_column = QWidget(self)
         self.left_column.setObjectName("curvesLeftColumn")
+        self.left_column.setFixedWidth(300)
         left_layout = QVBoxLayout(self.left_column)
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(0)
-        content_row.addWidget(self.left_column, 1)
+        content_row.addWidget(self.left_column)
+
+        self.config_divider = QFrame(self)
+        self.config_divider.setObjectName("serviceDivider")
+        self.config_divider.setFixedWidth(1)
+        content_row.addWidget(self.config_divider)
 
         self.left_scroll = QScrollArea(self.left_column)
         self.left_scroll.setWidgetResizable(True)
@@ -134,6 +140,7 @@ class CurvesPage(QWidget):
         self.new_profile_button.clicked.connect(self.create_profile)
 
         self.rename_profile_button = QPushButton("Rename Profile", self)
+        self.rename_profile_button.setObjectName("curveActionBtn")
         self.rename_profile_button.clicked.connect(self.rename_profile)
 
         self.refresh_button = QPushButton("Refresh", self)
@@ -142,27 +149,30 @@ class CurvesPage(QWidget):
         self.curve_selector = QComboBox(self)
         self.curve_selector.currentTextChanged.connect(self._load_selected_curve)
         self.new_curve_button = QPushButton("New Curve", self)
+        self.new_curve_button.setObjectName("curveActionBtn")
         self.new_curve_button.clicked.connect(self.create_curve)
         self.save_curve_button = QPushButton("Save Curve", self)
+        self.save_curve_button.setObjectName("curveActionBtn")
         self.save_curve_button.clicked.connect(self.save_curve)
         self.delete_curve_button = QPushButton("Delete Curve", self)
+        self.delete_curve_button.setObjectName("curveActionBtn")
         self.delete_curve_button.clicked.connect(self.delete_curve)
 
         self.points_table = QTableWidget(0, 2, self)
         self.points_table.setObjectName("pointsTable")
-        self.points_table.setHorizontalHeaderLabels(
-            ["Temperature (°C)", "Fan Speed (%)"]
-        )
+        self.points_table.setHorizontalHeaderLabels(["Temperature", "Fan Speed"])
         header = self.points_table.horizontalHeader()
         header.setStretchLastSection(False)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.points_table.setColumnWidth(0, 190)
-        self.points_table.setMinimumHeight(260)
+        self.points_table.setColumnWidth(0, 100)
+        self.points_table.setMinimumHeight(200)
 
         self.add_point_button = QPushButton("Add Point", self)
+        self.add_point_button.setObjectName("curveActionBtn")
         self.add_point_button.clicked.connect(self.add_point)
         self.remove_point_button = QPushButton("Remove Point", self)
+        self.remove_point_button.setObjectName("curveActionBtn")
         self.remove_point_button.clicked.connect(self.remove_selected_point)
         self.hysteresis_spin = QDoubleSpinBox(self)
         self.hysteresis_spin.setRange(0.0, 20.0)
@@ -176,6 +186,7 @@ class CurvesPage(QWidget):
         self.aggregation_selector = QComboBox(self)
         self.aggregation_selector.addItems(get_valid_aggregation_methods())
         self.save_fan_button = QPushButton("Save Fan Settings", self)
+        self.save_fan_button.setObjectName("curveActionBtn")
         self.save_fan_button.clicked.connect(self.save_fan_settings)
 
         self.poll_interval_spin = QDoubleSpinBox(self)
@@ -184,6 +195,7 @@ class CurvesPage(QWidget):
         self.poll_interval_spin.setDecimals(1)
         self.poll_interval_spin.setKeyboardTracking(False)
         self.save_settings_button = QPushButton("Save Settings", self)
+        self.save_settings_button.setObjectName("curveActionBtn")
         self.save_settings_button.clicked.connect(self.save_general_settings)
 
         self.curve_points_section = self.accordion.add_section(

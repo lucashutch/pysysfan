@@ -5,7 +5,6 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
-    QHBoxLayout,
     QLabel,
     QToolButton,
     QVBoxLayout,
@@ -47,48 +46,48 @@ class AccordionSection(QFrame):
         header.setProperty("accordionHeaderContainer", True)
         header.setCursor(Qt.CursorShape.PointingHandCursor)
         header_layout = QVBoxLayout(header)
-        header_layout.setContentsMargins(12, 10, 12, 10)
-        header_layout.setSpacing(4)
+        header_layout.setContentsMargins(0, 8, 0, 8)
+        header_layout.setSpacing(0)
 
-        top_row = QWidget(header)
-        top_row_layout = QHBoxLayout(top_row)
-        top_row_layout.setContentsMargins(0, 0, 0, 0)
-        top_row_layout.setSpacing(10)
+        self.indicator_label = QLabel("+", header)
+        self.indicator_label.setObjectName("accordionIndicator")
+        self.indicator_label.setProperty("accordionIndicator", True)
+        self.indicator_label.setAlignment(
+            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft
+        )
+        self.indicator_label.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
+        )
+        self.indicator_label.setFixedWidth(32)
+        self.indicator_label.setStyleSheet(
+            "font-size: 14px; font-weight: 700; padding-left: 12px;"
+        )
+        header_layout.addWidget(self.indicator_label)
 
-        self.header_button = QToolButton(top_row)
+        self.header_button = QToolButton(header)
         self.header_button.setObjectName("accordionHeader")
         self.header_button.setProperty("accordionHeader", True)
         self.header_button.setCheckable(True)
         self.header_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         self.header_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.header_button.clicked.connect(self._on_header_clicked)
-        top_row_layout.addWidget(self.header_button, stretch=1)
-
-        self.indicator_label = QLabel("+", top_row)
-        self.indicator_label.setObjectName("accordionIndicator")
-        self.indicator_label.setProperty("accordionIndicator", True)
-        self.indicator_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.indicator_label.setAttribute(
-            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
-        )
-        self.indicator_label.setFixedWidth(34)
-        self.indicator_label.setFixedHeight(34)
-        self.indicator_label.setStyleSheet("font-size: 16px; font-weight: 700;")
-        top_row_layout.addWidget(self.indicator_label)
+        self.header_button.setStyleSheet("text-align: center;")
+        header_layout.addWidget(self.header_button, stretch=1)
 
         self.summary_label = QLabel(summary, header)
         self.summary_label.setObjectName("accordionSummary")
         self.summary_label.setProperty("accordionSummary", True)
-        self.summary_label.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        self.summary_label.setAlignment(
+            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft
+        )
         self.summary_label.setWordWrap(True)
         self.summary_label.setAttribute(
             Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
         )
+        self.summary_label.setStyleSheet("padding-right: 12px;")
+        header_layout.addWidget(self.summary_label)
 
         header.clicked.connect(lambda: self.header_button.click())
-
-        header_layout.addWidget(top_row)
-        header_layout.addWidget(self.summary_label)
 
         self.body_widget = QWidget(self)
         self.body_widget.setObjectName("accordionBody")
