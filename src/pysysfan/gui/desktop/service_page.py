@@ -443,6 +443,7 @@ class ServicePage(QWidget):
 
         if daemon_running:
             self.start_stop_button.setText("■ Stop")
+            self.start_stop_button.setProperty("actionState", "stop")
             self.start_stop_button.clicked.disconnect()
             self.start_stop_button.clicked.connect(
                 lambda: self._run_action(
@@ -452,11 +453,13 @@ class ServicePage(QWidget):
             )
         else:
             self.start_stop_button.setText("▶ Start")
+            self.start_stop_button.setProperty("actionState", "start")
             self.start_stop_button.clicked.disconnect()
             self.start_stop_button.clicked.connect(lambda: self._run_action("start"))
 
         if task_installed:
             self.install_uninstall_button.setText("Uninstall")
+            self.install_uninstall_button.setProperty("actionState", "uninstall")
             self.install_uninstall_button.clicked.disconnect()
             self.install_uninstall_button.clicked.connect(
                 lambda: self._run_action(
@@ -466,6 +469,7 @@ class ServicePage(QWidget):
             )
         else:
             self.install_uninstall_button.setText("Install")
+            self.install_uninstall_button.setProperty("actionState", "install")
             self.install_uninstall_button.clicked.disconnect()
             self.install_uninstall_button.clicked.connect(
                 lambda: self._run_action("install")
@@ -473,12 +477,14 @@ class ServicePage(QWidget):
 
         if task_enabled:
             self.enable_disable_button.setText("Disable Schedule")
+            self.enable_disable_button.setProperty("actionState", "disable")
             self.enable_disable_button.clicked.disconnect()
             self.enable_disable_button.clicked.connect(
                 lambda: self._run_action("disable")
             )
         else:
             self.enable_disable_button.setText("Enable Schedule")
+            self.enable_disable_button.setProperty("actionState", "enable")
             self.enable_disable_button.clicked.disconnect()
             self.enable_disable_button.clicked.connect(
                 lambda: self._run_action("enable")
