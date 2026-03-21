@@ -345,6 +345,8 @@ class CurvesPage(QWidget):
         self._populate_curve_selector()
         self._populate_fan_selector()
         self.preview_curve()
+        self._update_live_preview_summary()
+        self._update_section_summaries()
 
     def switch_profile(self) -> None:
         """Switch the active profile and reload the editor."""
@@ -446,6 +448,7 @@ class CurvesPage(QWidget):
             "Saved general settings. The daemon will reload the YAML automatically.",
             is_error=False,
         )
+        self._update_section_summaries()
 
     def create_curve(self) -> None:
         """Create a new curve in memory and select it."""
@@ -470,6 +473,7 @@ class CurvesPage(QWidget):
             f"Curve '{curve_name}' created locally. Save to persist.",
             is_error=False,
         )
+        self._update_section_summaries()
 
     def save_curve(self) -> None:
         """Save the current curve and general settings to the YAML config."""
@@ -503,6 +507,7 @@ class CurvesPage(QWidget):
             f"Curve '{curve_name}' saved. The daemon will reload the YAML automatically.",
             is_error=False,
         )
+        self._update_section_summaries()
 
     def delete_curve(self) -> None:
         """Delete the selected curve after checking fan references."""
@@ -540,6 +545,7 @@ class CurvesPage(QWidget):
 
         self._populate_curve_selector()
         self._show_message(f"Curve '{curve_name}' deleted", is_error=False)
+        self._update_section_summaries()
 
     def preview_curve(self) -> None:
         """Preview the current curve in the interactive plot."""
@@ -549,6 +555,7 @@ class CurvesPage(QWidget):
                 "Hover over the graph to inspect values. Drag control points to edit the curve."
             )
             self._plot_preview([])
+            self._update_section_summaries()
             return
 
         try:
@@ -564,6 +571,7 @@ class CurvesPage(QWidget):
             "Hover over the graph to inspect values. Drag control points to edit the curve."
         )
         self._plot_preview(preview_series, points)
+        self._update_section_summaries()
 
     def save_fan_settings(self) -> None:
         """Save the selected fan's config block directly to YAML."""
@@ -602,6 +610,7 @@ class CurvesPage(QWidget):
         )
         self.refresh_data()
         self.fan_selector.setCurrentText(fan_name)
+        self._update_section_summaries()
 
     def add_point(self) -> None:
         """Append a new point row to the table."""
@@ -652,6 +661,7 @@ class CurvesPage(QWidget):
             index = self.profile_selector.findData(current)
             if index >= 0:
                 self.profile_selector.setCurrentIndex(index)
+        self._update_section_summaries()
 
     def _populate_curve_selector(self, selected: str | None = None) -> None:
         if self._config is None:
@@ -677,6 +687,7 @@ class CurvesPage(QWidget):
         if target:
             self.curve_selector.setCurrentText(target)
             self._load_selected_curve(target)
+        self._update_section_summaries()
 
     def _populate_fan_selector(self) -> None:
         if self._config is None:
@@ -695,6 +706,7 @@ class CurvesPage(QWidget):
         if target:
             self.fan_selector.setCurrentText(target)
             self._load_selected_fan(target)
+        self._update_section_summaries()
 
     def _load_selected_curve(self, curve_name: str) -> None:
         if self._config is None or curve_name not in self._config.curves:
@@ -705,6 +717,7 @@ class CurvesPage(QWidget):
         self._load_curve_points(curve.points)
         self.hysteresis_spin.setValue(curve.hysteresis)
         self.preview_curve()
+        self._update_section_summaries()
 
     def _load_selected_fan(self, fan_name: str) -> None:
         if self._config is None or fan_name not in self._config.fans:
@@ -716,6 +729,7 @@ class CurvesPage(QWidget):
         self.curve_selector.setCurrentText(fan.curve)
         self.temp_ids_edit.setText(", ".join(fan.temp_ids))
         self.aggregation_selector.setCurrentText(fan.aggregation)
+        self._update_section_summaries()
 
     def _load_curve_points(self, points) -> None:
         self._syncing_points = True
@@ -724,6 +738,7 @@ class CurvesPage(QWidget):
             self._append_point_row(float(temp), float(speed))
         self._syncing_points = False
         self.preview_curve()
+        self._update_section_summaries()
 
     def _append_point_row(self, temperature: float, speed: float) -> None:
         row = self.points_table.rowCount()
@@ -735,6 +750,7 @@ class CurvesPage(QWidget):
         if self._syncing_points:
             return
         self.preview_curve()
+        self._update_section_summaries()
 
     def _handle_plot_hover_changed(self, hover_point: tuple[int, int] | None) -> None:
         if hover_point is None:
@@ -756,6 +772,77 @@ class CurvesPage(QWidget):
             self._append_point_row(temperature, speed)
         self._syncing_points = False
         self.preview_curve()
+
+    def _update_live_preview_summary(self) -> None:
+        state = read_daemon_state(self._state_path)
+
+        temp_text = "—"
+        if state is not None:
+            for sensor in state.temperatures:
+                if sensor.value is not None:
+                    temp_text = f"{float(sensor.value):.1f} °C"
+                    break
+
+        fan_text = "—"
+        selected_fan_name = self.fan_selector.currentText().strip()
+        if state is not None and self._config is not None and selected_fan_name:
+            fan_config = self._config.fans.get(selected_fan_name)
+            if fan_config is not None:
+                candidate_ids = {fan_config.fan_id}
+                if "/control/" in fan_config.fan_id:
+                    candidate_ids.add(fan_config.fan_id.replace("/control/", "/fan/"))
+                if "/fan/" in fan_config.fan_id:
+                    candidate_ids.add(fan_config.fan_id.replace("/fan/", "/control/"))
+                for fan in state.fan_speeds:
+                    if (
+                        fan.control_identifier in candidate_ids
+                        or fan.identifier in candidate_ids
+                    ):
+                        if fan.current_control_pct is not None:
+                            fan_text = f"{float(fan.current_control_pct):.0f}%"
+                        elif fan.rpm is not None:
+                            fan_text = f"{float(fan.rpm):.0f} rpm"
+                        break
+
+        self.live_temp_value_label.setText(temp_text)
+        self.live_fan_value_label.setText(fan_text)
+
+    def _update_section_summaries(self) -> None:
+        curve_summary = f"{self.points_table.rowCount()} points"
+        if self._config is not None:
+            curve_name = self.curve_selector.currentText().strip()
+            if curve_name in self._config.curves:
+                curve = self._config.curves[curve_name]
+                curve_summary = (
+                    f"{len(curve.points)} points · Hysteresis {curve.hysteresis:.1f}°C"
+                )
+        self.curve_points_section.set_summary(curve_summary)
+
+        fan_name = self.fan_selector.currentText().strip()
+        if self._config is not None and fan_name in self._config.fans:
+            fan = self._config.fans[fan_name]
+            fan_summary = f"{fan_name} → {fan.curve}"
+            if fan.temp_ids:
+                fan_summary = f"{fan_summary} · {len(fan.temp_ids)} sensors"
+        else:
+            fan_summary = "No fan selected"
+        self.fan_assignment_section.set_summary(fan_summary)
+
+        temp_ids = [
+            item.strip() for item in self.temp_ids_edit.text().split(",") if item.strip()
+        ]
+        if temp_ids:
+            sensor_summary = f"{len(temp_ids)} sensors · {self.aggregation_selector.currentText()}"
+        else:
+            sensor_summary = f"{self.aggregation_selector.currentText()} · no sensors"
+        self.sensor_mapping_section.set_summary(sensor_summary)
+
+        self.general_settings_section.set_summary(
+            f"Poll {self.poll_interval_spin.value():.1f}s · Hysteresis {self.hysteresis_spin.value():.1f}°C"
+        )
+
+        active_profile = self.profile_selector.currentText().strip() or self._active_profile
+        self.profiles_section.set_summary(active_profile or "No profile selected")
 
     def _selected_profile_name(self) -> str:
         value = self.profile_selector.currentData()
