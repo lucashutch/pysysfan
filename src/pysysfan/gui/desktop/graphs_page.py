@@ -7,10 +7,12 @@ individual series visibility.
 
 from __future__ import annotations
 
+from math import ceil
 from typing import Callable
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QGridLayout,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -23,6 +25,7 @@ from PySide6.QtWidgets import (
 from pysysfan.gui.desktop.data_provider import DashboardDataProvider
 from pysysfan.gui.desktop.sidebar import SidebarWidget
 from pysysfan.gui.desktop.theme import (
+    PAGE_HEADING_STYLE,
     desktop_colors,
     graphs_page_stylesheet,
     plot_theme,
@@ -135,6 +138,9 @@ class GraphsPage(QWidget):
         self._initialized_tabs: set[str] = set()
         self._active_tab: str = self._DEFAULT_TAB
         self._applying_theme: bool = False
+        self._hover_point: tuple[float, float] | None = None
+        self._legend_columns = 4
+        self._hover_marker_item = None
 
         # Build the outer layout: sidebar + main content
         outer_layout = QHBoxLayout(self)
@@ -154,15 +160,41 @@ class GraphsPage(QWidget):
         main_area.setObjectName("graphsMainArea")
         root_layout = QVBoxLayout(main_area)
         root_layout.setContentsMargins(16, 12, 16, 12)
-        root_layout.setSpacing(8)
+        root_layout.setSpacing(10)
         outer_layout.addWidget(main_area, stretch=1)
+
+        self._header_frame = QFrame(self)
+        self._header_frame.setObjectName("graphsHeader")
+        header_layout = QVBoxLayout(self._header_frame)
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(4)
+
+        header_title = QLabel("Graphs", self._header_frame)
+        header_title.setObjectName("graphsHeaderTitle")
+        header_title.setStyleSheet(PAGE_HEADING_STYLE)
+        header_layout.addWidget(header_title)
+
+        header_subtitle = QLabel(
+            "Temperature and fan-speed history with a bottom-drawer control strip",
+            self._header_frame,
+        )
+        header_subtitle.setObjectName("graphsHeaderSubtitle")
+        header_layout.addWidget(header_subtitle)
+
+        root_layout.addWidget(self._header_frame)
 
         # --- top controls row ---
         self._controls_row = QFrame(self)
         self._controls_row.setObjectName("graphsControlsRow")
-        controls_layout = QHBoxLayout(self._controls_row)
+        controls_layout = QVBoxLayout(self._controls_row)
         controls_layout.setContentsMargins(0, 0, 0, 0)
-        controls_layout.setSpacing(8)
+        controls_layout.setSpacing(6)
+
+        self._tab_row = QWidget(self._controls_row)
+        self._tab_row.setObjectName("graphsTabRow")
+        tab_row_layout = QHBoxLayout(self._tab_row)
+        tab_row_layout.setContentsMargins(0, 0, 0, 0)
+        tab_row_layout.setSpacing(8)
 
         self._tab_buttons: dict[str, QPushButton] = {}
         for tab_key, tab_label in (
@@ -175,12 +207,18 @@ class GraphsPage(QWidget):
             btn.setFlat(True)
             btn.setProperty("graphTab", True)
             btn.clicked.connect(lambda checked, key=tab_key: self._switch_tab(key))
-            controls_layout.addWidget(btn)
+            tab_row_layout.addWidget(btn)
             self._tab_buttons[tab_key] = btn
         self._tab_buttons[self._active_tab].setChecked(True)
         self._showgrid_applied = False
 
-        controls_layout.addStretch()
+        tab_row_layout.addStretch()
+
+        self._history_row = QWidget(self._controls_row)
+        self._history_row.setObjectName("graphsHistoryRow")
+        history_row_layout = QHBoxLayout(self._history_row)
+        history_row_layout.setContentsMargins(0, 0, 0, 0)
+        history_row_layout.setSpacing(8)
 
         # History window buttons
         self._history_buttons: dict[int, QPushButton] = {}
@@ -191,14 +229,16 @@ class GraphsPage(QWidget):
             btn.setFlat(True)
             btn.setProperty("historyBtn", True)
             btn.clicked.connect(lambda checked, s=seconds: self._set_history_window(s))
-            controls_layout.addWidget(btn)
+            history_row_layout.addWidget(btn)
             self._history_buttons[seconds] = btn
+        history_row_layout.addStretch()
+
+        controls_layout.addWidget(self._tab_row)
+        controls_layout.addWidget(self._history_row)
         # Default history is the provider's current window
         default_seconds = provider.history_seconds
         if default_seconds in self._history_buttons:
             self._history_buttons[default_seconds].setChecked(True)
-
-        root_layout.addWidget(self._controls_row)
 
         # --- plot widget ---
         if pg is not None:
@@ -209,22 +249,66 @@ class GraphsPage(QWidget):
             self._plot_widget.setSizePolicy(
                 QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
             )
+            self._hover_marker_item = pg.ScatterPlotItem(pxMode=True)
+            self._hover_marker_item.setZValue(1000)
+            self._plot_widget.addItem(self._hover_marker_item)
+            self._plot_widget.hoverChanged.connect(self._handle_plot_hover_changed)
             root_layout.addWidget(self._plot_widget, stretch=1)
         else:
             self._plot_widget = None
+            self._hover_marker_item = None
             placeholder = QLabel("pyqtgraph not available", self)
             placeholder.setAlignment(Qt.AlignmentFlag.AlignCenter)
             root_layout.addWidget(placeholder, stretch=1)
 
+        # --- bottom drawer ---
+        self._drawer_frame = QFrame(self)
+        self._drawer_frame.setObjectName("graphsDrawer")
+        drawer_layout = QVBoxLayout(self._drawer_frame)
+        drawer_layout.setContentsMargins(12, 12, 12, 12)
+        drawer_layout.setSpacing(8)
+
+        drawer_layout.addWidget(self._controls_row)
+
+        self._stats_row = QFrame(self._drawer_frame)
+        self._stats_row.setObjectName("graphsStatsRow")
+        stats_layout = QHBoxLayout(self._stats_row)
+        stats_layout.setContentsMargins(0, 0, 0, 0)
+        stats_layout.setSpacing(12)
+        self._visible_count_label = QLabel("0 visible", self._stats_row)
+        self._visible_count_label.setObjectName("graphsStatsLabel")
+        self._range_label = QLabel("Window 60 s", self._stats_row)
+        self._range_label.setObjectName("graphsStatsLabel")
+        stats_layout.addWidget(self._visible_count_label)
+        stats_layout.addWidget(self._range_label)
+        stats_layout.addStretch(1)
+        drawer_layout.addWidget(self._stats_row)
+
+        self._hover_row = QFrame(self._drawer_frame)
+        self._hover_row.setObjectName("graphsHoverRow")
+        hover_layout = QHBoxLayout(self._hover_row)
+        hover_layout.setContentsMargins(0, 0, 0, 0)
+        hover_layout.setSpacing(0)
+        self._default_hover_text = (
+            "Hover a visible line to inspect the values at that point in time."
+        )
+        self._hover_label = QLabel(self._default_hover_text, self._hover_row)
+        self._hover_label.setObjectName("graphsHoverLabel")
+        self._hover_label.setWordWrap(True)
+        hover_layout.addWidget(self._hover_label, 1)
+        drawer_layout.addWidget(self._hover_row)
+
         # --- legend bar ---
         self._legend_frame = QFrame(self)
         self._legend_frame.setObjectName("graphsLegendBar")
-        self._legend_layout = QHBoxLayout(self._legend_frame)
+        self._legend_layout = QGridLayout(self._legend_frame)
         self._legend_layout.setContentsMargins(4, 4, 4, 4)
-        self._legend_layout.setSpacing(4)
-        self._legend_layout.addStretch()
+        self._legend_layout.setHorizontalSpacing(4)
+        self._legend_layout.setVerticalSpacing(4)
         self._legend_items: list[LegendItem] = []
-        root_layout.addWidget(self._legend_frame)
+        drawer_layout.addWidget(self._legend_frame)
+
+        root_layout.addWidget(self._drawer_frame)
 
         # Connect provider signals
         self._provider.historyUpdated.connect(self._refresh_plot)

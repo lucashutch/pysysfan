@@ -177,7 +177,10 @@ def test_graphs_page_structure(qtbot, tmp_path) -> None:
     page = _make_page(qtbot, provider)
 
     assert page.objectName() == "graphsRoot"
+    assert page.findChild(QFrame, "graphsHeader") is not None
+    assert page.findChild(QFrame, "graphsDrawer") is not None
     assert page.findChild(QFrame, "graphsControlsRow") is not None
+    assert page.findChild(QFrame, "graphsStatsRow") is not None
     assert page.findChild(QFrame, "graphsLegendBar") is not None
     assert page.findChild(QPushButton, "graphTab_temperature") is not None
     assert page.findChild(QPushButton, "graphTab_fan_rpm") is not None
