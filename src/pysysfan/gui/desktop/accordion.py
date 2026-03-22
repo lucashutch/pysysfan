@@ -7,7 +7,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
-    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -37,6 +36,7 @@ class AccordionSection(QFrame):
         self.setProperty("accordionSection", True)
         self._title = title
         self._summary = summary
+        self._is_open = False
 
         outer_layout = QVBoxLayout(self)
         outer_layout.setContentsMargins(0, 0, 0, 0)
@@ -63,14 +63,16 @@ class AccordionSection(QFrame):
         self.indicator_label.setStyleSheet("font-size: 14px; font-weight: 700;")
         header_layout.addWidget(self.indicator_label)
 
-        self.header_button = QToolButton(header)
-        self.header_button.setObjectName("accordionHeader")
-        self.header_button.setProperty("accordionHeader", True)
-        self.header_button.setCheckable(True)
-        self.header_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
-        self.header_button.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.header_button.clicked.connect(self._on_header_clicked)
-        header_layout.addWidget(self.header_button, stretch=1)
+        self.header_label = QLabel(title, header)
+        self.header_label.setObjectName("accordionHeader")
+        self.header_label.setProperty("accordionHeader", True)
+        self.header_label.setAlignment(
+            Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft
+        )
+        self.header_label.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
+        )
+        header_layout.addWidget(self.header_label, stretch=1)
 
         self.summary_label = QLabel(summary, header)
         self.summary_label.setObjectName("accordionSummary")
@@ -84,7 +86,7 @@ class AccordionSection(QFrame):
         )
         header_layout.addWidget(self.summary_label)
 
-        header.clicked.connect(lambda: self.header_button.click())
+        header.clicked.connect(self._on_header_clicked)
 
         self.body_widget = QWidget(self)
         self.body_widget.setObjectName("accordionBody")
@@ -108,12 +110,10 @@ class AccordionSection(QFrame):
         self.summary_label.setVisible(not self.is_open())
 
     def is_open(self) -> bool:
-        return self.header_button.isChecked()
+        return self._is_open
 
     def set_open(self, open_: bool) -> None:
-        self.header_button.blockSignals(True)
-        self.header_button.setChecked(open_)
-        self.header_button.blockSignals(False)
+        self._is_open = open_
         self._apply_state(open_)
 
     def add_widget(self, widget: QWidget) -> None:
@@ -125,13 +125,14 @@ class AccordionSection(QFrame):
     def add_stretch(self, stretch: int = 1) -> None:
         self.body_layout.addStretch(stretch)
 
-    def _on_header_clicked(self, checked: bool) -> None:
-        self._apply_state(checked)
-        self.toggled.emit(checked)
+    def _on_header_clicked(self) -> None:
+        self._is_open = not self._is_open
+        self._apply_state(self._is_open)
+        self.toggled.emit(self._is_open)
 
     def _apply_state(self, open_: bool) -> None:
         self.indicator_label.setText("−" if open_ else "+")
-        self.header_button.setText(self._title)
+        self.header_label.setText(self._title)
         self.body_widget.setVisible(open_)
         self.summary_label.setVisible(not open_)
 

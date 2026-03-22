@@ -81,7 +81,7 @@ def test_curves_accordion_sections_can_stay_open_independently(qtbot, tmp_path) 
     assert first.is_open() is True
     assert second.is_open() is True
 
-    first.header_button.click()
+    first.set_open(False)
 
     assert first.is_open() is False
     assert second.is_open() is True

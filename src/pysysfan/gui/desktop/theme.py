@@ -350,9 +350,6 @@ QStatusBar {{
 def management_page_stylesheet(palette: QPalette) -> str:
     """Return a shared stylesheet for the Config and Service management pages."""
     colors = desktop_colors(palette)
-    hover_background = _hex(
-        _mix(QColor(colors["raised"]), QColor(colors["accent"]), 0.12)
-    )
     button_text = colors["text"]
     return f"""
 QWidget#managementPageRoot {{
@@ -603,18 +600,13 @@ QFrame[accordionSection="true"] {{
     border-radius: 4px;
 }}
 
-QToolButton[accordionHeader="true"] {{
+QLabel[accordionHeader="true"] {{
     border: 0;
     background: transparent;
     padding: 10px 12px;
     color: {colors["text"]};
     font-size: 13px;
     font-weight: 800;
-    text-align: left;
-}}
-
-QToolButton[accordionHeader="true"]:hover {{
-    background: {hover_background};
 }}
 
 QLabel[accordionSummary="true"] {{
@@ -961,14 +953,13 @@ QFrame[accordionSection="true"] {{
     max-width: 388px;
 }}
 
-QToolButton[accordionHeader="true"] {{
+QLabel[accordionHeader="true"] {{
     border: 0;
     background: transparent;
     padding: 8px 0;
     color: {colors["text"]};
     font-size: 12px;
     font-weight: 700;
-    text-align: left;
 }}
 
 QLabel[accordionSummary="true"] {{
