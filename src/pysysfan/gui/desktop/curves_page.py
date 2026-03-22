@@ -136,9 +136,11 @@ class CurvesPage(QWidget):
         self.profile_selector.setObjectName("profileSelector")
 
         self.switch_profile_button = QPushButton("Switch Profile", self)
+        self.switch_profile_button.setObjectName("curveActionBtn")
         self.switch_profile_button.clicked.connect(self.switch_profile)
 
         self.new_profile_button = QPushButton("New Profile", self)
+        self.new_profile_button.setObjectName("curveActionBtn")
         self.new_profile_button.clicked.connect(self.create_profile)
 
         self.rename_profile_button = QPushButton("Rename Profile", self)
@@ -146,6 +148,7 @@ class CurvesPage(QWidget):
         self.rename_profile_button.clicked.connect(self.rename_profile)
 
         self.refresh_button = QPushButton("Refresh", self)
+        self.refresh_button.setObjectName("curveActionBtn")
         self.refresh_button.clicked.connect(self.refresh_data)
 
         self.curve_selector = QComboBox(self)
@@ -205,19 +208,24 @@ class CurvesPage(QWidget):
             summary="3 points · Hysteresis 3.0°C",
             open_=True,
         )
+        curve_points_actions_top = QHBoxLayout()
+        curve_points_actions_top.setSpacing(8)
+        curve_points_actions_top.addWidget(self.new_curve_button)
+        curve_points_actions_top.addWidget(self.save_curve_button)
+        curve_points_actions_top.addWidget(self.delete_curve_button)
+        curve_points_actions_top.addStretch(1)
+        self.curve_points_section.add_layout(curve_points_actions_top)
         curve_points_header = QHBoxLayout()
         curve_points_header.addWidget(QLabel("Curve", self))
         curve_points_header.addWidget(self.curve_selector, 1)
         self.curve_points_section.add_layout(curve_points_header)
         self.curve_points_section.add_widget(self.points_table)
-        curve_points_actions = QHBoxLayout()
-        curve_points_actions.addWidget(self.new_curve_button)
-        curve_points_actions.addWidget(self.save_curve_button)
-        curve_points_actions.addWidget(self.delete_curve_button)
-        curve_points_actions.addWidget(self.add_point_button)
-        curve_points_actions.addWidget(self.remove_point_button)
-        curve_points_actions.addStretch(1)
-        self.curve_points_section.add_layout(curve_points_actions)
+        curve_points_actions_bottom = QHBoxLayout()
+        curve_points_actions_bottom.setSpacing(8)
+        curve_points_actions_bottom.addWidget(self.add_point_button)
+        curve_points_actions_bottom.addWidget(self.remove_point_button)
+        curve_points_actions_bottom.addStretch(1)
+        self.curve_points_section.add_layout(curve_points_actions_bottom)
 
         self.fan_assignment_section = self.accordion.add_section(
             "Fan Assignment",
@@ -242,7 +250,11 @@ class CurvesPage(QWidget):
         sensor_mapping_layout.addWidget(QLabel("Temp sensor IDs", self), 0, 0)
         sensor_mapping_layout.addWidget(self.temp_ids_edit, 0, 1)
         sensor_mapping_layout.addWidget(QLabel("Aggregation", self), 1, 0)
-        sensor_mapping_layout.addWidget(self.aggregation_selector, 1, 1)
+        aggregation_wrapper = QHBoxLayout()
+        aggregation_wrapper.addWidget(self.aggregation_selector)
+        aggregation_wrapper.addStretch(1)
+        self.aggregation_selector.setMaximumWidth(150)
+        sensor_mapping_layout.addLayout(aggregation_wrapper, 1, 1)
         sensor_mapping_layout.addWidget(self.save_fan_button, 2, 0, 1, 2)
         self.sensor_mapping_section.add_layout(sensor_mapping_layout)
 
@@ -269,12 +281,20 @@ class CurvesPage(QWidget):
         profile_layout.setVerticalSpacing(10)
         profile_layout.addWidget(QLabel("Profile", self), 0, 0)
         profile_layout.addWidget(self.profile_selector, 0, 1)
-        profile_actions = QHBoxLayout()
-        profile_actions.addWidget(self.switch_profile_button)
-        profile_actions.addWidget(self.new_profile_button)
-        profile_actions.addWidget(self.rename_profile_button)
-        profile_actions.addWidget(self.refresh_button)
-        profile_actions.addStretch(1)
+        profile_actions = QVBoxLayout()
+        profile_actions.setSpacing(8)
+        profile_actions_top = QHBoxLayout()
+        profile_actions_top.setSpacing(8)
+        profile_actions_top.addWidget(self.switch_profile_button)
+        profile_actions_top.addWidget(self.new_profile_button)
+        profile_actions_top.addStretch(1)
+        profile_actions.addLayout(profile_actions_top)
+        profile_actions_bottom = QHBoxLayout()
+        profile_actions_bottom.setSpacing(8)
+        profile_actions_bottom.addWidget(self.rename_profile_button)
+        profile_actions_bottom.addWidget(self.refresh_button)
+        profile_actions_bottom.addStretch(1)
+        profile_actions.addLayout(profile_actions_bottom)
         profile_layout.addLayout(profile_actions, 1, 0, 1, 2)
         self.profiles_section.add_layout(profile_layout)
 
@@ -350,7 +370,27 @@ class CurvesPage(QWidget):
 
         self.points_table.itemChanged.connect(self._handle_curve_inputs_changed)
         self.hysteresis_spin.valueChanged.connect(self._handle_curve_inputs_changed)
+        self._apply_uniform_button_sizing()
         self.setStyleSheet(flat_management_page_stylesheet(self.palette()))
+
+    def _apply_uniform_button_sizing(self) -> None:
+        buttons = [
+            self.switch_profile_button,
+            self.new_profile_button,
+            self.rename_profile_button,
+            self.refresh_button,
+            self.new_curve_button,
+            self.save_curve_button,
+            self.delete_curve_button,
+            self.add_point_button,
+            self.remove_point_button,
+            self.save_fan_button,
+            self.save_settings_button,
+        ]
+        for btn in buttons:
+            btn.setSizePolicy(
+                QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed
+            )
 
     def refresh_data(self) -> None:
         """Load the active profile config from disk."""
@@ -769,8 +809,12 @@ class CurvesPage(QWidget):
     def _append_point_row(self, temperature: float, speed: float) -> None:
         row = self.points_table.rowCount()
         self.points_table.insertRow(row)
-        self.points_table.setItem(row, 0, QTableWidgetItem(f"{temperature:.1f}"))
-        self.points_table.setItem(row, 1, QTableWidgetItem(f"{speed:.1f}"))
+        temp_item = QTableWidgetItem(f"{temperature:.1f}")
+        temp_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.points_table.setItem(row, 0, temp_item)
+        speed_item = QTableWidgetItem(f"{speed:.1f}")
+        speed_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.points_table.setItem(row, 1, speed_item)
 
     def _handle_curve_inputs_changed(self, *_args) -> None:
         if self._syncing_points:

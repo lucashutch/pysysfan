@@ -871,32 +871,72 @@ QDoubleSpinBox {{
 }}
 
 QComboBox {{
-    border: none;
+    border: 1px solid {colors["border"]};
+    background: {colors["base"]};
 }}
 
 QComboBox::drop-down {{
-    border: 0;
-    width: 24px;
+    border: none;
+    width: 28px;
 }}
 
 QComboBox::down-arrow {{
+    image: none;
+    width: 10px;
+    height: 10px;
+}}
+
+QComboBox::down-arrow:after {{
+    content: "▼";
+    color: {colors["text"]};
+    font-size: 10px;
+    font-weight: 700;
+}}
+
+QComboBox:hover {{
+    background: {colors["raised"]};
+    border-color: {colors["accent"]};
+}}
+
+QComboBox::item:hover {{
+    background: {colors["accent"]};
+    color: {colors["window"]};
+}}
+
+QDoubleSpinBox {{
+    padding-right: 2px;
+}}
+
+QDoubleSpinBox::up-button {{
+    width: 16px;
+}}
+
+QDoubleSpinBox::down-button {{
+    width: 16px;
+}}
+
+QDoubleSpinBox::up-arrow {{
     image: none;
     width: 8px;
     height: 8px;
 }}
 
-QComboBox::down-arrow:after {{
-    content: "▼";
-    color: {colors["muted"]};
+QDoubleSpinBox::up-arrow:after {{
+    content: "▲";
+    color: {colors["text"]};
     font-size: 8px;
 }}
 
-QComboBox:hover {{
-    background: {colors["card"]};
+QDoubleSpinBox::down-arrow {{
+    image: none;
+    width: 8px;
+    height: 8px;
 }}
 
-QComboBox::item:hover {{
-    background: {colors["accent"]};
+QDoubleSpinBox::down-arrow:after {{
+    content: "▼";
+    color: {colors["text"]};
+    font-size: 8px;
 }}
 
 QTableWidget,
