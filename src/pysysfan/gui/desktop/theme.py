@@ -981,6 +981,10 @@ QLabel[accordionSummary="true"] {{
     font-weight: 600;
 }}
 
+QWidget#accordionTitleContainer {{
+    background: transparent;
+}}
+
 QWidget[accordionBody="true"] {{
     background: {colors["raised"]};
 }}

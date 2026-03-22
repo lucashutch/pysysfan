@@ -48,7 +48,7 @@ class AccordionSection(QFrame):
         header.setCursor(Qt.CursorShape.PointingHandCursor)
         header_layout = QHBoxLayout(header)
         header_layout.setContentsMargins(12, 8, 12, 8)
-        header_layout.setSpacing(8)
+        header_layout.setSpacing(0)
 
         self.indicator_label = QLabel("+", header)
         self.indicator_label.setObjectName("accordionIndicator")
@@ -63,17 +63,22 @@ class AccordionSection(QFrame):
         self.indicator_label.setStyleSheet("font-size: 14px; font-weight: 700;")
         header_layout.addWidget(self.indicator_label)
 
-        self.header_button = QToolButton(header)
+        self._title_container = QWidget(header)
+        self._title_container.setObjectName("accordionTitleContainer")
+        title_container_layout = QHBoxLayout(self._title_container)
+        title_container_layout.setContentsMargins(8, 0, 0, 0)
+        title_container_layout.setSpacing(8)
+
+        self.header_button = QToolButton(self._title_container)
         self.header_button.setObjectName("accordionHeader")
         self.header_button.setProperty("accordionHeader", True)
         self.header_button.setCheckable(True)
         self.header_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         self.header_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.header_button.clicked.connect(self._on_header_clicked)
-        self.header_button.setStyleSheet("text-align: left;")
-        header_layout.addWidget(self.header_button, stretch=1)
+        title_container_layout.addWidget(self.header_button, stretch=1)
 
-        self.summary_label = QLabel(summary, header)
+        self.summary_label = QLabel(summary, self._title_container)
         self.summary_label.setObjectName("accordionSummary")
         self.summary_label.setProperty("accordionSummary", True)
         self.summary_label.setAlignment(
@@ -83,7 +88,9 @@ class AccordionSection(QFrame):
         self.summary_label.setAttribute(
             Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
         )
-        header_layout.addWidget(self.summary_label)
+        title_container_layout.addWidget(self.summary_label)
+
+        header_layout.addWidget(self._title_container, stretch=1)
 
         header.clicked.connect(lambda: self.header_button.click())
 
