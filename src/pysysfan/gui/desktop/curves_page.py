@@ -101,7 +101,7 @@ class CurvesPage(QWidget):
 
         self.left_column = QWidget(self)
         self.left_column.setObjectName("curvesLeftColumn")
-        self.left_column.setFixedWidth(300)
+        self.left_column.setFixedWidth(400)
         left_layout = QVBoxLayout(self.left_column)
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(0)
@@ -123,7 +123,7 @@ class CurvesPage(QWidget):
         left_scroll_content = QWidget(self.left_scroll)
         self.left_scroll.setWidget(left_scroll_content)
         left_scroll_layout = QVBoxLayout(left_scroll_content)
-        left_scroll_layout.setContentsMargins(0, 0, 0, 0)
+        left_scroll_layout.setContentsMargins(8, 0, 8, 0)
         left_scroll_layout.setSpacing(10)
 
         self.accordion = AccordionWidget(left_scroll_content)
@@ -165,7 +165,7 @@ class CurvesPage(QWidget):
         header.setStretchLastSection(False)
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.points_table.setColumnWidth(0, 100)
+        self.points_table.setColumnWidth(0, 130)
         self.points_table.setMinimumHeight(200)
 
         self.add_point_button = QPushButton("Add Point", self)
