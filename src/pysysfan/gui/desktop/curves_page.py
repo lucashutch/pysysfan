@@ -96,7 +96,7 @@ class CurvesPage(QWidget):
         layout.addLayout(toolbar)
 
         content_row = QHBoxLayout()
-        content_row.setSpacing(0)
+        content_row.setSpacing(10)
         layout.addLayout(content_row, 1)
 
         self.left_column = QWidget(self)
@@ -128,7 +128,7 @@ class CurvesPage(QWidget):
         left_scroll_layout.setSpacing(10)
 
         self.accordion = AccordionWidget(left_scroll_content)
-        self.accordion.setMaximumWidth(388)
+        self.accordion.setMaximumWidth(400)
         left_scroll_layout.addWidget(self.accordion)
         left_scroll_layout.addStretch(1)
 
@@ -147,9 +147,9 @@ class CurvesPage(QWidget):
         self.rename_profile_button.setObjectName("curveActionBtn")
         self.rename_profile_button.clicked.connect(self.rename_profile)
 
-        self.refresh_button = QPushButton("Refresh", self)
-        self.refresh_button.setObjectName("curveActionBtn")
-        self.refresh_button.clicked.connect(self.refresh_data)
+        self.profile_refresh_button = QPushButton("Refresh", self)
+        self.profile_refresh_button.setObjectName("curveActionBtn")
+        self.profile_refresh_button.clicked.connect(self.refresh_data)
 
         self.curve_selector = QComboBox(self)
         self.curve_selector.currentTextChanged.connect(self._load_selected_curve)
@@ -168,9 +168,11 @@ class CurvesPage(QWidget):
         self.points_table.setHorizontalHeaderLabels(["Temperature", "Fan Speed"])
         header = self.points_table.horizontalHeader()
         header.setStretchLastSection(False)
+        # Use Interactive mode with explicit minimum widths
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.points_table.setColumnWidth(0, 130)
+        self.points_table.setColumnWidth(0, 180)
+        self.points_table.setColumnWidth(1, 180)
         self.points_table.setMinimumHeight(200)
 
         self.add_point_button = QPushButton("Add Point", self)
@@ -210,9 +212,10 @@ class CurvesPage(QWidget):
         )
         curve_points_actions_top = QHBoxLayout()
         curve_points_actions_top.setSpacing(8)
-        curve_points_actions_top.addWidget(self.new_curve_button)
-        curve_points_actions_top.addWidget(self.save_curve_button)
-        curve_points_actions_top.addWidget(self.delete_curve_button)
+        curve_points_actions_top.addStretch(1)
+        curve_points_actions_top.addWidget(self.new_curve_button, 1)
+        curve_points_actions_top.addWidget(self.save_curve_button, 1)
+        curve_points_actions_top.addWidget(self.delete_curve_button, 1)
         curve_points_actions_top.addStretch(1)
         self.curve_points_section.add_layout(curve_points_actions_top)
         curve_points_header = QHBoxLayout()
@@ -222,8 +225,9 @@ class CurvesPage(QWidget):
         self.curve_points_section.add_widget(self.points_table)
         curve_points_actions_bottom = QHBoxLayout()
         curve_points_actions_bottom.setSpacing(8)
-        curve_points_actions_bottom.addWidget(self.add_point_button)
-        curve_points_actions_bottom.addWidget(self.remove_point_button)
+        curve_points_actions_bottom.addStretch(1)
+        curve_points_actions_bottom.addWidget(self.add_point_button, 1)
+        curve_points_actions_bottom.addWidget(self.remove_point_button, 1)
         curve_points_actions_bottom.addStretch(1)
         self.curve_points_section.add_layout(curve_points_actions_bottom)
 
@@ -281,25 +285,38 @@ class CurvesPage(QWidget):
         profile_layout.setVerticalSpacing(10)
         profile_layout.addWidget(QLabel("Profile", self), 0, 0)
         profile_layout.addWidget(self.profile_selector, 0, 1)
-        profile_actions = QVBoxLayout()
-        profile_actions.setSpacing(8)
-        profile_actions_top = QHBoxLayout()
-        profile_actions_top.setSpacing(8)
-        profile_actions_top.addWidget(self.switch_profile_button)
-        profile_actions_top.addWidget(self.new_profile_button)
-        profile_actions_top.addStretch(1)
-        profile_actions.addLayout(profile_actions_top)
-        profile_actions_bottom = QHBoxLayout()
-        profile_actions_bottom.setSpacing(8)
-        profile_actions_bottom.addWidget(self.rename_profile_button)
-        profile_actions_bottom.addWidget(self.refresh_button)
-        profile_actions_bottom.addStretch(1)
-        profile_actions.addLayout(profile_actions_bottom)
-        profile_layout.addLayout(profile_actions, 1, 0, 1, 2)
+        profile_btn_container = QWidget()
+        profile_btn_layout = QVBoxLayout(profile_btn_container)
+        profile_btn_layout.setSpacing(8)
+        profile_btn_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Top row: Switch Profile, New Profile
+        profile_top_row = QHBoxLayout()
+        profile_top_row.setSpacing(8)
+        profile_top_row.addStretch(1)
+        profile_top_row.addWidget(self.switch_profile_button, 1)
+        profile_top_row.addWidget(self.new_profile_button, 1)
+        profile_top_row.addStretch(1)
+
+        # Bottom row: Rename Profile, Refresh
+        profile_bottom_row = QHBoxLayout()
+        profile_bottom_row.setSpacing(8)
+        profile_bottom_row.addStretch(1)
+        profile_bottom_row.addWidget(self.rename_profile_button, 1)
+        profile_bottom_row.addWidget(self.profile_refresh_button, 1)
+        profile_bottom_row.addStretch(1)
+
+        profile_btn_layout.addLayout(profile_top_row)
+        profile_btn_layout.addLayout(profile_bottom_row)
+        profile_layout.addWidget(profile_btn_container, 1, 0, 1, 2)
         self.profiles_section.add_layout(profile_layout)
 
         self.right_column = QWidget(self)
         self.right_column.setObjectName("curvesRightColumn")
+        self.right_column.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding,
+        )
         right_layout = QVBoxLayout(self.right_column)
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(10)
@@ -391,6 +408,20 @@ class CurvesPage(QWidget):
             btn.setSizePolicy(
                 QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed
             )
+            btn.setMinimumWidth(130)
+
+    def _align_combo_items(self, combo: QComboBox) -> None:
+        """Ensure combo box dropdown items are right-aligned."""
+        model = combo.model()
+        if model is None:
+            return
+        for i in range(model.rowCount()):
+            index = model.index(i, 0)
+            model.setData(
+                index,
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                Qt.ItemDataRole.TextAlignmentRole,
+            )
 
     def refresh_data(self) -> None:
         """Load the active profile config from disk."""
@@ -409,6 +440,11 @@ class CurvesPage(QWidget):
         self._populate_profile_selector()
         self._populate_curve_selector()
         self._populate_fan_selector()
+        self._align_combo_items(self.profile_selector)
+        self._align_combo_items(self.curve_selector)
+        self._align_combo_items(self.fan_selector)
+        self._align_combo_items(self.fan_curve_selector)
+        self._align_combo_items(self.aggregation_selector)
         self.preview_curve()
         self._update_live_preview_summary()
         self._update_section_summaries()

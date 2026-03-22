@@ -33,7 +33,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("PySysFan")
         self.setWindowIcon(app_icon())
         self.resize(1100, 800)
-        self.setMinimumSize(800, 800)
+        self.setMinimumSize(1000, 800)
         self._allow_close = False
         self._tray_notice_shown = False
         self._tray_icon: QSystemTrayIcon | None = None

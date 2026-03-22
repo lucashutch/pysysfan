@@ -950,7 +950,7 @@ QFrame[accordionSection="true"] {{
     background: {colors["raised"]};
     border: none;
     border-radius: 0;
-    max-width: 388px;
+    max-width: 400px;
 }}
 
 QLabel[accordionHeader="true"] {{
@@ -974,7 +974,7 @@ QWidget[accordionBody="true"] {{
 
 QWidget#accordionWidget {{
     background: transparent;
-    max-width: 388px;
+    max-width: 400px;
 }}
 
 QWidget#accordionScrollContent {{
@@ -982,11 +982,15 @@ QWidget#accordionScrollContent {{
     max-width: 400px;
 }}
 
-QWidget#curvesLeftColumn,
-QWidget#curvesRightColumn {{
+QWidget#curvesLeftColumn {{
     background: {colors["window"]};
     border: none;
     max-width: 400px;
+}}
+
+QWidget#curvesRightColumn {{
+    background: {colors["window"]};
+    border: none;
 }}
 
 QFrame#previewGroup {{
