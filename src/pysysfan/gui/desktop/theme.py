@@ -971,18 +971,10 @@ QToolButton[accordionHeader="true"] {{
     text-align: left;
 }}
 
-QToolButton[accordionHeader="true"]:hover {{
-    background: {colors["card"]};
-}}
-
 QLabel[accordionSummary="true"] {{
     color: {colors["muted"]};
     font-size: 11px;
     font-weight: 600;
-}}
-
-QWidget#accordionTitleContainer {{
-    background: transparent;
 }}
 
 QWidget[accordionBody="true"] {{
