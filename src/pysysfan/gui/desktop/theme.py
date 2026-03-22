@@ -918,15 +918,16 @@ QFrame[accordionSection="true"] {{
     background: {colors["raised"]};
     border: none;
     border-radius: 0;
+    max-width: 388px;
 }}
 
 QToolButton[accordionHeader="true"] {{
     border: 0;
     background: transparent;
-    padding: 10px 12px;
+    padding: 8px 0;
     color: {colors["text"]};
-    font-size: 13px;
-    font-weight: 800;
+    font-size: 12px;
+    font-weight: 700;
     text-align: left;
 }}
 
@@ -944,10 +945,21 @@ QWidget[accordionBody="true"] {{
     background: {colors["raised"]};
 }}
 
+QWidget#accordionWidget {{
+    background: transparent;
+    max-width: 388px;
+}}
+
+QWidget#accordionScrollContent {{
+    background: transparent;
+    max-width: 400px;
+}}
+
 QWidget#curvesLeftColumn,
 QWidget#curvesRightColumn {{
     background: {colors["window"]};
     border: none;
+    max-width: 400px;
 }}
 
 QFrame#previewGroup {{

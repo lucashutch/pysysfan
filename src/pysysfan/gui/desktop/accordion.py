@@ -5,6 +5,7 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
+    QHBoxLayout,
     QLabel,
     QToolButton,
     QVBoxLayout,
@@ -45,9 +46,9 @@ class AccordionSection(QFrame):
         header.setObjectName("accordionHeaderContainer")
         header.setProperty("accordionHeaderContainer", True)
         header.setCursor(Qt.CursorShape.PointingHandCursor)
-        header_layout = QVBoxLayout(header)
-        header_layout.setContentsMargins(0, 8, 0, 8)
-        header_layout.setSpacing(0)
+        header_layout = QHBoxLayout(header)
+        header_layout.setContentsMargins(12, 8, 12, 8)
+        header_layout.setSpacing(8)
 
         self.indicator_label = QLabel("+", header)
         self.indicator_label.setObjectName("accordionIndicator")
@@ -58,10 +59,8 @@ class AccordionSection(QFrame):
         self.indicator_label.setAttribute(
             Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
         )
-        self.indicator_label.setFixedWidth(32)
-        self.indicator_label.setStyleSheet(
-            "font-size: 14px; font-weight: 700; padding-left: 12px;"
-        )
+        self.indicator_label.setFixedWidth(20)
+        self.indicator_label.setStyleSheet("font-size: 14px; font-weight: 700;")
         header_layout.addWidget(self.indicator_label)
 
         self.header_button = QToolButton(header)
@@ -71,7 +70,7 @@ class AccordionSection(QFrame):
         self.header_button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         self.header_button.setCursor(Qt.CursorShape.PointingHandCursor)
         self.header_button.clicked.connect(self._on_header_clicked)
-        self.header_button.setStyleSheet("text-align: center;")
+        self.header_button.setStyleSheet("text-align: left;")
         header_layout.addWidget(self.header_button, stretch=1)
 
         self.summary_label = QLabel(summary, header)
@@ -80,11 +79,10 @@ class AccordionSection(QFrame):
         self.summary_label.setAlignment(
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft
         )
-        self.summary_label.setWordWrap(True)
+        self.summary_label.setWordWrap(False)
         self.summary_label.setAttribute(
             Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
         )
-        self.summary_label.setStyleSheet("padding-right: 12px;")
         header_layout.addWidget(self.summary_label)
 
         header.clicked.connect(lambda: self.header_button.click())

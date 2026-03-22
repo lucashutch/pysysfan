@@ -121,12 +121,14 @@ class CurvesPage(QWidget):
         left_layout.addWidget(self.left_scroll, 1)
 
         left_scroll_content = QWidget(self.left_scroll)
+        left_scroll_content.setObjectName("accordionScrollContent")
         self.left_scroll.setWidget(left_scroll_content)
         left_scroll_layout = QVBoxLayout(left_scroll_content)
-        left_scroll_layout.setContentsMargins(8, 0, 8, 0)
+        left_scroll_layout.setContentsMargins(0, 0, 0, 0)
         left_scroll_layout.setSpacing(10)
 
         self.accordion = AccordionWidget(left_scroll_content)
+        self.accordion.setMaximumWidth(388)
         left_scroll_layout.addWidget(self.accordion)
         left_scroll_layout.addStretch(1)
 
@@ -779,12 +781,12 @@ class CurvesPage(QWidget):
     def _handle_plot_hover_changed(self, hover_point: tuple[int, int] | None) -> None:
         if hover_point is None:
             self.preview_result_label.setText(
-                "Hover over the graph to inspect values. Drag control points to edit the curve."
+                "Move cursor over graph to inspect values"
             )
             return
 
         temperature, speed = hover_point
-        self.preview_result_label.setText(f"Hover: {temperature}°C → {speed}%")
+        self.preview_result_label.setText(f"{temperature}°C → {speed}%")
 
     def _handle_plot_points_changed(
         self,

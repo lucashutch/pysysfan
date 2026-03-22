@@ -38,3 +38,11 @@ When working in this repository:
 - LHM and PawnIO download modules use version marker files (`.lhm_version`, `.pawnio_version`) in `~/.pysysfan/` to avoid re-downloading when already up-to-date.
 - PawnIO installer requires elevation — use `powershell Start-Process -Verb RunAs`.
 - All downloads go through the GitHub releases API.
+
+## Desktop UI
+
+- Use Heroicons from https://heroicons.com/ for all new in-product icons. Do not introduce emoji, Unicode glyph icons, or additional icon packs unless a specific asset already exists for branding.
+- Treat the desktop theme as palette-aware rather than fixed-theme. The shared styles derive `window`, `base`, `text`, `raised`, `panel`, `card`, `muted`, `border`, `accent`, and `graph` tokens from `QPalette`, so keep new surfaces aligned with those tokens instead of hard-coding a separate palette.
+- The visual language is flat and boxy. Prefer square or near-square corners, borderless surfaces, and thin neutral separators over heavy outlines, shadows, or gradients. Most controls intentionally use `border: none` or a 0 to 4px radius; larger containers only use modest rounding when they need to read as shells.
+- Use color sparingly and intentionally. Neutral grays carry the layout, while accents are reserved for status and emphasis: blue `#60a5fa`, green `#34d399`, amber `#f59e0b`, red `#ef4444`, cyan `#22d3ee`, pink `#f472b6`, and purple `#a78bfa`. Keep those colors for component bars, alerts, and chart series rather than decorative fills.
+- When styling new desktop UI, match the existing flat management pages and dashboard rows: solid fills, compact spacing, uppercase or bold section labels, and accent bars instead of decorative chrome.
