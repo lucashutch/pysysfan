@@ -350,9 +350,6 @@ QStatusBar {{
 def management_page_stylesheet(palette: QPalette) -> str:
     """Return a shared stylesheet for the Config and Service management pages."""
     colors = desktop_colors(palette)
-    hover_background = _hex(
-        _mix(QColor(colors["raised"]), QColor(colors["accent"]), 0.12)
-    )
     button_text = colors["text"]
     return f"""
 QWidget#managementPageRoot {{
@@ -603,18 +600,13 @@ QFrame[accordionSection="true"] {{
     border-radius: 4px;
 }}
 
-QToolButton[accordionHeader="true"] {{
+QLabel[accordionHeader="true"] {{
     border: 0;
     background: transparent;
     padding: 10px 12px;
     color: {colors["text"]};
     font-size: 13px;
     font-weight: 800;
-    text-align: left;
-}}
-
-QToolButton[accordionHeader="true"]:hover {{
-    background: {hover_background};
 }}
 
 QLabel[accordionSummary="true"] {{
@@ -625,6 +617,386 @@ QLabel[accordionSummary="true"] {{
 
 QWidget[accordionBody="true"] {{
     background: {colors["raised"]};
+}}
+"""
+
+
+def flat_management_page_stylesheet(palette: QPalette) -> str:
+    """Return a flat, borderless stylesheet for Config and Service pages."""
+    colors = desktop_colors(palette)
+    button_text = colors["text"]
+    return f"""
+QWidget#managementPageRoot {{
+    background: {colors["window"]};
+    color: {colors["text"]};
+}}
+
+QGroupBox {{
+    border: none;
+    border-radius: 0;
+    margin-top: 0;
+    padding-top: 0;
+    background: {colors["raised"]};
+    color: {colors["text"]};
+    font-size: 15px;
+    font-weight: 800;
+}}
+
+QGroupBox::title {{
+    subcontrol-origin: margin;
+    left: 16px;
+    padding: 0 8px;
+}}
+
+QLabel[serviceSectionHeader="true"] {{
+    color: {colors["muted"]};
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+}}
+
+QLabel#serviceConnectionLabel {{
+    color: {colors["muted"]};
+    font-size: 11px;
+}}
+
+QLabel#serviceMessageLabel {{
+    color: {colors["text"]};
+    font-size: 11px;
+    padding: 2px 8px;
+}}
+
+QFrame#serviceSidebar,
+QFrame#serviceDiagnosticsPanel {{
+    background: {colors["window"]};
+    border: none;
+}}
+
+QFrame#serviceDivider {{
+    background: {colors["raised"]};
+}}
+
+QFrame[serviceCard="true"] {{
+    background: {colors["raised"]};
+    border: none;
+}}
+
+QFrame#serviceStatusBox {{
+    background: {colors["raised"]};
+    border: none;
+}}
+
+QFrame#serviceStatusDot {{
+    border-radius: 0;
+    background: {colors["muted"]};
+}}
+
+QFrame#serviceStatusDot[status="running"] {{
+    background: #22c55e;
+}}
+
+QFrame#serviceStatusDot[status="stopped"] {{
+    background: #ef4444;
+}}
+
+QLabel#servicePidLabel {{
+    color: {colors["muted"]};
+    font-size: 11px;
+}}
+
+QLabel#detailValue {{
+    color: {colors["text"]};
+    font-size: 11px;
+    font-weight: 600;
+}}
+
+QCheckBox#traySwitch {{
+    spacing: 0;
+}}
+
+QCheckBox#traySwitch::indicator {{
+    width: 36px;
+    height: 18px;
+    border-radius: 0;
+    background: {colors["raised"]};
+    border: none;
+}}
+
+QCheckBox#traySwitch::indicator:checked {{
+    background: {colors["accent"]};
+}}
+
+QFrame#serviceComponentCard {{
+    background: {colors["raised"]};
+    border: none;
+}}
+
+QFrame#serviceComponentCard[componentAccent="lhm"] QFrame#componentAccentBar {{
+    background: #60a5fa;
+}}
+
+QFrame#serviceComponentCard[componentAccent="pawnio"] QFrame#componentAccentBar {{
+    background: #a78bfa;
+}}
+
+QPushButton#serviceInstallLhmBtn,
+QPushButton#serviceInstallPawnioBtn {{
+    background: transparent;
+    border: none;
+    color: {colors["text"]};
+    font-size: 14px;
+    padding: 4px 8px;
+}}
+
+QPushButton#serviceInstallLhmBtn:hover,
+QPushButton#serviceInstallPawnioBtn:hover {{
+    color: {colors["accent"]};
+}}
+
+QLabel#serviceComponentTitle {{
+    color: {colors["text"]};
+    font-size: 12px;
+    font-weight: 600;
+    padding-left: 8px;
+}}
+
+QFrame#serviceComponentCard[componentAccent="pawnio"] QLabel#serviceComponentTitle {{
+    color: {colors["text"]};
+}}
+
+QLabel#serviceComponentDetail {{
+    color: {colors["muted"]};
+    font-size: 11px;
+}}
+
+QLabel#serviceDiagnosticsTitle {{
+    color: {colors["muted"]};
+    font-size: 11px;
+    font-weight: 700;
+    padding-top: 8px;
+}}
+
+QSplitter::handle {{
+    background: transparent;
+    width: 0px;
+}}
+
+QPlainTextEdit#diagnosticsView {{
+    background: {colors["base"]};
+    border: none;
+    font-family: Consolas, monospace;
+    font-size: 11px;
+}}
+
+QFrame[liveValueCard="true"] {{
+    background: {colors["raised"]};
+    border: none;
+}}
+
+QLabel#liveValueTitle {{
+    color: {colors["muted"]};
+    font-size: 9px;
+    font-weight: 700;
+}}
+
+QLabel#liveTempValue,
+QLabel#liveFanValue {{
+    color: {colors["text"]};
+    font-size: 20px;
+    font-weight: 900;
+}}
+
+QLabel#curvesMessageLabel,
+QLabel#serviceMessageLabel {{
+    border-radius: 0;
+    padding: 8px 10px;
+    background: {colors["raised"]};
+}}
+
+QPushButton,
+QComboBox,
+QLineEdit,
+QDoubleSpinBox,
+QPlainTextEdit,
+QTableWidget {{
+    border: none;
+    border-radius: 0;
+    background: {colors["base"]};
+    color: {colors["text"]};
+}}
+
+QPushButton {{
+    background: {colors["raised"]};
+    border: none;
+    border-radius: 0;
+    color: {button_text};
+    padding: 8px 16px;
+}}
+
+QPushButton:hover {{
+    background: {colors["card"]};
+}}
+
+QPushButton:pressed {{
+    background: {colors["accent"]};
+    color: {colors["window"]};
+}}
+
+QPushButton#curveActionBtn {{
+    background: {colors["card"]};
+    border: none;
+    border-radius: 0;
+    color: {button_text};
+    padding: 8px 16px;
+}}
+
+QPushButton#curveActionBtn:hover {{
+    background: {colors["accent"]};
+    color: {colors["window"]};
+}}
+
+QComboBox,
+QLineEdit,
+QDoubleSpinBox {{
+    padding: 6px 10px;
+    background: {colors["raised"]};
+}}
+
+QComboBox {{
+    border: 1px solid {colors["border"]};
+    background: {colors["base"]};
+}}
+
+QComboBox::drop-down {{
+    border: none;
+    width: 28px;
+}}
+
+QComboBox::down-arrow {{
+    image: none;
+    width: 10px;
+    height: 10px;
+}}
+
+QComboBox::down-arrow:after {{
+    content: "▼";
+    color: {colors["text"]};
+    font-size: 10px;
+    font-weight: 700;
+}}
+
+QComboBox:hover {{
+    background: {colors["raised"]};
+    border-color: {colors["accent"]};
+}}
+
+QComboBox::item:hover {{
+    background: {colors["accent"]};
+    color: {colors["window"]};
+}}
+
+QDoubleSpinBox {{
+    padding-right: 2px;
+}}
+
+QDoubleSpinBox::up-button {{
+    width: 16px;
+}}
+
+QDoubleSpinBox::down-button {{
+    width: 16px;
+}}
+
+QDoubleSpinBox::up-arrow {{
+    image: none;
+    width: 8px;
+    height: 8px;
+}}
+
+QDoubleSpinBox::up-arrow:after {{
+    content: "▲";
+    color: {colors["text"]};
+    font-size: 8px;
+}}
+
+QDoubleSpinBox::down-arrow {{
+    image: none;
+    width: 8px;
+    height: 8px;
+}}
+
+QDoubleSpinBox::down-arrow:after {{
+    content: "▼";
+    color: {colors["text"]};
+    font-size: 8px;
+}}
+
+QTableWidget,
+QPlainTextEdit {{
+    gridline-color: {colors["border"]};
+    background: {colors["raised"]};
+}}
+
+QHeaderView::section {{
+    background: {colors["raised"]};
+    color: {colors["text"]};
+    border: 0;
+    border-bottom: 1px solid {colors["border"]};
+    padding: 8px;
+    font-weight: 700;
+}}
+
+QFrame[accordionSection="true"] {{
+    background: {colors["raised"]};
+    border: none;
+    border-radius: 0;
+    max-width: 400px;
+}}
+
+QLabel[accordionHeader="true"] {{
+    border: 0;
+    background: transparent;
+    padding: 8px 0;
+    color: {colors["text"]};
+    font-size: 12px;
+    font-weight: 700;
+}}
+
+QLabel[accordionSummary="true"] {{
+    color: {colors["muted"]};
+    font-size: 11px;
+    font-weight: 600;
+}}
+
+QWidget[accordionBody="true"] {{
+    background: {colors["raised"]};
+}}
+
+QWidget#accordionWidget {{
+    background: transparent;
+    max-width: 400px;
+}}
+
+QWidget#accordionScrollContent {{
+    background: transparent;
+    max-width: 400px;
+}}
+
+QWidget#curvesLeftColumn {{
+    background: {colors["window"]};
+    border: none;
+    max-width: 400px;
+}}
+
+QWidget#curvesRightColumn {{
+    background: {colors["window"]};
+    border: none;
+}}
+
+QFrame#previewGroup {{
+    background: {colors["raised"]};
+    border: none;
+    border-radius: 0;
 }}
 """
 

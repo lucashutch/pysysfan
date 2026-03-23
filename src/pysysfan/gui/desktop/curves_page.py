@@ -36,7 +36,7 @@ from pysysfan.gui.desktop.local_backend import (
 from pysysfan.gui.desktop.plotting import CurveEditorPlotWidget, pg
 from pysysfan.gui.desktop.theme import (
     PAGE_HEADING_STYLE,
-    management_page_stylesheet,
+    flat_management_page_stylesheet,
     plot_theme,
 )
 from pysysfan.profiles import DEFAULT_PROFILE_NAME, ProfileManager
@@ -66,34 +66,51 @@ class CurvesPage(QWidget):
         self._profile_display_names: dict[str, str] = {}
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(10)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(14)
 
-        heading = QLabel("Config", self)
+        heading = QLabel("Configuration", self)
         heading.setObjectName("curvesTitle")
         heading.setStyleSheet(PAGE_HEADING_STYLE)
         layout.addWidget(heading)
 
+        toolbar = QHBoxLayout()
+        toolbar.setSpacing(12)
+
+        self.status_label = QLabel("● default · Poll 1.0s · Hysteresis 3.0°C", self)
+        self.status_label.setObjectName("serviceConnectionLabel")
+        toolbar.addWidget(self.status_label)
+
+        toolbar.addStretch(1)
+
+        self.refresh_button = QPushButton("Refresh", self)
+        self.refresh_button.setObjectName("serviceRefreshBtn")
+        self.refresh_button.clicked.connect(self.refresh_data)
+        toolbar.addWidget(self.refresh_button)
+
         self.message_label = QLabel("", self)
         self.message_label.setObjectName("curvesMessageLabel")
-        self.message_label.setWordWrap(True)
+        self.message_label.setWordWrap(False)
         self.message_label.hide()
-        layout.addWidget(self.message_label)
-
-        self.config_path_label = QLabel("Config path: N/A", self)
-        self.config_path_label.setWordWrap(True)
-        layout.addWidget(self.config_path_label)
+        toolbar.addWidget(self.message_label)
+        layout.addLayout(toolbar)
 
         content_row = QHBoxLayout()
-        content_row.setSpacing(12)
+        content_row.setSpacing(10)
         layout.addLayout(content_row, 1)
 
         self.left_column = QWidget(self)
         self.left_column.setObjectName("curvesLeftColumn")
+        self.left_column.setFixedWidth(400)
         left_layout = QVBoxLayout(self.left_column)
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(0)
-        content_row.addWidget(self.left_column, 1)
+        content_row.addWidget(self.left_column)
+
+        self.config_divider = QFrame(self)
+        self.config_divider.setObjectName("serviceDivider")
+        self.config_divider.setFixedWidth(1)
+        content_row.addWidget(self.config_divider)
 
         self.left_scroll = QScrollArea(self.left_column)
         self.left_scroll.setWidgetResizable(True)
@@ -104,12 +121,14 @@ class CurvesPage(QWidget):
         left_layout.addWidget(self.left_scroll, 1)
 
         left_scroll_content = QWidget(self.left_scroll)
+        left_scroll_content.setObjectName("accordionScrollContent")
         self.left_scroll.setWidget(left_scroll_content)
         left_scroll_layout = QVBoxLayout(left_scroll_content)
         left_scroll_layout.setContentsMargins(0, 0, 0, 0)
         left_scroll_layout.setSpacing(10)
 
         self.accordion = AccordionWidget(left_scroll_content)
+        self.accordion.setMaximumWidth(400)
         left_scroll_layout.addWidget(self.accordion)
         left_scroll_layout.addStretch(1)
 
@@ -117,41 +136,50 @@ class CurvesPage(QWidget):
         self.profile_selector.setObjectName("profileSelector")
 
         self.switch_profile_button = QPushButton("Switch Profile", self)
+        self.switch_profile_button.setObjectName("curveActionBtn")
         self.switch_profile_button.clicked.connect(self.switch_profile)
 
         self.new_profile_button = QPushButton("New Profile", self)
+        self.new_profile_button.setObjectName("curveActionBtn")
         self.new_profile_button.clicked.connect(self.create_profile)
 
         self.rename_profile_button = QPushButton("Rename Profile", self)
+        self.rename_profile_button.setObjectName("curveActionBtn")
         self.rename_profile_button.clicked.connect(self.rename_profile)
 
-        self.refresh_button = QPushButton("Refresh", self)
-        self.refresh_button.clicked.connect(self.refresh_data)
+        self.profile_refresh_button = QPushButton("Refresh", self)
+        self.profile_refresh_button.setObjectName("curveActionBtn")
+        self.profile_refresh_button.clicked.connect(self.refresh_data)
 
         self.curve_selector = QComboBox(self)
         self.curve_selector.currentTextChanged.connect(self._load_selected_curve)
         self.new_curve_button = QPushButton("New Curve", self)
+        self.new_curve_button.setObjectName("curveActionBtn")
         self.new_curve_button.clicked.connect(self.create_curve)
         self.save_curve_button = QPushButton("Save Curve", self)
+        self.save_curve_button.setObjectName("curveActionBtn")
         self.save_curve_button.clicked.connect(self.save_curve)
         self.delete_curve_button = QPushButton("Delete Curve", self)
+        self.delete_curve_button.setObjectName("curveActionBtn")
         self.delete_curve_button.clicked.connect(self.delete_curve)
 
         self.points_table = QTableWidget(0, 2, self)
         self.points_table.setObjectName("pointsTable")
-        self.points_table.setHorizontalHeaderLabels(
-            ["Temperature (°C)", "Fan Speed (%)"]
-        )
+        self.points_table.setHorizontalHeaderLabels(["Temperature", "Fan Speed"])
         header = self.points_table.horizontalHeader()
         header.setStretchLastSection(False)
+        # Use Interactive mode with explicit minimum widths
         header.setSectionResizeMode(0, QHeaderView.ResizeMode.Interactive)
         header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        self.points_table.setColumnWidth(0, 190)
-        self.points_table.setMinimumHeight(260)
+        self.points_table.setColumnWidth(0, 180)
+        self.points_table.setColumnWidth(1, 180)
+        self.points_table.setMinimumHeight(200)
 
         self.add_point_button = QPushButton("Add Point", self)
+        self.add_point_button.setObjectName("curveActionBtn")
         self.add_point_button.clicked.connect(self.add_point)
         self.remove_point_button = QPushButton("Remove Point", self)
+        self.remove_point_button.setObjectName("curveActionBtn")
         self.remove_point_button.clicked.connect(self.remove_selected_point)
         self.hysteresis_spin = QDoubleSpinBox(self)
         self.hysteresis_spin.setRange(0.0, 20.0)
@@ -165,6 +193,7 @@ class CurvesPage(QWidget):
         self.aggregation_selector = QComboBox(self)
         self.aggregation_selector.addItems(get_valid_aggregation_methods())
         self.save_fan_button = QPushButton("Save Fan Settings", self)
+        self.save_fan_button.setObjectName("curveActionBtn")
         self.save_fan_button.clicked.connect(self.save_fan_settings)
 
         self.poll_interval_spin = QDoubleSpinBox(self)
@@ -173,6 +202,7 @@ class CurvesPage(QWidget):
         self.poll_interval_spin.setDecimals(1)
         self.poll_interval_spin.setKeyboardTracking(False)
         self.save_settings_button = QPushButton("Save Settings", self)
+        self.save_settings_button.setObjectName("curveActionBtn")
         self.save_settings_button.clicked.connect(self.save_general_settings)
 
         self.curve_points_section = self.accordion.add_section(
@@ -180,19 +210,26 @@ class CurvesPage(QWidget):
             summary="3 points · Hysteresis 3.0°C",
             open_=True,
         )
+        curve_points_actions_top = QHBoxLayout()
+        curve_points_actions_top.setSpacing(8)
+        curve_points_actions_top.addStretch(1)
+        curve_points_actions_top.addWidget(self.new_curve_button, 1)
+        curve_points_actions_top.addWidget(self.save_curve_button, 1)
+        curve_points_actions_top.addWidget(self.delete_curve_button, 1)
+        curve_points_actions_top.addStretch(1)
+        self.curve_points_section.add_layout(curve_points_actions_top)
         curve_points_header = QHBoxLayout()
         curve_points_header.addWidget(QLabel("Curve", self))
         curve_points_header.addWidget(self.curve_selector, 1)
         self.curve_points_section.add_layout(curve_points_header)
         self.curve_points_section.add_widget(self.points_table)
-        curve_points_actions = QHBoxLayout()
-        curve_points_actions.addWidget(self.new_curve_button)
-        curve_points_actions.addWidget(self.save_curve_button)
-        curve_points_actions.addWidget(self.delete_curve_button)
-        curve_points_actions.addWidget(self.add_point_button)
-        curve_points_actions.addWidget(self.remove_point_button)
-        curve_points_actions.addStretch(1)
-        self.curve_points_section.add_layout(curve_points_actions)
+        curve_points_actions_bottom = QHBoxLayout()
+        curve_points_actions_bottom.setSpacing(8)
+        curve_points_actions_bottom.addStretch(1)
+        curve_points_actions_bottom.addWidget(self.add_point_button, 1)
+        curve_points_actions_bottom.addWidget(self.remove_point_button, 1)
+        curve_points_actions_bottom.addStretch(1)
+        self.curve_points_section.add_layout(curve_points_actions_bottom)
 
         self.fan_assignment_section = self.accordion.add_section(
             "Fan Assignment",
@@ -217,7 +254,11 @@ class CurvesPage(QWidget):
         sensor_mapping_layout.addWidget(QLabel("Temp sensor IDs", self), 0, 0)
         sensor_mapping_layout.addWidget(self.temp_ids_edit, 0, 1)
         sensor_mapping_layout.addWidget(QLabel("Aggregation", self), 1, 0)
-        sensor_mapping_layout.addWidget(self.aggregation_selector, 1, 1)
+        aggregation_wrapper = QHBoxLayout()
+        aggregation_wrapper.addWidget(self.aggregation_selector)
+        aggregation_wrapper.addStretch(1)
+        self.aggregation_selector.setMaximumWidth(150)
+        sensor_mapping_layout.addLayout(aggregation_wrapper, 1, 1)
         sensor_mapping_layout.addWidget(self.save_fan_button, 2, 0, 1, 2)
         self.sensor_mapping_section.add_layout(sensor_mapping_layout)
 
@@ -244,17 +285,38 @@ class CurvesPage(QWidget):
         profile_layout.setVerticalSpacing(10)
         profile_layout.addWidget(QLabel("Profile", self), 0, 0)
         profile_layout.addWidget(self.profile_selector, 0, 1)
-        profile_actions = QHBoxLayout()
-        profile_actions.addWidget(self.switch_profile_button)
-        profile_actions.addWidget(self.new_profile_button)
-        profile_actions.addWidget(self.rename_profile_button)
-        profile_actions.addWidget(self.refresh_button)
-        profile_actions.addStretch(1)
-        profile_layout.addLayout(profile_actions, 1, 0, 1, 2)
+        profile_btn_container = QWidget()
+        profile_btn_layout = QVBoxLayout(profile_btn_container)
+        profile_btn_layout.setSpacing(8)
+        profile_btn_layout.setContentsMargins(0, 0, 0, 0)
+
+        # Top row: Switch Profile, New Profile
+        profile_top_row = QHBoxLayout()
+        profile_top_row.setSpacing(8)
+        profile_top_row.addStretch(1)
+        profile_top_row.addWidget(self.switch_profile_button, 1)
+        profile_top_row.addWidget(self.new_profile_button, 1)
+        profile_top_row.addStretch(1)
+
+        # Bottom row: Rename Profile, Refresh
+        profile_bottom_row = QHBoxLayout()
+        profile_bottom_row.setSpacing(8)
+        profile_bottom_row.addStretch(1)
+        profile_bottom_row.addWidget(self.rename_profile_button, 1)
+        profile_bottom_row.addWidget(self.profile_refresh_button, 1)
+        profile_bottom_row.addStretch(1)
+
+        profile_btn_layout.addLayout(profile_top_row)
+        profile_btn_layout.addLayout(profile_bottom_row)
+        profile_layout.addWidget(profile_btn_container, 1, 0, 1, 2)
         self.profiles_section.add_layout(profile_layout)
 
         self.right_column = QWidget(self)
         self.right_column.setObjectName("curvesRightColumn")
+        self.right_column.setSizePolicy(
+            QSizePolicy.Policy.Expanding,
+            QSizePolicy.Policy.Expanding,
+        )
         right_layout = QVBoxLayout(self.right_column)
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(10)
@@ -325,7 +387,41 @@ class CurvesPage(QWidget):
 
         self.points_table.itemChanged.connect(self._handle_curve_inputs_changed)
         self.hysteresis_spin.valueChanged.connect(self._handle_curve_inputs_changed)
-        self.setStyleSheet(management_page_stylesheet(self.palette()))
+        self._apply_uniform_button_sizing()
+        self.setStyleSheet(flat_management_page_stylesheet(self.palette()))
+
+    def _apply_uniform_button_sizing(self) -> None:
+        buttons = [
+            self.switch_profile_button,
+            self.new_profile_button,
+            self.rename_profile_button,
+            self.refresh_button,
+            self.new_curve_button,
+            self.save_curve_button,
+            self.delete_curve_button,
+            self.add_point_button,
+            self.remove_point_button,
+            self.save_fan_button,
+            self.save_settings_button,
+        ]
+        for btn in buttons:
+            btn.setSizePolicy(
+                QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed
+            )
+            btn.setMinimumWidth(130)
+
+    def _align_combo_items(self, combo: QComboBox) -> None:
+        """Ensure combo box dropdown items are right-aligned."""
+        model = combo.model()
+        if model is None:
+            return
+        for i in range(model.rowCount()):
+            index = model.index(i, 0)
+            model.setData(
+                index,
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                Qt.ItemDataRole.TextAlignmentRole,
+            )
 
     def refresh_data(self) -> None:
         """Load the active profile config from disk."""
@@ -338,16 +434,21 @@ class CurvesPage(QWidget):
             return
 
         self._show_message("", is_error=False)
-        self.config_path_label.setText(f"Config path: {self._config_path}")
         self.poll_interval_spin.setValue(
             self._normalized_poll_interval(self._config.poll_interval)
         )
         self._populate_profile_selector()
         self._populate_curve_selector()
         self._populate_fan_selector()
+        self._align_combo_items(self.profile_selector)
+        self._align_combo_items(self.curve_selector)
+        self._align_combo_items(self.fan_selector)
+        self._align_combo_items(self.fan_curve_selector)
+        self._align_combo_items(self.aggregation_selector)
         self.preview_curve()
         self._update_live_preview_summary()
         self._update_section_summaries()
+        self._update_status_label()
 
     def switch_profile(self) -> None:
         """Switch the active profile and reload the editor."""
@@ -744,8 +845,12 @@ class CurvesPage(QWidget):
     def _append_point_row(self, temperature: float, speed: float) -> None:
         row = self.points_table.rowCount()
         self.points_table.insertRow(row)
-        self.points_table.setItem(row, 0, QTableWidgetItem(f"{temperature:.1f}"))
-        self.points_table.setItem(row, 1, QTableWidgetItem(f"{speed:.1f}"))
+        temp_item = QTableWidgetItem(f"{temperature:.1f}")
+        temp_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.points_table.setItem(row, 0, temp_item)
+        speed_item = QTableWidgetItem(f"{speed:.1f}")
+        speed_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.points_table.setItem(row, 1, speed_item)
 
     def _handle_curve_inputs_changed(self, *_args) -> None:
         if self._syncing_points:
@@ -756,12 +861,12 @@ class CurvesPage(QWidget):
     def _handle_plot_hover_changed(self, hover_point: tuple[int, int] | None) -> None:
         if hover_point is None:
             self.preview_result_label.setText(
-                "Hover over the graph to inspect values. Drag control points to edit the curve."
+                "Move cursor over graph to inspect values"
             )
             return
 
         temperature, speed = hover_point
-        self.preview_result_label.setText(f"Hover: {temperature}°C → {speed}%")
+        self.preview_result_label.setText(f"{temperature}°C → {speed}%")
 
     def _handle_plot_points_changed(
         self,
@@ -850,6 +955,14 @@ class CurvesPage(QWidget):
             self.profile_selector.currentText().strip() or self._active_profile
         )
         self.profiles_section.set_summary(active_profile or "No profile selected")
+
+    def _update_status_label(self) -> None:
+        profile = self._active_profile or "default"
+        poll = self.poll_interval_spin.value()
+        hyst = self.hysteresis_spin.value()
+        self.status_label.setText(
+            f"● {profile} · Poll {poll:.1f}s · Hysteresis {hyst:.1f}°C"
+        )
 
     def _selected_profile_name(self) -> str:
         value = self.profile_selector.currentData()

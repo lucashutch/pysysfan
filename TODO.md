@@ -1,9 +1,4 @@
 # TODO
-
-## Completed
-
-- [x] Desktop UI phase: graph hover summaries, column-major graph legend flow, accordion affordance, and colored service action buttons.
-
 ## Bug Fixes
 
 - rework the config ui to more closely match the flat square aesthetic of the rest of the dashboard or service page
