@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import (
@@ -42,7 +41,7 @@ class SidebarWidget(QFrame):
     ) -> None:
         super().__init__(parent)
         self.setObjectName("sidebar")
-        self.setFixedWidth(200)
+        self.setFixedWidth(250)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         self._provider = provider
         self._active_tab = active_tab

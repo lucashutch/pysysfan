@@ -35,29 +35,27 @@ def is_dark_palette(palette: QPalette) -> bool:
 
 
 def desktop_colors(palette: QPalette) -> DesktopColors:
-    """Build a set of palette-aware surface and text colors."""
-    dark = is_dark_palette(palette)
-    window = palette.color(QPalette.ColorRole.Window)
-    base = palette.color(QPalette.ColorRole.Base)
-    text = palette.color(QPalette.ColorRole.WindowText)
-    accent = palette.color(QPalette.ColorRole.Highlight)
-    muted = _mix(text, window, 0.45 if dark else 0.6)
-    border = _mix(text, window, 0.78 if dark else 0.86)
-    raised = _mix(base, window, 0.3 if dark else 0.1)
-    panel = _mix(base, accent, 0.08 if dark else 0.03)
-    card = _mix(base, accent, 0.06 if dark else 0.015)
-    graph = _mix(base, window, 0.12 if dark else 0.03)
+    """Build a set of palette-aware surface and text colors.
+
+    Uses fixed colour tokens from the dashboard.html design mockup
+    to ensure visual consistency across light/dark system palettes.
+    """
     return DesktopColors(
-        window=_hex(window),
-        base=_hex(base),
-        text=_hex(text),
-        muted=_hex(muted),
-        border=_hex(border),
-        raised=_hex(raised),
-        panel=_hex(panel),
-        card=_hex(card),
-        accent=_hex(accent),
-        graph=_hex(graph),
+        window="#0e0e0e",  # surface - main background
+        base="#131313",  # surface-container-low - input backgrounds
+        text="#ffffff",  # on-surface - primary text
+        muted="#adaaaa",  # on-surface-variant - secondary text
+        border="#767575",  # outline - borders
+        raised="#1a1a1a",  # surface-container - elevated surfaces
+        panel="#20201f",  # surface-container-high - panel backgrounds
+        card="#1a1a1a",  # surface-container - card backgrounds
+        accent="#5eb4ff",  # primary - accent/selection
+        graph="#131313",  # surface-container-low - graph background
+        # Additional semantic colours from the design token set
+        primary="#5eb4ff",
+        secondary="#6ffb85",
+        tertiary="#ffa84f",
+        error="#ff716c",
     )
 
 
@@ -1003,17 +1001,12 @@ QFrame#previewGroup {{
 
 def badge_stylesheet(tone: str, palette: QPalette) -> str:
     """Return a rounded badge stylesheet for a semantic tone."""
-    colors = desktop_colors(palette)
-    dark = is_dark_palette(palette)
     tone_map = {
-        "neutral": (colors["raised"], colors["text"]),
-        "info": ("#1e3a5f" if dark else "#e0e7f1", "#8eafd0" if dark else "#3b6fa0"),
-        "success": ("#166534" if dark else "#dcfce7", "#dcfce7" if dark else "#166534"),
-        "warning": ("#92400e" if dark else "#fef3c7", "#fef3c7" if dark else "#92400e"),
-        "critical": (
-            "#b91c1c" if dark else "#fee2e2",
-            "#fee2e2" if dark else "#b91c1c",
-        ),
+        "neutral": ("#262626", "#adaaaa"),
+        "info": ("#1a1a1a", "#5eb4ff"),
+        "success": ("#1a1a1a", "#6ffb85"),
+        "warning": ("#1a1a1a", "#ffa84f"),
+        "critical": ("#1a1a1a", "#ff716c"),
     }
     background, foreground = tone_map.get(tone, tone_map["neutral"])
     return (
@@ -1028,21 +1021,16 @@ def badge_stylesheet(tone: str, palette: QPalette) -> str:
 
 def message_stylesheet(*, is_error: bool, palette: QPalette) -> str:
     """Return a consistent message style that respects the active palette."""
-    colors = desktop_colors(palette)
-    accent = "#ef4444" if is_error else colors["accent"]
+    accent = "#ff716c" if is_error else "#6ffb85"
     return f"font-size: 12px;font-weight: 700;color: {accent};"
 
 
 def sidebar_stylesheet(palette: QPalette) -> str:
     """Return a palette-aware stylesheet for the shared sidebar."""
     colors = desktop_colors(palette)
-    dark = is_dark_palette(palette)
-    sidebar_bg = _hex(
-        _mix(QColor(colors["window"]), QColor("#000000"), 0.15 if dark else 0.03)
-    )
     return f"""
 QFrame#sidebar {{
-    background: {sidebar_bg};
+    background: #131313;
     border-right: 1px solid {colors["border"]};
 }}
 QLabel#sidebarBrand {{
@@ -1065,8 +1053,8 @@ QPushButton[sidebarNav="true"] {{
     background: transparent;
 }}
 QPushButton[sidebarNav="true"]:checked {{
-    background: rgba(37, 99, 235, 0.12);
-    color: {colors["accent"]};
+    background: rgba(94, 180, 255, 0.15);
+    color: #5eb4ff;
     font-weight: 700;
 }}
 QLabel#sidebarSeparator {{
@@ -1088,28 +1076,16 @@ QLabel.sidebarValue {{
 def plot_theme(palette: QPalette) -> dict[str, str | list[str]]:
     """Return palette-aware colors for pyqtgraph widgets."""
     colors = desktop_colors(palette)
-    dark = is_dark_palette(palette)
     series = [
-        "#60a5fa",
-        "#34d399",
-        "#f59e0b",
-        "#f87171",
-        "#a78bfa",
-        "#22d3ee",
-        "#f472b6",
-        "#c084fc",
+        "#60a5fa",  # blue
+        "#34d399",  # green
+        "#f59e0b",  # amber
+        "#f87171",  # red
+        "#a78bfa",  # purple
+        "#22d3ee",  # cyan
+        "#f472b6",  # pink
+        "#c084fc",  # violet
     ]
-    if not dark:
-        series = [
-            "#2563eb",
-            "#059669",
-            "#d97706",
-            "#dc2626",
-            "#7c3aed",
-            "#0891b2",
-            "#db2777",
-            "#9333ea",
-        ]
     return {
         "background": colors["graph"],
         "foreground": colors["text"],

@@ -26,10 +26,10 @@ from pysysfan.gui.desktop.theme import (
 from pysysfan.state_file import DaemonStateFile
 
 GROUP_ACCENT_COLORS = [
-    "#60a5fa",  # blue
-    "#34d399",  # green
-    "#f59e0b",  # amber
-    "#f87171",  # red
+    "#5eb4ff",  # blue (primary)
+    "#6ffb85",  # green (secondary)
+    "#ffa84f",  # amber (tertiary)
+    "#ff716c",  # red (error)
     "#a78bfa",  # purple
     "#22d3ee",  # cyan
     "#f472b6",  # pink
