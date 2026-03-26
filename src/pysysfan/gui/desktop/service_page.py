@@ -158,8 +158,8 @@ class ServicePage(QWidget):
         left_scroll.setWidgetResizable(True)
         left_scroll.setFrameShape(QFrame.Shape.NoFrame)
         left_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        left_scroll.setMinimumWidth(200)
-        left_scroll.setMaximumWidth(200)
+        left_scroll.setMinimumWidth(250)
+        left_scroll.setMaximumWidth(250)
 
         self._sidebar = QFrame(left_scroll)
         self._sidebar.setObjectName("serviceSidebar")
