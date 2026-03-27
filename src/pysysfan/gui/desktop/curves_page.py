@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QCursor
 from PySide6.QtWidgets import (
     QComboBox,
     QDoubleSpinBox,
@@ -157,15 +158,15 @@ class CurvesPage(QWidget):
         self.new_curve_button.setObjectName("curveActionBtn")
         self.new_curve_button.clicked.connect(self.create_curve)
         self.save_curve_button = QPushButton("Save Curve", self)
-        self.save_curve_button.setObjectName("curveActionBtn")
+        self.save_curve_button.setObjectName("saveCurveBtn")
         self.save_curve_button.clicked.connect(self.save_curve)
         self.delete_curve_button = QPushButton("Delete Curve", self)
-        self.delete_curve_button.setObjectName("curveActionBtn")
+        self.delete_curve_button.setObjectName("deleteCurveBtn")
         self.delete_curve_button.clicked.connect(self.delete_curve)
 
         self.points_table = QTableWidget(0, 2, self)
         self.points_table.setObjectName("pointsTable")
-        self.points_table.setHorizontalHeaderLabels(["Temperature", "Fan Speed"])
+        self.points_table.setHorizontalHeaderLabels(["TEMP(°C)", "FAN (%)"])
         header = self.points_table.horizontalHeader()
         header.setStretchLastSection(False)
         # Use Interactive mode with explicit minimum widths
@@ -174,6 +175,7 @@ class CurvesPage(QWidget):
         self.points_table.setColumnWidth(0, 180)
         self.points_table.setColumnWidth(1, 180)
         self.points_table.setMinimumHeight(200)
+        self.points_table.setAlternatingRowColors(True)
 
         self.add_point_button = QPushButton("Add Point", self)
         self.add_point_button.setObjectName("curveActionBtn")
@@ -374,9 +376,14 @@ class CurvesPage(QWidget):
         )
         self.preview_result_label.setObjectName("previewResultLabel")
         self.preview_result_label.setWordWrap(True)
-        preview_layout.addWidget(self.preview_result_label)
+        self.preview_result_label.setVisible(False)
 
         self.preview_plot = self._create_plot_widget()
+        self.preview_result_label.setParent(self.preview_plot)
+        self.preview_result_label.setAttribute(
+            Qt.WidgetAttribute.WA_TransparentForMouseEvents, True
+        )
+        self.preview_result_label.raise_()
         self.preview_plot.setMinimumWidth(300)
         self.preview_plot.setMinimumHeight(400)
         self.preview_plot.setSizePolicy(
@@ -846,28 +853,68 @@ class CurvesPage(QWidget):
     def _append_point_row(self, temperature: float, speed: float) -> None:
         row = self.points_table.rowCount()
         self.points_table.insertRow(row)
-        temp_item = QTableWidgetItem(f"{temperature:.1f}")
+        temp_int = int(round(temperature))
+        speed_int = int(round(speed))
+
+        temp_item = QTableWidgetItem(str(temp_int))
         temp_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         self.points_table.setItem(row, 0, temp_item)
-        speed_item = QTableWidgetItem(f"{speed:.1f}")
+        speed_item = QTableWidgetItem(str(speed_int))
         speed_item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
         self.points_table.setItem(row, 1, speed_item)
 
     def _handle_curve_inputs_changed(self, *_args) -> None:
         if self._syncing_points:
             return
+
+        # Normalize user edits so the table always displays integer values.
+        self._syncing_points = True
+        try:
+            for row in range(self.points_table.rowCount()):
+                temp_item = self.points_table.item(row, 0)
+                speed_item = self.points_table.item(row, 1)
+                if temp_item is None or speed_item is None:
+                    continue
+
+                try:
+                    temp_val = float(temp_item.text())
+                    speed_val = float(speed_item.text())
+                except ValueError:
+                    continue
+
+                temp_item.setText(str(int(round(temp_val))))
+                speed_item.setText(str(int(round(speed_val))))
+        finally:
+            self._syncing_points = False
+
         self.preview_curve()
         self._update_section_summaries()
 
     def _handle_plot_hover_changed(self, hover_point: tuple[int, int] | None) -> None:
         if hover_point is None:
-            self.preview_result_label.setText(
-                "Move cursor over graph to inspect values"
-            )
+            self.preview_result_label.setVisible(False)
             return
 
         temperature, speed = hover_point
         self.preview_result_label.setText(f"{temperature}°C → {speed}%")
+
+        # Attach tooltip to mouse pointer while hovering inside the plot.
+        cursor_pos = QCursor.pos()
+        local_pos = self.preview_plot.mapFromGlobal(cursor_pos)
+        self.preview_result_label.adjustSize()
+
+        pad = 12
+        x = local_pos.x() + pad
+        y = local_pos.y() + pad
+        x = max(
+            0, min(x, self.preview_plot.width() - self.preview_result_label.width())
+        )
+        y = max(
+            0, min(y, self.preview_plot.height() - self.preview_result_label.height())
+        )
+
+        self.preview_result_label.move(x, y)
+        self.preview_result_label.setVisible(True)
 
     def _handle_plot_points_changed(
         self,

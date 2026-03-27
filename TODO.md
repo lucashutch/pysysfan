@@ -13,3 +13,6 @@
 - **[x] Config tab color/styling** - Phase 1 (preview accent + tooltip card styling)
 - **[x] Config tab color/styling** - Phase 2 (accordion cards)
 - **[x] Config tab color/styling** - Phase 3 (points table)
+
+## UI Redesign Follow-ups
+- **[x] Config tab behavior + polish** - Fix accordion initial state, integer table + labeling, hover tooltip follows cursor, dropdown border removal, and save/delete button accents.

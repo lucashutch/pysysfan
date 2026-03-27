@@ -856,6 +856,35 @@ QPushButton#curveActionBtn:hover {{
     color: {colors["window"]};
 }}
 
+QPushButton#saveCurveBtn {{
+    background: {colors["accent"]};
+    border: none;
+    border-radius: 0;
+    color: {colors["window"]};
+    padding: 8px 16px;
+    font-weight: 900;
+}}
+
+QPushButton#saveCurveBtn:hover {{
+    background: rgba(94, 180, 255, 0.9);
+    color: {colors["window"]};
+}}
+
+QPushButton#deleteCurveBtn {{
+    background: transparent;
+    border: 1px solid {colors["error"]};
+    border-radius: 0;
+    color: {colors["error"]};
+    padding: 8px 16px;
+    font-weight: 900;
+}}
+
+QPushButton#deleteCurveBtn:hover {{
+    background: {colors["error"]};
+    border-color: {colors["error"]};
+    color: {colors["window"]};
+}}
+
 QComboBox,
 QLineEdit,
 QDoubleSpinBox {{
@@ -864,8 +893,8 @@ QDoubleSpinBox {{
 }}
 
 QComboBox {{
-    border: 1px solid {colors["border"]};
     background: {colors["base"]};
+    border: none;
 }}
 
 QComboBox::drop-down {{
@@ -888,7 +917,7 @@ QComboBox::down-arrow:after {{
 
 QComboBox:hover {{
     background: {colors["raised"]};
-    border-color: {colors["accent"]};
+    border: none;
 }}
 
 QComboBox::item:hover {{
@@ -966,6 +995,7 @@ QTableWidget#pointsTable::item {{
     font-size: 11px;
     font-weight: 900;
     padding: 6px;
+    background: {colors["base"]};
 }}
 
 QTableWidget#pointsTable::item:alternate {{
@@ -980,7 +1010,7 @@ QTableWidget#pointsTable::item:selected {{
 QFrame[accordionSection="true"] {{
     background: {colors["raised"]};
     border: none;
-    border-left: 4px solid transparent;
+    border-left: 4px solid rgba(94, 180, 255, 0.25);
     border-radius: 0;
     max-width: 400px;
 }}
@@ -999,13 +1029,9 @@ QWidget[accordionHeaderContainer="true"]:hover {{
 }}
 
 QLabel[accordionIndicator="true"] {{
-    color: {colors["muted"]};
+    color: {colors["accent"]};
     font-size: 14px;
     font-weight: 900;
-}}
-
-QFrame[accordionSection="true"][accordionOpen="true"] QLabel[accordionIndicator="true"] {{
-    color: {colors["accent"]};
 }}
 
 QLabel[accordionHeader="true"] {{
