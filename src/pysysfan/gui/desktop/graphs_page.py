@@ -224,6 +224,19 @@ class GraphsPage(QWidget):
         if default_seconds in self._history_buttons:
             self._history_buttons[default_seconds].setChecked(True)
 
+        # --- hover stats row ---
+        self._stats_frame = QFrame(self)
+        self._stats_frame.setObjectName("graphsStatsRow")
+        stats_layout = QHBoxLayout(self._stats_frame)
+        stats_layout.setContentsMargins(0, 0, 0, 0)
+        stats_layout.setSpacing(8)
+        self._hover_label = QLabel("Hover @ —", self._stats_frame)
+        self._hover_label.setObjectName("graphsHoverLabel")
+        self._hover_label.setWordWrap(True)
+        stats_layout.addWidget(self._hover_label)
+        stats_layout.addStretch(1)
+        root_layout.addWidget(self._stats_frame)
+
         # --- plot widget ---
         if pg is not None:
             self._plot_widget = DashboardPlotWidget(
@@ -285,7 +298,8 @@ class GraphsPage(QWidget):
         return self._enabled_series
 
     # ------------------------------------------------------------------
-    # Show / hide lifecycle
+    # ------------------------------------------------------------------
+    # Lifecycle
     # ------------------------------------------------------------------
 
     def changeEvent(self, event) -> None:  # noqa: N802
@@ -296,9 +310,6 @@ class GraphsPage(QWidget):
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
         self._refresh_plot()
-
-    def hideEvent(self, event) -> None:  # noqa: N802
-        super().hideEvent(event)
 
     # ------------------------------------------------------------------
     # Tab switching
@@ -513,7 +524,7 @@ class GraphsPage(QWidget):
     ) -> None:
         if hover_point is None:
             self._hover_point = None
-            self._set_hover_markers([])
+            self._clear_hover_summary()
             return
 
         self._hover_point = (float(hover_point[0]), float(hover_point[1]))
@@ -538,6 +549,7 @@ class GraphsPage(QWidget):
         enabled = self._enabled_series.get(self._active_tab, set())
         colors = self._series_colors()
         marker_spots: list[dict[str, object]] = []
+        hover_lines: list[str] = []
 
         for idx, (series_id, label) in enumerate(catalog.items()):
             if series_id not in enabled:
@@ -550,6 +562,17 @@ class GraphsPage(QWidget):
 
             sample_x, sample_y = sample
             color = colors[idx % len(colors)] if colors else "#888888"
+
+            if self._active_tab == "temperature":
+                rounded = round(float(sample_y))
+                if abs(float(sample_y) - rounded) < 1e-9:
+                    value_text = f"{int(rounded)}"
+                else:
+                    value_text = f"{float(sample_y):.1f}"
+                hover_lines.append(f"{label}: {value_text} \u00b0C")
+            else:
+                hover_lines.append(f"{label}: {float(sample_y):.0f} RPM")
+
             marker_spots.append(
                 {
                     "pos": (sample_x, sample_y),
@@ -559,7 +582,17 @@ class GraphsPage(QWidget):
                 }
             )
 
+        prefix = f"Hover @ {x_value:.0f}s"
+        if hover_lines:
+            self._hover_label.setText(prefix + "\n" + "\n".join(hover_lines))
+        else:
+            self._hover_label.setText(prefix)
+
         self._set_hover_markers(marker_spots)
+
+    def _clear_hover_summary(self) -> None:
+        self._hover_label.setText("")
+        self._set_hover_markers([])
 
     def _set_hover_markers(self, marker_spots: list[dict[str, object]]) -> None:
         if self._hover_marker_item is None or pg is None:

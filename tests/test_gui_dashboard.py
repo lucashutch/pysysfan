@@ -414,14 +414,18 @@ def test_dashboard_start_service_uses_provider(qtbot, tmp_path) -> None:
 
 
 def test_dashboard_polling_controlled_by_show_hide(qtbot, tmp_path) -> None:
-    """The dashboard should start/stop provider polling on show/hide."""
+    """The dashboard page itself should not control polling.
+
+    Polling is owned by the main window (it keeps graphs + sidebar updating
+    while switching tabs, and pauses while the main window is minimized/hidden).
+    """
     provider = _make_provider(tmp_path, installed=True)
     page = _make_page(qtbot, provider)
 
     assert provider._refresh_timer.isActive() is False
 
     page.show()
-    qtbot.waitUntil(provider._refresh_timer.isActive)
+    qtbot.waitUntil(lambda: not provider._refresh_timer.isActive())
 
     page.hide()
     qtbot.waitUntil(lambda: not provider._refresh_timer.isActive())

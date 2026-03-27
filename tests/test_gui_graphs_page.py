@@ -311,13 +311,13 @@ def test_legend_toggle_changes_visibility(qtbot, tmp_path) -> None:
 
     item = items[0]
     assert item.visible is True
-    assert item.color_label.text() == "\u25cf"
+    assert item.color_label.text() == "\u25a0"
 
     # Simulate click
     item.mousePressEvent(None)
 
     assert item.visible is False
-    assert item.color_label.text() == "\u25cb"
+    assert item.color_label.text() == "\u25a1"
     assert item.series_id not in page.enabled_series["temperature"]
 
 
