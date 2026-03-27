@@ -608,6 +608,8 @@ class GraphsPage(QWidget):
             label_lower = label.lower()
             if re.search(r"core\s+\d+", label_lower):
                 return False
+            if re.search(r"sensor\s+resolution", label_lower):
+                return False
         return True
 
     # ------------------------------------------------------------------
