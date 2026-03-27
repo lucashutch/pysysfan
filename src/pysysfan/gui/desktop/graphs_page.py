@@ -429,8 +429,6 @@ class GraphsPage(QWidget):
 
         if latest_ts == 0.0:
             self._plot_widget.remove_stale_series(set())
-            self._update_drawer_stats(0, len(catalog))
-            self._clear_hover_summary()
             return
 
         active_ids: set[str] = set()
@@ -447,7 +445,6 @@ class GraphsPage(QWidget):
             active_ids.add(sid)
 
         self._plot_widget.remove_stale_series(active_ids)
-        self._update_drawer_stats(len(active_ids), len(catalog))
 
         # Axis labels (lightweight)
         plot_item = self._plot_widget.getPlotItem()
@@ -516,29 +513,23 @@ class GraphsPage(QWidget):
     ) -> None:
         if hover_point is None:
             self._hover_point = None
-            self._clear_hover_summary()
+            self._set_hover_markers([])
             return
 
         self._hover_point = (float(hover_point[0]), float(hover_point[1]))
         self._update_hover_summary(self._hover_point)
 
-    def _update_drawer_stats(self, visible_count: int, catalog_count: int) -> None:
-        self._visible_count_label.setText(f"{visible_count} visible")
-        self._range_label.setText(
-            f"{catalog_count} selectable · window {self._provider.history_seconds} s"
-        )
-
     def _update_hover_summary(
         self, hover_point: tuple[float, float] | None = None
     ) -> None:
         if self._plot_widget is None or pg is None:
-            self._clear_hover_summary()
+            self._set_hover_markers([])
             return
 
         if hover_point is None:
             hover_point = self._hover_point
         if hover_point is None:
-            self._clear_hover_summary()
+            self._set_hover_markers([])
             return
 
         x_value = float(hover_point[0])
@@ -546,9 +537,7 @@ class GraphsPage(QWidget):
         history = self._current_history()
         enabled = self._enabled_series.get(self._active_tab, set())
         colors = self._series_colors()
-        summary_lines = [f"Hover @ {abs(x_value):g} s ago"]
         marker_spots: list[dict[str, object]] = []
-        unit = "°C" if self._active_tab == "temperature" else "RPM"
 
         for idx, (series_id, label) in enumerate(catalog.items()):
             if series_id not in enabled:
@@ -560,7 +549,6 @@ class GraphsPage(QWidget):
                 continue
 
             sample_x, sample_y = sample
-            summary_lines.append(f"{label}: {format(sample_y, 'g')} {unit}")
             color = colors[idx % len(colors)] if colors else "#888888"
             marker_spots.append(
                 {
@@ -571,16 +559,7 @@ class GraphsPage(QWidget):
                 }
             )
 
-        if len(summary_lines) == 1:
-            self._clear_hover_summary()
-            return
-
-        self._hover_label.setText("\n".join(summary_lines))
         self._set_hover_markers(marker_spots)
-
-    def _clear_hover_summary(self) -> None:
-        self._hover_label.setText(self._default_hover_text)
-        self._set_hover_markers([])
 
     def _set_hover_markers(self, marker_spots: list[dict[str, object]]) -> None:
         if self._hover_marker_item is None or pg is None:
