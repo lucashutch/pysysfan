@@ -261,8 +261,10 @@ QFrame#graphsStatsRow {{
 
 QLabel#graphsStatsLabel {{
     color: {colors["muted"]};
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }}
 
 QFrame#graphsLegendBar {{
