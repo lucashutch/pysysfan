@@ -121,16 +121,7 @@ class DashboardPage(QWidget):
         # -- Initial theme -------------------------------------------------
         self._apply_theme()
 
-    # ------------------------------------------------------------------
-    # Show / hide → tell provider to start / stop polling
-    # ------------------------------------------------------------------
-    def showEvent(self, event) -> None:  # noqa: N802
-        super().showEvent(event)
-        self._provider.start_polling()
-
-    def hideEvent(self, event) -> None:  # noqa: N802
-        self._provider.stop_polling()
-        super().hideEvent(event)
+    # Polling is owned by MainWindow (desktop-level visibility control).
 
     # ------------------------------------------------------------------
     # Theme

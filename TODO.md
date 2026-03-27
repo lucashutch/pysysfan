@@ -1,7 +1,6 @@
 # TODO
 ## Bug Fixes
 
-- rework the config ui to more closely match the flat square aesthetic of the rest of the dashboard or service page
 - pawnio version is incorrectly being obtained. i have 2.2 installed but the ui is showing 1.2
 - fix alignment fo diagnostic logs. it should be the same as the serivce running indicator in the left panel.
 

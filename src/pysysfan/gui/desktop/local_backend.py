@@ -34,6 +34,7 @@ _STATE_CACHE_VALUE: DaemonStateFile | None = None
 
 _HISTORY_CACHE_PATH: Path | None = None
 _HISTORY_CACHE_MTIME_NS: int | None = None
+_HISTORY_CACHE_SIZE: int | None = None
 _HISTORY_CACHE_VALUE: list[HistorySample] | None = None
 
 
@@ -178,7 +179,11 @@ def read_daemon_history(
     history_path: Path = DEFAULT_HISTORY_PATH,
 ) -> list[HistorySample]:
     """Read recent daemon history samples from the shared NDJSON file."""
-    global _HISTORY_CACHE_PATH, _HISTORY_CACHE_MTIME_NS, _HISTORY_CACHE_VALUE
+    global \
+        _HISTORY_CACHE_PATH, \
+        _HISTORY_CACHE_MTIME_NS, \
+        _HISTORY_CACHE_VALUE, \
+        _HISTORY_CACHE_SIZE
 
     history_path = Path(history_path)
     try:
@@ -187,15 +192,22 @@ def read_daemon_history(
         _HISTORY_CACHE_PATH = history_path
         _HISTORY_CACHE_MTIME_NS = None
         _HISTORY_CACHE_VALUE = []
+        _HISTORY_CACHE_SIZE = None
         return []
 
     mtime_ns = stat.st_mtime_ns
-    if _HISTORY_CACHE_PATH == history_path and _HISTORY_CACHE_MTIME_NS == mtime_ns:
+    file_size = stat.st_size
+    if (
+        _HISTORY_CACHE_PATH == history_path
+        and _HISTORY_CACHE_MTIME_NS == mtime_ns
+        and _HISTORY_CACHE_SIZE == file_size
+    ):
         return list(_HISTORY_CACHE_VALUE or [])
 
     value = read_history(history_path)
     _HISTORY_CACHE_PATH = history_path
     _HISTORY_CACHE_MTIME_NS = mtime_ns
+    _HISTORY_CACHE_SIZE = file_size
     _HISTORY_CACHE_VALUE = list(value)
     return list(value)
 

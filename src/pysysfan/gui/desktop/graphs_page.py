@@ -7,6 +7,7 @@ individual series visibility.
 
 from __future__ import annotations
 
+import re
 from math import ceil
 from typing import Callable
 
@@ -25,7 +26,6 @@ from PySide6.QtWidgets import (
 from pysysfan.gui.desktop.data_provider import DashboardDataProvider
 from pysysfan.gui.desktop.sidebar import SidebarWidget
 from pysysfan.gui.desktop.theme import (
-    PAGE_HEADING_STYLE,
     desktop_colors,
     graphs_page_stylesheet,
     plot_theme,
@@ -67,12 +67,12 @@ class LegendItem(QWidget):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(6, 2, 6, 2)
-        layout.setSpacing(4)
+        layout.setContentsMargins(4, 1, 4, 1)
+        layout.setSpacing(6)
 
         self.color_label = QLabel(self)
         self.color_label.setObjectName("legendColor")
-        self.color_label.setFixedWidth(16)
+        self.color_label.setFixedWidth(20)
         self.color_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.text_label = QLabel(label, self)
@@ -99,12 +99,12 @@ class LegendItem(QWidget):
 
     def _apply_visual(self) -> None:
         if self._visible:
-            self.color_label.setText("\u25cf")
-            self.color_label.setStyleSheet(f"color: {self._color}; font-size: 14px;")
+            self.color_label.setText("\u25a0")
+            self.color_label.setStyleSheet(f"color: {self._color}; font-size: 18px;")
             self.text_label.setStyleSheet("")
         else:
-            self.color_label.setText("\u25cb")
-            self.color_label.setStyleSheet(f"color: {self._color}; font-size: 14px;")
+            self.color_label.setText("\u25a1")
+            self.color_label.setStyleSheet(f"color: {self._color}; font-size: 18px;")
             self.text_label.setStyleSheet(f"color: {self._muted_color};")
 
 
@@ -141,6 +141,7 @@ class GraphsPage(QWidget):
         self._hover_point: tuple[float, float] | None = None
         self._legend_columns = 4
         self._hover_marker_item = None
+        self._legend_catalog_signature: dict[str, tuple[tuple[str, str], ...]] = {}
 
         # Build the outer layout: sidebar + main content
         outer_layout = QHBoxLayout(self)
@@ -169,17 +170,9 @@ class GraphsPage(QWidget):
         header_layout.setContentsMargins(0, 0, 0, 0)
         header_layout.setSpacing(4)
 
-        header_title = QLabel("Graphs", self._header_frame)
+        header_title = QLabel("SYSTEM TELEMETRY", self._header_frame)
         header_title.setObjectName("graphsHeaderTitle")
-        header_title.setStyleSheet(PAGE_HEADING_STYLE)
         header_layout.addWidget(header_title)
-
-        header_subtitle = QLabel(
-            "Temperature and fan-speed history with a bottom-drawer control strip",
-            self._header_frame,
-        )
-        header_subtitle.setObjectName("graphsHeaderSubtitle")
-        header_layout.addWidget(header_subtitle)
 
         root_layout.addWidget(self._header_frame)
 
@@ -214,13 +207,7 @@ class GraphsPage(QWidget):
 
         tab_row_layout.addStretch()
 
-        self._history_row = QWidget(self._controls_row)
-        self._history_row.setObjectName("graphsHistoryRow")
-        history_row_layout = QHBoxLayout(self._history_row)
-        history_row_layout.setContentsMargins(0, 0, 0, 0)
-        history_row_layout.setSpacing(8)
-
-        # History window buttons
+        # History window buttons on the same row, far right
         self._history_buttons: dict[int, QPushButton] = {}
         for label, seconds in DashboardDataProvider.HISTORY_WINDOWS.items():
             btn = QPushButton(label, self._controls_row)
@@ -229,16 +216,27 @@ class GraphsPage(QWidget):
             btn.setFlat(True)
             btn.setProperty("historyBtn", True)
             btn.clicked.connect(lambda checked, s=seconds: self._set_history_window(s))
-            history_row_layout.addWidget(btn)
+            tab_row_layout.addWidget(btn)
             self._history_buttons[seconds] = btn
-        history_row_layout.addStretch()
 
         controls_layout.addWidget(self._tab_row)
-        controls_layout.addWidget(self._history_row)
         # Default history is the provider's current window
         default_seconds = provider.history_seconds
         if default_seconds in self._history_buttons:
             self._history_buttons[default_seconds].setChecked(True)
+
+        # --- hover stats row ---
+        self._stats_frame = QFrame(self)
+        self._stats_frame.setObjectName("graphsStatsRow")
+        stats_layout = QHBoxLayout(self._stats_frame)
+        stats_layout.setContentsMargins(0, 0, 0, 0)
+        stats_layout.setSpacing(8)
+        self._hover_label = QLabel("Hover @ —", self._stats_frame)
+        self._hover_label.setObjectName("graphsHoverLabel")
+        self._hover_label.setWordWrap(True)
+        stats_layout.addWidget(self._hover_label)
+        stats_layout.addStretch(1)
+        root_layout.addWidget(self._stats_frame)
 
         # --- plot widget ---
         if pg is not None:
@@ -269,34 +267,6 @@ class GraphsPage(QWidget):
         drawer_layout.setSpacing(8)
 
         drawer_layout.addWidget(self._controls_row)
-
-        self._stats_row = QFrame(self._drawer_frame)
-        self._stats_row.setObjectName("graphsStatsRow")
-        stats_layout = QHBoxLayout(self._stats_row)
-        stats_layout.setContentsMargins(0, 0, 0, 0)
-        stats_layout.setSpacing(12)
-        self._visible_count_label = QLabel("0 visible", self._stats_row)
-        self._visible_count_label.setObjectName("graphsStatsLabel")
-        self._range_label = QLabel("Window 60 s", self._stats_row)
-        self._range_label.setObjectName("graphsStatsLabel")
-        stats_layout.addWidget(self._visible_count_label)
-        stats_layout.addWidget(self._range_label)
-        stats_layout.addStretch(1)
-        drawer_layout.addWidget(self._stats_row)
-
-        self._hover_row = QFrame(self._drawer_frame)
-        self._hover_row.setObjectName("graphsHoverRow")
-        hover_layout = QHBoxLayout(self._hover_row)
-        hover_layout.setContentsMargins(0, 0, 0, 0)
-        hover_layout.setSpacing(0)
-        self._default_hover_text = (
-            "Hover a visible line to inspect the values at that point in time."
-        )
-        self._hover_label = QLabel(self._default_hover_text, self._hover_row)
-        self._hover_label.setObjectName("graphsHoverLabel")
-        self._hover_label.setWordWrap(True)
-        hover_layout.addWidget(self._hover_label, 1)
-        drawer_layout.addWidget(self._hover_row)
 
         # --- legend bar ---
         self._legend_frame = QFrame(self)
@@ -329,7 +299,8 @@ class GraphsPage(QWidget):
         return self._enabled_series
 
     # ------------------------------------------------------------------
-    # Show / hide lifecycle
+    # ------------------------------------------------------------------
+    # Lifecycle
     # ------------------------------------------------------------------
 
     def changeEvent(self, event) -> None:  # noqa: N802
@@ -340,9 +311,6 @@ class GraphsPage(QWidget):
     def showEvent(self, event) -> None:  # noqa: N802
         super().showEvent(event)
         self._refresh_plot()
-
-    def hideEvent(self, event) -> None:  # noqa: N802
-        super().hideEvent(event)
 
     # ------------------------------------------------------------------
     # Tab switching
@@ -374,7 +342,19 @@ class GraphsPage(QWidget):
     # ------------------------------------------------------------------
 
     def _on_state_updated(self, state: object) -> None:
-        self._rebuild_legend()
+        # Rebuilding the legend (delete/create widgets) on every state tick
+        # can block the UI thread and cause timer jitter. Only rebuild when
+        # the underlying catalog (series set + labels) changes.
+        catalog = self._current_catalog()
+        signature = tuple(catalog.items())
+        if self._legend_catalog_signature.get(self._active_tab) != signature:
+            self._legend_catalog_signature[self._active_tab] = signature
+            self._rebuild_legend()
+        else:
+            # Still keep plot in sync with newest history values.
+            # Legend items are already present and keep their visibility state.
+            pass
+
         self._refresh_plot()
 
     # ------------------------------------------------------------------
@@ -473,8 +453,6 @@ class GraphsPage(QWidget):
 
         if latest_ts == 0.0:
             self._plot_widget.remove_stale_series(set())
-            self._update_drawer_stats(0, len(catalog))
-            self._clear_hover_summary()
             return
 
         active_ids: set[str] = set()
@@ -491,7 +469,6 @@ class GraphsPage(QWidget):
             active_ids.add(sid)
 
         self._plot_widget.remove_stale_series(active_ids)
-        self._update_drawer_stats(len(active_ids), len(catalog))
 
         # Axis labels (lightweight)
         plot_item = self._plot_widget.getPlotItem()
@@ -518,7 +495,7 @@ class GraphsPage(QWidget):
         return {
             series_id: label
             for series_id, label in catalog.items()
-            if self._is_selectable_series_id(series_id)
+            if self._is_selectable_series_id(series_id, label)
         }
 
     def _current_history(self) -> dict:
@@ -566,23 +543,17 @@ class GraphsPage(QWidget):
         self._hover_point = (float(hover_point[0]), float(hover_point[1]))
         self._update_hover_summary(self._hover_point)
 
-    def _update_drawer_stats(self, visible_count: int, catalog_count: int) -> None:
-        self._visible_count_label.setText(f"{visible_count} visible")
-        self._range_label.setText(
-            f"{catalog_count} selectable · window {self._provider.history_seconds} s"
-        )
-
     def _update_hover_summary(
         self, hover_point: tuple[float, float] | None = None
     ) -> None:
         if self._plot_widget is None or pg is None:
-            self._clear_hover_summary()
+            self._set_hover_markers([])
             return
 
         if hover_point is None:
             hover_point = self._hover_point
         if hover_point is None:
-            self._clear_hover_summary()
+            self._set_hover_markers([])
             return
 
         x_value = float(hover_point[0])
@@ -590,9 +561,8 @@ class GraphsPage(QWidget):
         history = self._current_history()
         enabled = self._enabled_series.get(self._active_tab, set())
         colors = self._series_colors()
-        summary_lines = [f"Hover @ {abs(x_value):g} s ago"]
         marker_spots: list[dict[str, object]] = []
-        unit = "°C" if self._active_tab == "temperature" else "RPM"
+        hover_lines: list[str] = []
 
         for idx, (series_id, label) in enumerate(catalog.items()):
             if series_id not in enabled:
@@ -604,8 +574,18 @@ class GraphsPage(QWidget):
                 continue
 
             sample_x, sample_y = sample
-            summary_lines.append(f"{label}: {format(sample_y, 'g')} {unit}")
             color = colors[idx % len(colors)] if colors else "#888888"
+
+            if self._active_tab == "temperature":
+                rounded = round(float(sample_y))
+                if abs(float(sample_y) - rounded) < 1e-9:
+                    value_text = f"{int(rounded)}"
+                else:
+                    value_text = f"{float(sample_y):.1f}"
+                hover_lines.append(f"{label}: {value_text} \u00b0C")
+            else:
+                hover_lines.append(f"{label}: {float(sample_y):.0f} RPM")
+
             marker_spots.append(
                 {
                     "pos": (sample_x, sample_y),
@@ -615,15 +595,16 @@ class GraphsPage(QWidget):
                 }
             )
 
-        if len(summary_lines) == 1:
-            self._clear_hover_summary()
-            return
+        prefix = f"Hover @ {x_value:.0f}s"
+        if hover_lines:
+            self._hover_label.setText(prefix + "\n" + "\n".join(hover_lines))
+        else:
+            self._hover_label.setText(prefix)
 
-        self._hover_label.setText("\n".join(summary_lines))
         self._set_hover_markers(marker_spots)
 
     def _clear_hover_summary(self) -> None:
-        self._hover_label.setText(self._default_hover_text)
+        self._hover_label.setText("")
         self._set_hover_markers([])
 
     def _set_hover_markers(self, marker_spots: list[dict[str, object]]) -> None:
@@ -665,9 +646,17 @@ class GraphsPage(QWidget):
         return (last_x, series_data[-1][1])
 
     @staticmethod
-    def _is_selectable_series_id(series_id: str) -> bool:
+    def _is_selectable_series_id(series_id: str, label: str = "") -> bool:
         blocked_prefixes = ("const::", "min::", "max::", "marker::")
-        return not series_id.startswith(blocked_prefixes)
+        if series_id.startswith(blocked_prefixes):
+            return False
+        if label:
+            label_lower = label.lower()
+            if re.search(r"core\s+\d+", label_lower):
+                return False
+            if re.search(r"sensor\s+resolution", label_lower):
+                return False
+        return True
 
     # ------------------------------------------------------------------
     # Theming
@@ -683,6 +672,7 @@ class GraphsPage(QWidget):
         for axis_name in ("left", "bottom"):
             plot_item.getAxis(axis_name).setTextPen(theme["foreground"])
             plot_item.getAxis(axis_name).setPen(theme["muted"])
+        plot_item.getAxis("left").setWidth(50)
         if not self._showgrid_applied:
             plot_item.showGrid(x=True, y=True, alpha=0.25)
             self._showgrid_applied = True

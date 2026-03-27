@@ -46,6 +46,10 @@ class MainWindow(QMainWindow):
 
         self.data_provider = DashboardDataProvider(parent=self)
 
+        # Polling is controlled by the main window's visibility/state so shared
+        # providers keep driving all pages (graphs + sidebar stats).
+        self._polling_active = False
+
         self.sidebar = SidebarWidget(
             provider=self.data_provider, active_tab=0, parent=self
         )
@@ -104,8 +108,12 @@ class MainWindow(QMainWindow):
         self.close()
 
     def showEvent(self, event) -> None:  # noqa: N802
-        """Start provider polling and refresh pages on first show."""
+        """Start provider polling when the main window becomes visible."""
         super().showEvent(event)
+        if not self._polling_active:
+            self._polling_active = True
+            self.data_provider.start_polling()
+
         if not self._first_show_done:
             self._first_show_done = True
             for page in (
@@ -120,6 +128,13 @@ class MainWindow(QMainWindow):
                         refresh()
                     except Exception:
                         continue
+
+    def hideEvent(self, event) -> None:  # noqa: N802
+        """Stop polling when the main window is hidden (e.g. to tray)."""
+        if self._polling_active:
+            self._polling_active = False
+            self.data_provider.stop_polling()
+        super().hideEvent(event)
 
     def _refresh_current_page(self, index: int) -> None:
         page = self.page_stack.widget(index)
@@ -139,6 +154,19 @@ class MainWindow(QMainWindow):
     def changeEvent(self, event) -> None:  # noqa: N802
         """Optionally minimize to the tray instead of the taskbar."""
         super().changeEvent(event)
+
+        if event.type() == QEvent.Type.WindowStateChange:
+            # Pause polling while minimized (even if tray integration is off).
+            if self.isMinimized():
+                if self._polling_active:
+                    self._polling_active = False
+                    self.data_provider.stop_polling()
+            else:
+                # Resume polling when restored and the window is visible.
+                if self.isVisible() and not self._polling_active:
+                    self._polling_active = True
+                    self.data_provider.start_polling()
+
         if event.type() != QEvent.Type.WindowStateChange:
             return
         if not self.isMinimized() or not self.minimize_to_tray_enabled():

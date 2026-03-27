@@ -198,13 +198,15 @@ class DashboardDataProvider(QObject):
             self.offlineDetected.emit(service_status)
             return
 
-        if (not state.running) or (
-            self._last_polled_state_timestamp is not None
-            and state.timestamp <= self._last_polled_state_timestamp
-        ):
-            self._set_refresh_interval(self.IDLE_REFRESH_INTERVAL_MS)
-        else:
+        # Keep redraw cadence stable while the daemon is running.
+        # The daemon may skip rewriting `daemon_state.json` when its logical
+        # state signature is unchanged, so using `state.timestamp` for cadence
+        # causes sporadic UI stalls.
+        if state.running:
             self._set_refresh_interval(self.REFRESH_INTERVAL_MS)
+        else:
+            self._set_refresh_interval(self.IDLE_REFRESH_INTERVAL_MS)
+
         self._last_polled_state_timestamp = state.timestamp
 
         self._daemon_state = state

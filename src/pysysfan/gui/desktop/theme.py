@@ -204,7 +204,6 @@ QToolButton#alertsButton::menu-indicator {{
 def graphs_page_stylesheet(palette: QPalette) -> str:
     """Return a palette-aware stylesheet for the graphs page."""
     colors = desktop_colors(palette)
-    active_border = colors["accent"]
     return f"""
 QWidget#graphsRoot {{
     background: {colors["window"]};
@@ -217,51 +216,43 @@ QFrame#graphsHeader {{
 
 QLabel#graphsHeaderTitle {{
     color: {colors["text"]};
-    font-size: 20px;
+    font-size: 1.5rem;
     font-weight: 900;
-}}
-
-QLabel#graphsHeaderSubtitle {{
-    color: {colors["muted"]};
-    font-size: 12px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
 }}
 
 QPushButton[graphTab="true"] {{
-    border: 1px solid {colors["border"]};
-    border-radius: 8px;
+    border: none;
     padding: 6px 16px;
     font-weight: 700;
     font-size: 12px;
-    background: {colors["raised"]};
+    background: transparent;
     color: {colors["muted"]};
 }}
 
 QPushButton[graphTab="true"]:checked {{
-    background: {colors["panel"]};
-    border-color: {active_border};
-    color: {colors["text"]};
+    background: {colors["accent"]};
+    color: {colors["window"]};
 }}
 
 QPushButton[historyBtn="true"] {{
-    border: 1px solid {colors["border"]};
-    border-radius: 8px;
+    border: none;
     padding: 4px 12px;
     font-size: 11px;
     font-weight: 600;
-    background: {colors["raised"]};
+    background: transparent;
     color: {colors["muted"]};
 }}
 
 QPushButton[historyBtn="true"]:checked {{
-    background: {colors["panel"]};
-    border-color: {active_border};
-    color: {colors["text"]};
+    background: {colors["accent"]};
+    color: {colors["window"]};
 }}
 
 QFrame#graphsDrawer {{
-    background: {colors["raised"]};
-    border: 1px solid {colors["border"]};
-    border-radius: 14px;
+    background: {colors["panel"]};
+    border: none;
 }}
 
 QFrame#graphsStatsRow {{
@@ -270,19 +261,25 @@ QFrame#graphsStatsRow {{
 
 QLabel#graphsStatsLabel {{
     color: {colors["muted"]};
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }}
 
 QFrame#graphsLegendBar {{
-    background: {colors["panel"]};
-    border: 1px solid {colors["border"]};
-    border-radius: 12px;
-    min-height: 32px;
+    background: {colors["raised"]};
+    border: none;
+    min-height: 160px;
 }}
 
 QFrame#graphsControlsRow {{
     background: transparent;
+}}
+
+QLabel#graphsHoverLabel {{
+    color: {colors["muted"]};
+    font-size: 10px;
 }}
 """
 
