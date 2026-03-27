@@ -270,7 +270,7 @@ QLabel#graphsStatsLabel {{
 QFrame#graphsLegendBar {{
     background: {colors["raised"]};
     border: none;
-    min-height: 80px;
+    min-height: 160px;
 }}
 
 QFrame#graphsControlsRow {{

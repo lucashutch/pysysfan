@@ -68,11 +68,11 @@ class LegendItem(QWidget):
 
         layout = QHBoxLayout(self)
         layout.setContentsMargins(4, 1, 4, 1)
-        layout.setSpacing(4)
+        layout.setSpacing(6)
 
         self.color_label = QLabel(self)
         self.color_label.setObjectName("legendColor")
-        self.color_label.setFixedWidth(10)
+        self.color_label.setFixedWidth(20)
         self.color_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         self.text_label = QLabel(label, self)
@@ -100,11 +100,11 @@ class LegendItem(QWidget):
     def _apply_visual(self) -> None:
         if self._visible:
             self.color_label.setText("\u25a0")
-            self.color_label.setStyleSheet(f"color: {self._color}; font-size: 9px;")
+            self.color_label.setStyleSheet(f"color: {self._color}; font-size: 18px;")
             self.text_label.setStyleSheet("")
         else:
             self.color_label.setText("\u25a1")
-            self.color_label.setStyleSheet(f"color: {self._color}; font-size: 9px;")
+            self.color_label.setStyleSheet(f"color: {self._color}; font-size: 18px;")
             self.text_label.setStyleSheet(f"color: {self._muted_color};")
 
 
@@ -624,6 +624,7 @@ class GraphsPage(QWidget):
         for axis_name in ("left", "bottom"):
             plot_item.getAxis(axis_name).setTextPen(theme["foreground"])
             plot_item.getAxis(axis_name).setPen(theme["muted"])
+        plot_item.getAxis("left").setWidth(50)
         if not self._showgrid_applied:
             plot_item.showGrid(x=True, y=True, alpha=0.25)
             self._showgrid_applied = True
