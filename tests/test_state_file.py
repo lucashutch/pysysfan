@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+from unittest.mock import patch
 
 from pysysfan.state_file import (
     AlertState,
@@ -65,7 +67,9 @@ class TestWriteState:
     def test_write_creates_parent_directory(self, tmp_path):
         path = tmp_path / "nested" / "daemon_state.json"
 
-        write_state(_sample_state(), path)
+        ok = write_state(_sample_state(), path)
+
+        assert ok is True
 
         assert path.exists()
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -76,7 +80,9 @@ class TestWriteState:
         path = tmp_path / "daemon_state.json"
         path.write_text("old", encoding="utf-8")
 
-        write_state(_sample_state(), path)
+        ok = write_state(_sample_state(), path)
+
+        assert ok is True
 
         payload = json.loads(path.read_text(encoding="utf-8"))
         assert payload["running"] is True
@@ -135,3 +141,41 @@ class TestDeleteState:
 
     def test_delete_missing_file_is_noop(self, tmp_path):
         delete_state(tmp_path / "missing.json")
+
+
+def test_write_state_permission_error_retries(tmp_path):
+    state = _sample_state()
+    path = tmp_path / "daemon_state.json"
+
+    real_replace = os.replace
+    call_count = {"n": 0}
+
+    def _replace(src, dst):
+        call_count["n"] += 1
+        if call_count["n"] == 1:
+            raise PermissionError("Access is denied")
+        return real_replace(src, dst)
+
+    with patch("pysysfan.state_file.os.replace", side_effect=_replace):
+        ok = write_state(state, path)
+
+    assert ok is True
+    assert call_count["n"] == 2
+    assert path.exists()
+
+
+def test_write_state_permission_error_eventual_failure(tmp_path):
+    state = _sample_state()
+    path = tmp_path / "daemon_state.json"
+    path.write_text("old", encoding="utf-8")
+
+    with patch(
+        "pysysfan.state_file.os.replace",
+        side_effect=PermissionError("Access is denied"),
+    ):
+        ok = write_state(
+            state, path, permission_retry_attempts=3, permission_retry_delay_seconds=0
+        )
+
+    assert ok is False
+    assert path.read_text(encoding="utf-8") == "old"
