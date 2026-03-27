@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QMessageBox,
-    QPlainTextEdit,
+    QTextEdit,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
@@ -36,6 +36,7 @@ from pysysfan.gui.desktop.theme import (
     PAGE_HEADING_STYLE,
     flat_management_page_stylesheet,
 )
+from pysysfan.config import DEFAULT_CONFIG_DIR
 from pysysfan.platforms import windows_service
 from pysysfan.state_file import DEFAULT_STATE_PATH
 
@@ -343,10 +344,14 @@ class ServicePage(QWidget):
         diagnostics_header.addWidget(self.copy_diagnostics_button)
         diagnostics_layout.addLayout(diagnostics_header)
 
-        self.diagnostics_view = QPlainTextEdit(self)
+        self.diagnostics_view = QTextEdit(self)
         self.diagnostics_view.setObjectName("diagnosticsView")
         self.diagnostics_view.setReadOnly(True)
         self.diagnostics_view.setMinimumHeight(260)
+        self.diagnostics_view.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
+        self.diagnostics_view.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        )
         diagnostics_layout.addWidget(self.diagnostics_view, 1)
 
         content_layout.addWidget(self._diagnostics_panel)
@@ -354,6 +359,9 @@ class ServicePage(QWidget):
         self._refresh_timer = QTimer(self)
         self._refresh_timer.setInterval(self.REFRESH_INTERVAL_MS)
         self._refresh_timer.timeout.connect(self.refresh_data)
+        self._diagnostic_refresh_timer = QTimer(self)
+        self._diagnostic_refresh_timer.setInterval(1000)
+        self._diagnostic_refresh_timer.timeout.connect(self._refresh_diagnostics)
         self._diagnostic_lines: list[tuple[str, str, str]] = []
         self.setStyleSheet(
             flat_management_page_stylesheet(self.palette()) + _action_state_stylesheet()
@@ -364,10 +372,12 @@ class ServicePage(QWidget):
         super().showEvent(event)
         self.refresh_data()
         self._refresh_timer.start()
+        self._diagnostic_refresh_timer.start()
 
     def hideEvent(self, event) -> None:  # noqa: N802
         """Stop periodic polling when the service page is hidden."""
         self._refresh_timer.stop()
+        self._diagnostic_refresh_timer.stop()
         super().hideEvent(event)
 
     def refresh_data(self) -> None:
@@ -526,56 +536,134 @@ class ServicePage(QWidget):
         self.detail_trigger_value.setText(trigger if trigger else "N/A")
 
     def _apply_diagnostics(self, task_details: dict[str, str], daemon_state) -> None:
-        from datetime import datetime
+        self._ensure_log_state_initialized()
 
-        now = datetime.now().strftime("%H:%M:%S")
+    def _refresh_diagnostics(self) -> None:
+        log_path = DEFAULT_CONFIG_DIR / "service.log"
+        if not log_path.exists():
+            return
 
-        is_first_refresh = not self._diagnostic_lines
+        try:
+            current_size = log_path.stat().st_size
+            if not hasattr(self, "_log_last_position"):
+                self._log_last_position = 0
+                self._cached_log_lines: list[str] = []
 
-        if is_first_refresh:
-            profile = daemon_state.active_profile if daemon_state else "N/A"
-            self._diagnostic_lines.append((now, "Service started", "info"))
-            self._diagnostic_lines.append((now, f"Loaded config: {profile}", "info"))
+            if current_size < self._log_last_position:
+                self._log_last_position = 0
+                self._cached_log_lines = []
+                self.diagnostics_view.clear()
+                self._set_colored_text([])
+                return
 
-        if daemon_state:
-            temp_count = (
-                len(daemon_state.temperatures) if daemon_state.temperatures else 0
-            )
-            fan_count = len(daemon_state.fan_speeds) if daemon_state.fan_speeds else 0
-            self._diagnostic_lines.append(
-                (
-                    now,
-                    f"LHM initialized — {temp_count} sensors, {fan_count} fans detected",
-                    "success",
-                )
-            )
+            with open(log_path, "r", encoding="utf-8") as f:
+                f.seek(self._log_last_position)
+                lines = f.readlines()
+                self._log_last_position = f.tell()
 
-            if daemon_state.temperatures:
-                for temp in daemon_state.temperatures[:3]:
-                    pct = int(temp.value) if temp.value else 0
-                    self._diagnostic_lines.append(
-                        (
-                            now,
-                            f"Fan loop tick: {temp.name}={temp.value:.0f}°C → {pct}%",
-                            "success",
-                        )
-                    )
+            if not lines:
+                return
 
-            if daemon_state.recent_alerts:
-                for alert in daemon_state.recent_alerts[-3:]:
-                    self._diagnostic_lines.append(
-                        (now, f"Alert: {alert.message}", "warning")
-                    )
-        else:
-            if is_first_refresh:
-                self._diagnostic_lines.append(
-                    (now, "Daemon state unavailable", "warning")
-                )
+            new_lines = [line.rstrip("\r\n") for line in lines if line.strip()]
+            self._cached_log_lines.extend(new_lines)
+            if len(self._cached_log_lines) > 2000:
+                self._cached_log_lines = self._cached_log_lines[-2000:]
+                self._set_colored_text(self._cached_log_lines)
+            else:
+                self._append_new_lines(new_lines)
 
-        if len(self._diagnostic_lines) > 100:
-            self._diagnostic_lines = self._diagnostic_lines[-100:]
+        except (OSError, IOError):
+            pass
 
-        self._refresh_diagnostics_view()
+    def _append_new_lines(self, new_lines: list[str]) -> None:
+        from PySide6.QtGui import QTextCursor, QTextCharFormat, QColor
+
+        if not new_lines:
+            return
+
+        sb = self.diagnostics_view.verticalScrollBar()
+        was_at_bottom = sb.value() >= sb.maximum() - 10
+
+        cursor = self.diagnostics_view.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+
+        for line in new_lines:
+            if "ERROR" in line:
+                color = QColor("#ef4444")
+            elif "WARNING" in line or "WARN" in line:
+                color = QColor("#f59e0b")
+            elif "DEBUG" in line:
+                color = QColor("#6b7280")
+            else:
+                color = QColor("#e5e5e5")
+
+            fmt = QTextCharFormat()
+            fmt.setForeground(color)
+            cursor.setCharFormat(fmt)
+            cursor.insertText(line)
+            cursor.insertText("\n")
+
+        if was_at_bottom:
+            sb.setValue(sb.maximum())
+
+    def _ensure_log_state_initialized(self) -> None:
+        log_path = DEFAULT_CONFIG_DIR / "service.log"
+        if not log_path.exists():
+            return
+
+        try:
+            if hasattr(self, "_log_last_position"):
+                return
+
+            self._log_last_position = 0
+            self._cached_log_lines: list[str] = []
+
+            with open(log_path, "r", encoding="utf-8") as f:
+                f.seek(0, 2)
+                file_size = f.tell()
+                if file_size > 100 * 1024:
+                    f.seek(file_size - 100 * 1024)
+                    f.readline()
+                lines = f.readlines()
+                self._log_last_position = file_size
+
+            self._cached_log_lines = [
+                line.rstrip("\r\n") for line in lines if line.strip()
+            ]
+            self._set_colored_text(self._cached_log_lines)
+
+        except (OSError, IOError):
+            pass
+
+    def _set_colored_text(self, lines: list[str]) -> None:
+        from PySide6.QtGui import QTextCursor, QTextCharFormat, QColor
+
+        cursor = self.diagnostics_view.textCursor()
+        cursor.movePosition(QTextCursor.MoveOperation.End)
+        cursor.select(QTextCursor.SelectionType.Document)
+        cursor.removeSelectedText()
+        cursor.deleteChar()
+
+        for line in lines:
+            if "ERROR" in line:
+                color = QColor("#ef4444")
+            elif "WARNING" in line or "WARN" in line:
+                color = QColor("#f59e0b")
+            elif "DEBUG" in line:
+                color = QColor("#6b7280")
+            else:
+                color = QColor("#e5e5e5")
+
+            fmt = QTextCharFormat()
+            fmt.setForeground(color)
+            cursor.setCharFormat(fmt)
+            cursor.insertText(line)
+            cursor.insertText("\n")
+
+        self.diagnostics_view.setTextCursor(cursor)
+        self.diagnostics_view.verticalScrollBar().setValue(
+            self.diagnostics_view.verticalScrollBar().maximum()
+        )
 
     def _confirm(self, message: str) -> bool:
         return (
