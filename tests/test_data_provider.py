@@ -467,12 +467,13 @@ class TestPollingControl:
         provider.stop_polling()
         assert provider._refresh_timer.isActive() is False
 
-    def test_idle_interval_on_duplicate_timestamp(self, qtbot, tmp_path):
+    def test_idle_interval_on_daemon_not_running(self, qtbot, tmp_path):
         profile_manager = _create_profile_manager(tmp_path)
         config_path = profile_manager.get_profile_config_path("gaming")
         state_path = tmp_path / "daemon_state.json"
         history_path = tmp_path / "daemon_history.ndjson"
-        write_state(_sample_state(config_path=str(config_path)), state_path)
+        state = _sample_state(config_path=str(config_path), running=False)
+        write_state(state, state_path)
 
         provider = DashboardDataProvider(
             state_path=state_path,
@@ -481,10 +482,6 @@ class TestPollingControl:
             profile_manager=profile_manager,
         )
 
-        provider.refresh_data()
-        assert provider._refresh_timer.interval() == provider.REFRESH_INTERVAL_MS
-
-        # Second refresh without timestamp change -> idle
         provider.refresh_data()
         assert provider._refresh_timer.interval() == provider.IDLE_REFRESH_INTERVAL_MS
 
