@@ -26,11 +26,21 @@ LOG_MAX_BYTES = 5 * 1024 * 1024  # 5 MB
 LOG_BACKUP_COUNT = 3
 
 
+class _RobustRotatingFileHandler(RotatingFileHandler):
+    """RotatingFileHandler that gracefully handles Windows file locking."""
+
+    def doRollover(self) -> None:
+        try:
+            super().doRollover()
+        except PermissionError:
+            self.stream = open(self.baseFilename, "a", encoding="utf-8")
+
+
 def _setup_logging(log_path: Path) -> None:
     """Configure root logger to write to a rotating log file."""
     log_path.parent.mkdir(parents=True, exist_ok=True)
 
-    handler = RotatingFileHandler(
+    handler = _RobustRotatingFileHandler(
         str(log_path),
         maxBytes=LOG_MAX_BYTES,
         backupCount=LOG_BACKUP_COUNT,
