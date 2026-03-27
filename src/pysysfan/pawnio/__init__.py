@@ -59,6 +59,16 @@ def get_installed_pawnio_version() -> str | None:
         r"SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
     ]
 
+    def _normalize_version(raw: object) -> str | None:
+        if raw is None:
+            return None
+        version = str(raw).strip()
+        if not version:
+            return None
+        if not version.lower().startswith("v"):
+            version = f"v{version}"
+        return version
+
     for root in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
         for key_path in uninstall_keys:
             try:
@@ -69,21 +79,37 @@ def get_installed_pawnio_version() -> str | None:
                         with winreg.OpenKey(
                             root, f"{key_path}\\{subkey_name}"
                         ) as subkey:
-                            display_name, _ = winreg.QueryValueEx(subkey, "DisplayName")
+                            try:
+                                display_name, _ = winreg.QueryValueEx(
+                                    subkey, "DisplayName"
+                                )
+                            except FileNotFoundError:
+                                continue
+
                             if "pawnio" not in str(display_name).lower():
                                 continue
+
+                            # Windows “Installed apps” typically uses
+                            # DisplayVersion but some installers only set
+                            # Version.
+                            display_version = None
                             try:
                                 display_version, _ = winreg.QueryValueEx(
                                     subkey, "DisplayVersion"
                                 )
                             except FileNotFoundError:
-                                display_version = None
+                                pass
+                            if display_version is None:
+                                try:
+                                    display_version, _ = winreg.QueryValueEx(
+                                        subkey, "Version"
+                                    )
+                                except FileNotFoundError:
+                                    pass
 
-                            if display_version:
-                                version = str(display_version).strip()
-                                if version and not version.lower().startswith("v"):
-                                    version = f"v{version}"
-                                return version
+                            normalized = _normalize_version(display_version)
+                            if normalized:
+                                return normalized
             except Exception:
                 # Ignore missing keys or access failures.
                 continue

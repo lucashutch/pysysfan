@@ -147,6 +147,40 @@ def test_get_installed_pawnio_version_falls_back_to_marker_on_missing_display_ve
         assert pawnio.get_installed_pawnio_version() == "v1.2.3"
 
 
+def test_get_installed_pawnio_version_uses_version_when_display_version_missing(
+    tmp_path,
+):
+    import pysysfan.pawnio as pawnio
+
+    marker = tmp_path / ".pawnio_version"
+    marker.write_text("v0.0.0\n", encoding="utf-8")
+
+    base_key = r"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall"
+    root = object()
+    data = {
+        root: {
+            base_key: {
+                "sub1": {
+                    "DisplayName": "PawnIO",
+                    # some installers expose only Version
+                    "Version": "2.2.0.0",
+                }
+            }
+        }
+    }
+
+    fake_winreg = _fake_winreg_module(data)
+    fake_winreg.HKEY_LOCAL_MACHINE = root
+    fake_winreg.HKEY_CURRENT_USER = root
+
+    with (
+        patch.object(pawnio.sys, "platform", "win32"),
+        patch.object(pawnio, "_PAWNIO_VERSION_MARKER_FILE", marker),
+        patch.dict("sys.modules", {"winreg": fake_winreg}),
+    ):
+        assert pawnio.get_installed_pawnio_version() == "v2.2.0.0"
+
+
 def test_get_installed_pawnio_version_non_windows_uses_marker(tmp_path):
     import pysysfan.pawnio as pawnio
 
