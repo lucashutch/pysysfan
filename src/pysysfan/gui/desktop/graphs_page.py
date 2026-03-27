@@ -141,6 +141,7 @@ class GraphsPage(QWidget):
         self._hover_point: tuple[float, float] | None = None
         self._legend_columns = 4
         self._hover_marker_item = None
+        self._legend_catalog_signature: dict[str, tuple[tuple[str, str], ...]] = {}
 
         # Build the outer layout: sidebar + main content
         outer_layout = QHBoxLayout(self)
@@ -341,7 +342,19 @@ class GraphsPage(QWidget):
     # ------------------------------------------------------------------
 
     def _on_state_updated(self, state: object) -> None:
-        self._rebuild_legend()
+        # Rebuilding the legend (delete/create widgets) on every state tick
+        # can block the UI thread and cause timer jitter. Only rebuild when
+        # the underlying catalog (series set + labels) changes.
+        catalog = self._current_catalog()
+        signature = tuple(catalog.items())
+        if self._legend_catalog_signature.get(self._active_tab) != signature:
+            self._legend_catalog_signature[self._active_tab] = signature
+            self._rebuild_legend()
+        else:
+            # Still keep plot in sync with newest history values.
+            # Legend items are already present and keep their visibility state.
+            pass
+
         self._refresh_plot()
 
     # ------------------------------------------------------------------
