@@ -372,6 +372,7 @@ class CurvesPage(QWidget):
             "Hover over the graph to inspect values. Drag control points to edit the curve.",
             self.preview_group,
         )
+        self.preview_result_label.setObjectName("previewResultLabel")
         self.preview_result_label.setWordWrap(True)
         preview_layout.addWidget(self.preview_result_label)
 

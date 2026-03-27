@@ -1,11 +1,4 @@
 # TODO
-## Bug Fixes
-
-- Fix alignment of diagnostic logs so it matches the service running indicator in the left panel.
-- Rename diagnostics log header to `LOG` and square the log corners.
-- Improve minimise-to-tray toggle contrast and match running-state green.
-
----
 
 ## New Features
 
@@ -15,3 +8,8 @@
 - **Sensor sanity checks and dead-sensor detection** - Add `sensor_timeout_seconds` to `FanConfig`. If a sensor returns `None` or an impossible value (e.g. 0 C or > 110 C) beyond the timeout, log a warning, optionally raise an alert, and fall back to a configured safe speed.
 - **Config import/export wizard in the GUI** - Add Import/Export buttons to `CurvesPage`. The import flow validates the incoming YAML against daemon rules and shows a human-readable diff before writing to disk.
 - **Per-fan speed ramping rate limits** - Add `ramp_up_rate` and `ramp_down_rate` (percent/second) to `FanConfig` so speed transitions are audibly smoother when hysteresis alone is insufficient.
+
+## UI Redesign
+- **[x] Config tab color/styling** - Phase 1 (preview accent + tooltip card styling)
+- **[ ] Config tab color/styling** - Phase 2 (accordion cards)
+- **[ ] Config tab color/styling** - Phase 3 (points table)

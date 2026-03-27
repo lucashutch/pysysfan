@@ -989,16 +989,28 @@ QWidget#curvesLeftColumn {{
     max-width: 400px;
 }}
 
-QWidget#curvesRightColumn {{
-    background: {colors["window"]};
-    border: none;
-}}
+        QWidget#curvesRightColumn {{
+            background: {colors["window"]};
+            border: none;
+        }}
 
-QFrame#previewGroup {{
-    background: {colors["raised"]};
-    border: none;
-    border-radius: 0;
-}}
+        QFrame#previewGroup {{
+            background: {colors["raised"]};
+            border: none;
+            border-left: 4px solid {colors["accent"]};
+            border-radius: 0;
+        }}
+
+        QLabel#previewResultLabel {{
+            background: {colors["panel"]};
+            border: 1px solid rgba(94, 180, 255, 0.45);
+            border-radius: 0px;
+            padding: 10px 12px;
+            color: {colors["text"]};
+            font-size: 11px;
+            font-weight: 800;
+            line-height: 1.25;
+        }}
 """
 
 
