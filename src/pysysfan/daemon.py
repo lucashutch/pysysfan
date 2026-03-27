@@ -735,8 +735,15 @@ class FanDaemon:
         payload["uptime_seconds"] = 0.0
         signature = json.dumps(payload, sort_keys=True, separators=(",", ":"))
         if signature != self._last_state_signature:
-            write_state(snapshot, self.state_path)
-            self._last_state_signature = signature
+            wrote = write_state(snapshot, self.state_path)
+            if wrote:
+                self._last_state_signature = signature
+            else:
+                # Keep controlling fans; state persistence is best-effort.
+                # Do not update the signature so we try again next cycle.
+                logger.warning(
+                    "daemon_state.json write failed; skipping this state update"
+                )
 
         try:
             append_history_sample(

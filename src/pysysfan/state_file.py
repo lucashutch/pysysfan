@@ -8,6 +8,7 @@ and alerts without needing an HTTP server.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import tempfile
 import time
@@ -19,6 +20,8 @@ from pysysfan.config import DEFAULT_CONFIG_DIR
 
 DEFAULT_STATE_PATH = DEFAULT_CONFIG_DIR / "daemon_state.json"
 DEFAULT_STATE_MAX_AGE_SECONDS = 10.0
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(slots=True)
@@ -115,8 +118,22 @@ class DaemonStateFile:
         return asdict(self)
 
 
-def write_state(state: DaemonStateFile, path: Path = DEFAULT_STATE_PATH) -> None:
-    """Atomically write a daemon state snapshot to disk."""
+def write_state(
+    state: DaemonStateFile,
+    path: Path = DEFAULT_STATE_PATH,
+    *,
+    permission_retry_attempts: int = 5,
+    permission_retry_delay_seconds: float = 0.05,
+) -> bool:
+    """Atomically write a daemon state snapshot to disk.
+
+    Returns ``True`` when the state file was written, otherwise ``False``.
+
+    On Windows, the destination file may be temporarily locked/handled by
+    another process. In that case, ``os.replace`` can raise
+    :class:`PermissionError`. We retry briefly and then return ``False`` so
+    the daemon can keep running.
+    """
 
     path.parent.mkdir(parents=True, exist_ok=True)
     payload = json.dumps(state.to_dict(), indent=2, sort_keys=True)
@@ -131,9 +148,31 @@ def write_state(state: DaemonStateFile, path: Path = DEFAULT_STATE_PATH) -> None
     ) as handle:
         handle.write(payload)
         handle.write("\n")
+        handle.flush()
         temp_path = Path(handle.name)
 
-    os.replace(temp_path, path)
+    try:
+        for attempt in range(permission_retry_attempts):
+            try:
+                os.replace(temp_path, path)
+                return True
+            except PermissionError as exc:
+                if attempt >= permission_retry_attempts - 1:
+                    logger.warning(
+                        "Failed to write daemon state (permission denied). "
+                        "Skipping this state update: %s",
+                        exc,
+                    )
+                    return False
+
+                time.sleep(permission_retry_delay_seconds)
+    finally:
+        # Best-effort cleanup when replace didn't happen.
+        if temp_path.exists():
+            try:
+                temp_path.unlink()
+            except OSError:
+                pass
 
 
 def delete_state(path: Path = DEFAULT_STATE_PATH) -> None:
