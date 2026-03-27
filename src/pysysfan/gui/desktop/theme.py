@@ -216,13 +216,10 @@ QFrame#graphsHeader {{
 
 QLabel#graphsHeaderTitle {{
     color: {colors["text"]};
-    font-size: 20px;
+    font-size: 1.5rem;
     font-weight: 900;
-}}
-
-QLabel#graphsHeaderSubtitle {{
-    color: {colors["muted"]};
-    font-size: 12px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
 }}
 
 QPushButton[graphTab="true"] {{

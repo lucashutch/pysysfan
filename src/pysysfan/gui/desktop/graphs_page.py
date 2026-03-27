@@ -25,7 +25,6 @@ from PySide6.QtWidgets import (
 from pysysfan.gui.desktop.data_provider import DashboardDataProvider
 from pysysfan.gui.desktop.sidebar import SidebarWidget
 from pysysfan.gui.desktop.theme import (
-    PAGE_HEADING_STYLE,
     desktop_colors,
     graphs_page_stylesheet,
     plot_theme,
@@ -169,17 +168,9 @@ class GraphsPage(QWidget):
         header_layout.setContentsMargins(0, 0, 0, 0)
         header_layout.setSpacing(4)
 
-        header_title = QLabel("Graphs", self._header_frame)
+        header_title = QLabel("SYSTEM TELEMETRY", self._header_frame)
         header_title.setObjectName("graphsHeaderTitle")
-        header_title.setStyleSheet(PAGE_HEADING_STYLE)
         header_layout.addWidget(header_title)
-
-        header_subtitle = QLabel(
-            "Temperature and fan-speed history with a bottom-drawer control strip",
-            self._header_frame,
-        )
-        header_subtitle.setObjectName("graphsHeaderSubtitle")
-        header_layout.addWidget(header_subtitle)
 
         root_layout.addWidget(self._header_frame)
 
