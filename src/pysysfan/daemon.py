@@ -855,6 +855,9 @@ class FanDaemon:
                 # Get current config (may have been reloaded)
                 current_cfg = self._cfg if self._cfg is not None else cfg
 
+                tick_start = time.perf_counter()
+                interval_s = float(current_cfg.poll_interval)
+
                 try:
                     applied = self._run_once(current_cfg)
                     if applied:
@@ -866,7 +869,19 @@ class FanDaemon:
                 # Update daemon state for API after the control pass.
                 self._update_state()
 
-                time.sleep(current_cfg.poll_interval)
+                # Drift-corrected scheduling: keep loop cadence close to
+                # `poll_interval` even when `_run_once()` takes variable time.
+                scheduled_next = tick_start + interval_s
+                sleep_for = scheduled_next - time.perf_counter()
+                if sleep_for > 0:
+                    time.sleep(sleep_for)
+                else:
+                    # Overran: skip sleeping and log at debug.
+                    logger.debug(
+                        "Control loop overran by %.3fs (poll interval %.3fs)",
+                        -sleep_for,
+                        interval_s,
+                    )
 
         finally:
             logger.info("Restoring BIOS fan control and shutting down...")
