@@ -438,13 +438,13 @@ QCheckBox#traySwitch::indicator {{
     width: 36px;
     height: 18px;
     border-radius: 2px;
-    background: {colors["raised"]};
+    background: {colors["panel"]};
     border: 1px solid {colors["border"]};
 }}
 
 QCheckBox#traySwitch::indicator:checked {{
-    background: {colors["accent"]};
-    border-color: {colors["accent"]};
+    background: #22c55e;
+    border-color: #22c55e;
 }}
 
 QFrame#serviceComponentCard {{
@@ -494,7 +494,7 @@ QLabel#serviceDiagnosticsTitle {{
     color: {colors["muted"]};
     font-size: 11px;
     font-weight: 700;
-    padding-top: 8px;
+    padding-top: 0px;
 }}
 
 QSplitter::handle {{
@@ -502,9 +502,11 @@ QSplitter::handle {{
     width: 0px;
 }}
 
-QPlainTextEdit#diagnosticsView {{
+    QTextEdit#diagnosticsView,
+    QPlainTextEdit#diagnosticsView {{
     background: {colors["base"]};
     border: none;
+    border-radius: 0px;
     font-family: Consolas, monospace;
     font-size: 11px;
 }}
@@ -713,12 +715,13 @@ QCheckBox#traySwitch::indicator {{
     width: 36px;
     height: 18px;
     border-radius: 0;
-    background: {colors["raised"]};
-    border: none;
+    background: {colors["panel"]};
+    border: 1px solid {colors["border"]};
 }}
 
 QCheckBox#traySwitch::indicator:checked {{
-    background: {colors["accent"]};
+    background: #22c55e;
+    border-color: #22c55e;
 }}
 
 QFrame#serviceComponentCard {{
@@ -766,9 +769,10 @@ QLabel#serviceComponentDetail {{
 
 QLabel#serviceDiagnosticsTitle {{
     color: {colors["muted"]};
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 700;
-    padding-top: 8px;
+    padding-top: 0px;
+    letter-spacing: 0.08em;
 }}
 
 QSplitter::handle {{
@@ -776,9 +780,11 @@ QSplitter::handle {{
     width: 0px;
 }}
 
-QPlainTextEdit#diagnosticsView {{
+    QTextEdit#diagnosticsView,
+    QPlainTextEdit#diagnosticsView {{
     background: {colors["base"]};
     border: none;
+    border-radius: 0px;
     font-family: Consolas, monospace;
     font-size: 11px;
 }}
