@@ -113,8 +113,17 @@ class AccordionSection(QFrame):
         return self._is_open
 
     def set_open(self, open_: bool) -> None:
+        if open_ == self._is_open:
+            return
+
         self._is_open = open_
+        self.setProperty("accordionOpen", open_)
         self._apply_state(open_)
+
+        # Re-polish so dynamic properties (used by QSS) take effect.
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.update()
 
     def add_widget(self, widget: QWidget) -> None:
         self.body_layout.addWidget(widget)

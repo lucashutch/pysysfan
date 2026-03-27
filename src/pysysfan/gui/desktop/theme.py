@@ -950,8 +950,32 @@ QHeaderView::section {{
 QFrame[accordionSection="true"] {{
     background: {colors["raised"]};
     border: none;
+    border-left: 4px solid transparent;
     border-radius: 0;
     max-width: 400px;
+}}
+
+QFrame[accordionSection="true"][accordionOpen="true"] {{
+    background: {colors["panel"]};
+    border-left: 4px solid {colors["accent"]};
+}}
+
+QWidget[accordionHeaderContainer="true"] {{
+    background: transparent;
+}}
+
+QWidget[accordionHeaderContainer="true"]:hover {{
+    background: rgba(94, 180, 255, 0.08);
+}}
+
+QLabel[accordionIndicator="true"] {{
+    color: {colors["muted"]};
+    font-size: 14px;
+    font-weight: 900;
+}}
+
+QFrame[accordionSection="true"][accordionOpen="true"] QLabel[accordionIndicator="true"] {{
+    color: {colors["accent"]};
 }}
 
 QLabel[accordionHeader="true"] {{
@@ -960,13 +984,14 @@ QLabel[accordionHeader="true"] {{
     padding: 8px 0;
     color: {colors["text"]};
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 900;
+    letter-spacing: 0.06em;
 }}
 
 QLabel[accordionSummary="true"] {{
     color: {colors["muted"]};
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 700;
 }}
 
 QWidget[accordionBody="true"] {{
