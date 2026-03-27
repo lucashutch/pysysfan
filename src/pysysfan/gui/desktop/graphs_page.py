@@ -206,13 +206,7 @@ class GraphsPage(QWidget):
 
         tab_row_layout.addStretch()
 
-        self._history_row = QWidget(self._controls_row)
-        self._history_row.setObjectName("graphsHistoryRow")
-        history_row_layout = QHBoxLayout(self._history_row)
-        history_row_layout.setContentsMargins(0, 0, 0, 0)
-        history_row_layout.setSpacing(8)
-
-        # History window buttons
+        # History window buttons on the same row, far right
         self._history_buttons: dict[int, QPushButton] = {}
         for label, seconds in DashboardDataProvider.HISTORY_WINDOWS.items():
             btn = QPushButton(label, self._controls_row)
@@ -221,12 +215,10 @@ class GraphsPage(QWidget):
             btn.setFlat(True)
             btn.setProperty("historyBtn", True)
             btn.clicked.connect(lambda checked, s=seconds: self._set_history_window(s))
-            history_row_layout.addWidget(btn)
+            tab_row_layout.addWidget(btn)
             self._history_buttons[seconds] = btn
-        history_row_layout.addStretch()
 
         controls_layout.addWidget(self._tab_row)
-        controls_layout.addWidget(self._history_row)
         # Default history is the provider's current window
         default_seconds = provider.history_seconds
         if default_seconds in self._history_buttons:
@@ -261,34 +253,6 @@ class GraphsPage(QWidget):
         drawer_layout.setSpacing(8)
 
         drawer_layout.addWidget(self._controls_row)
-
-        self._stats_row = QFrame(self._drawer_frame)
-        self._stats_row.setObjectName("graphsStatsRow")
-        stats_layout = QHBoxLayout(self._stats_row)
-        stats_layout.setContentsMargins(0, 0, 0, 0)
-        stats_layout.setSpacing(12)
-        self._visible_count_label = QLabel("0 visible", self._stats_row)
-        self._visible_count_label.setObjectName("graphsStatsLabel")
-        self._range_label = QLabel("Window 60 s", self._stats_row)
-        self._range_label.setObjectName("graphsStatsLabel")
-        stats_layout.addWidget(self._visible_count_label)
-        stats_layout.addWidget(self._range_label)
-        stats_layout.addStretch(1)
-        drawer_layout.addWidget(self._stats_row)
-
-        self._hover_row = QFrame(self._drawer_frame)
-        self._hover_row.setObjectName("graphsHoverRow")
-        hover_layout = QHBoxLayout(self._hover_row)
-        hover_layout.setContentsMargins(0, 0, 0, 0)
-        hover_layout.setSpacing(0)
-        self._default_hover_text = (
-            "Hover a visible line to inspect the values at that point in time."
-        )
-        self._hover_label = QLabel(self._default_hover_text, self._hover_row)
-        self._hover_label.setObjectName("graphsHoverLabel")
-        self._hover_label.setWordWrap(True)
-        hover_layout.addWidget(self._hover_label, 1)
-        drawer_layout.addWidget(self._hover_row)
 
         # --- legend bar ---
         self._legend_frame = QFrame(self)
