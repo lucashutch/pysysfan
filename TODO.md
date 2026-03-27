@@ -1,7 +1,7 @@
 # TODO
 ## Bug Fixes
 
-- rework the config ui to more closely match the flat square aesthetic of the rest of the dashboard or service page
+- fix the grahs not updating live. they onyl seem to be rendered on app start and then never again, even as new data comes in. this is a critical issue that needs to be resolved before the next release.
 - pawnio version is incorrectly being obtained. i have 2.2 installed but the ui is showing 1.2
 - fix alignment fo diagnostic logs. it should be the same as the serivce running indicator in the left panel.
 
