@@ -23,7 +23,6 @@ from PySide6.QtWidgets import (
 )
 
 from pysysfan.gui.desktop.local_backend import (
-    ELEVATION_REQUESTED_SENTINEL,
     read_daemon_state,
     run_installer_command,
     run_service_command,
@@ -418,12 +417,10 @@ class ServicePage(QWidget):
         success, message = self._command_runner(action)
         self.refresh_data()
         self._show_message(message, is_error=not success)
-        self._maybe_show_elevation_guidance(success, message)
 
     def _run_installer(self, executable_name: str) -> None:
         success, message = self._installer_runner(executable_name)
         self._show_message(message, is_error=not success)
-        self._maybe_show_elevation_guidance(success, message)
 
     def _set_minimize_to_tray_preference(self, enabled: bool) -> None:
         self._minimize_to_tray_setter(enabled)
@@ -694,17 +691,6 @@ class ServicePage(QWidget):
         self.message_label.setStyleSheet(f"color: {color};")
         self.message_label.setText(message)
         self.message_label.show()
-
-    def _maybe_show_elevation_guidance(self, success: bool, message: str) -> None:
-        """Show a clear modal prompt when Windows elevation is required."""
-        if not success or ELEVATION_REQUESTED_SENTINEL not in message:
-            return
-
-        QMessageBox.information(
-            self,
-            "Administrator Permission Needed",
-            message,
-        )
 
     @staticmethod
     def _format_uptime(seconds: float) -> str:

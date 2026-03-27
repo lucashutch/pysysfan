@@ -30,30 +30,30 @@ def _sample_state(timestamp: float | None = None) -> DaemonStateFile:
 
 @patch("pysysfan.gui.desktop.local_backend.check_admin", return_value=False)
 @patch("pysysfan.gui.desktop.local_backend.shutil.which")
-@patch("pysysfan.gui.desktop.local_backend.ctypes.windll", new_callable=MagicMock)
+@patch("pysysfan.gui.desktop.local_backend.subprocess.run")
 @patch("pysysfan.gui.desktop.local_backend.sys.platform", "win32")
 def test_run_service_command_requests_elevation_via_cli_executable(
-    mock_windll,
+    mock_run,
     mock_which,
     _mock_admin,
 ) -> None:
-    """The GUI should elevate the installed CLI executable, not the GUI launcher."""
+    """The GUI should elevate the installed CLI executable and wait."""
     mock_which.side_effect = [r"C:\tools\pysysfan.exe"]
-    mock_windll.shell32.IsUserAnAdmin.return_value = 0
-    mock_windll.shell32.ShellExecuteW.return_value = 33
+
+    mock_completed = MagicMock()
+    mock_completed.returncode = 0
+    mock_completed.stdout = "0\n"
+    mock_completed.stderr = ""
+    mock_run.return_value = mock_completed
 
     success, message = run_service_command("install")
 
     assert success is True
-    assert "Administrator permission" in message
-    mock_windll.shell32.ShellExecuteW.assert_called_once_with(
-        None,
-        "runas",
-        r"C:\tools\pysysfan.exe",
-        "service install",
-        None,
-        1,
-    )
+    assert "Elevated process exit code" in message
+    assert "Administrator permission" not in message
+
+    called_args = mock_run.call_args[0][0]
+    assert called_args[0] == "powershell"
 
 
 @patch("pysysfan.gui.desktop.local_backend.shutil.which", return_value=None)

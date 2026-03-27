@@ -26,8 +26,6 @@ from pysysfan.state_file import DEFAULT_STATE_PATH, DaemonStateFile, read_state
 from pysysfan.temperature import get_valid_aggregation_methods
 
 
-ELEVATION_REQUESTED_SENTINEL = "Windows asked for Administrator permission"
-
 _STATE_CACHE_PATH: Path | None = None
 _STATE_CACHE_MTIME_NS: int | None = None
 _STATE_CACHE_VALUE: DaemonStateFile | None = None
@@ -61,13 +59,52 @@ def _find_executable(executable_name: str) -> str | None:
     return None
 
 
-def _elevation_requested_message(command_label: str) -> str:
-    """Return a clear follow-up message after a UAC prompt was requested."""
-    return (
-        f"{ELEVATION_REQUESTED_SENTINEL} for {command_label}. "
-        "Approve the Windows UAC prompt to continue. "
-        "If no prompt appears, close PySysFan and relaunch it as Administrator."
+def _ps_single_quote(value: str) -> str:
+    """Return a PowerShell single-quoted string literal."""
+    return "'" + value.replace("'", "''") + "'"
+
+
+def _run_elevated_wait(
+    file_path: str, argument_list: Sequence[str]
+) -> tuple[bool, str]:
+    """Run a process elevated via UAC and wait for completion.
+
+    Output is not captured from the elevated process (PowerShell Start-Process
+    doesn't directly return stdout/stderr). Instead, we return a deterministic
+    message based on the elevated process exit code.
+    """
+
+    args_part = ""
+    if argument_list:
+        args_ps = ", ".join(_ps_single_quote(a) for a in argument_list)
+        args_part = f"-ArgumentList @({args_ps})"
+
+    ps_command = (
+        f"$p = Start-Process -Verb RunAs -FilePath {_ps_single_quote(file_path)} "
+        f"{args_part} -Wait -PassThru; "
+        "Write-Output $p.ExitCode"
     )
+
+    completed = subprocess.run(
+        ["powershell", "-NoProfile", "-Command", ps_command],
+        capture_output=True,
+        text=True,
+        **_hidden_process_kwargs(),
+    )
+    if completed.returncode != 0:
+        output = (completed.stdout or completed.stderr).strip()
+        return False, output or "Failed to request elevation"
+
+    raw = (completed.stdout or "").strip().splitlines()
+    if not raw:
+        return False, "Failed to parse elevated exit code"
+    try:
+        exit_code = int(raw[-1].strip())
+    except ValueError:
+        return False, raw[-1]
+
+    message = f"Elevated process exit code: {exit_code}"
+    return exit_code == 0, message
 
 
 def check_admin() -> bool:
@@ -216,7 +253,7 @@ def run_service_command(action: str) -> tuple[bool, str]:
     """Run a `pysysfan service <action>` command.
 
     When Administrator privileges are not already present on Windows, this will
-    request elevation via UAC and return immediately.
+    request elevation via UAC and wait for completion.
     """
     return run_cli_command(
         ["service", action],
@@ -231,17 +268,7 @@ def run_installer_command(executable_name: str) -> tuple[bool, str]:
         return False, f"Executable not found in PATH: {executable_name}"
 
     if sys.platform == "win32" and not check_admin():
-        code = ctypes.windll.shell32.ShellExecuteW(
-            None,
-            "runas",
-            executable,
-            "",
-            None,
-            1,
-        )
-        if code <= 32:
-            return False, f"Failed to request elevation for {executable_name}"
-        return True, _elevation_requested_message(executable_name)
+        return _run_elevated_wait(executable, [])
 
     completed = subprocess.run(
         [executable],
@@ -267,20 +294,7 @@ def run_cli_command(
         return run_python_module("pysysfan.cli", args, elevate=elevate)
 
     if elevate and sys.platform == "win32" and not check_admin():
-        params = subprocess.list2cmdline(list(args))
-        code = ctypes.windll.shell32.ShellExecuteW(
-            None,
-            "runas",
-            executable,
-            params,
-            None,
-            1,
-        )
-        if code <= 32:
-            return False, f"Failed to request elevation for {' '.join(args)}"
-        return True, _elevation_requested_message(
-            f"`{executable_name} {' '.join(args)}`"
-        )
+        return _run_elevated_wait(executable, list(args))
 
     completed = subprocess.run(
         [executable, *args],
@@ -304,18 +318,7 @@ def run_python_module(
     full_args = ["-m", module_name, *args]
 
     if elevate and sys.platform == "win32" and not check_admin():
-        params = subprocess.list2cmdline(full_args)
-        code = ctypes.windll.shell32.ShellExecuteW(
-            None,
-            "runas",
-            sys.executable,
-            params,
-            None,
-            1,
-        )
-        if code <= 32:
-            return False, f"Failed to request elevation for {' '.join(args)}"
-        return True, _elevation_requested_message(f"`pysysfan {' '.join(args)}`")
+        return _run_elevated_wait(sys.executable, full_args)
 
     completed = subprocess.run(
         [sys.executable, *full_args],
