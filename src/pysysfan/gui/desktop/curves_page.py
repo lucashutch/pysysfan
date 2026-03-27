@@ -135,6 +135,10 @@ class CurvesPage(QWidget):
 
         self.profile_selector = QComboBox(self)
         self.profile_selector.setObjectName("profileSelector")
+        self.profile_selector.setMaximumWidth(160)
+        self.profile_selector.setSizePolicy(
+            QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed
+        )
 
         self.switch_profile_button = QPushButton("Switch Profile", self)
         self.switch_profile_button.setObjectName("curveActionBtn")
@@ -154,6 +158,10 @@ class CurvesPage(QWidget):
 
         self.curve_selector = QComboBox(self)
         self.curve_selector.currentTextChanged.connect(self._load_selected_curve)
+        self.curve_selector.setMaximumWidth(160)
+        self.curve_selector.setSizePolicy(
+            QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed
+        )
         self.new_curve_button = QPushButton("New Curve", self)
         self.new_curve_button.setObjectName("curveActionBtn")
         self.new_curve_button.clicked.connect(self.create_curve)
@@ -203,11 +211,23 @@ class CurvesPage(QWidget):
 
         self.fan_selector = QComboBox(self)
         self.fan_selector.currentTextChanged.connect(self._load_selected_fan)
+        self.fan_selector.setMaximumWidth(160)
+        self.fan_selector.setSizePolicy(
+            QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed
+        )
         self.fan_curve_selector = QComboBox(self)
+        self.fan_curve_selector.setMaximumWidth(160)
+        self.fan_curve_selector.setSizePolicy(
+            QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed
+        )
         self.temp_ids_edit = QLineEdit(self)
         self.temp_ids_edit.setPlaceholderText("Comma-separated sensor identifiers")
         self.aggregation_selector = QComboBox(self)
         self.aggregation_selector.addItems(get_valid_aggregation_methods())
+        self.aggregation_selector.setMaximumWidth(160)
+        self.aggregation_selector.setSizePolicy(
+            QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed
+        )
         self.save_fan_button = QPushButton("Save Fan Settings", self)
         self.save_fan_button.setObjectName("curveActionBtn")
         self.save_fan_button.clicked.connect(self.save_fan_settings)
@@ -235,10 +255,13 @@ class CurvesPage(QWidget):
         curve_points_actions_top.addWidget(self.delete_curve_button, 1)
         curve_points_actions_top.addStretch(1)
         self.curve_points_section.add_layout(curve_points_actions_top)
-        curve_points_header = QHBoxLayout()
-        curve_points_header.addWidget(QLabel("Curve", self))
-        curve_points_header.addWidget(self.curve_selector, 1)
-        self.curve_points_section.add_layout(curve_points_header)
+        curve_points_header_layout = QHBoxLayout()
+        curve_points_header_layout.setContentsMargins(0, 0, 0, 0)
+        curve_points_header_layout.setSpacing(10)
+        curve_points_header_layout.addWidget(QLabel("Curve", self))
+        curve_points_header_layout.addStretch(1)
+        curve_points_header_layout.addWidget(self.curve_selector, 1)
+        self.curve_points_section.add_layout(curve_points_header_layout)
         self.curve_points_section.add_widget(self.points_table)
         curve_points_actions_bottom = QHBoxLayout()
         curve_points_actions_bottom.setSpacing(8)
@@ -1187,8 +1210,8 @@ class CurvesPage(QWidget):
 
         plot_widget = CurveEditorPlotWidget(self)
         plot_widget.showGrid(x=True, y=True, alpha=0.2)
-        plot_widget.setLabel("bottom", "Temperature", units="°C")
-        plot_widget.setLabel("left", "Fan speed", units="%")
+        plot_widget.setLabel("bottom", "TEMP(°C)")
+        plot_widget.setLabel("left", "FAN (%)")
         plot_widget.set_theme(plot_theme(self.palette()))
         left_axis = plot_widget.getPlotItem().getAxis("left")
         left_axis.setWidth(40)
