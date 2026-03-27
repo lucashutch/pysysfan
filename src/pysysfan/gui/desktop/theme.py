@@ -575,6 +575,8 @@ QDoubleSpinBox {{
 QComboBox::drop-down {{
     border: 0;
     width: 22px;
+    background: {colors["raised"]};
+    border-left: 1px solid {colors["border"]};
 }}
 
 QTableWidget,
@@ -844,7 +846,7 @@ QPushButton:pressed {{
 }}
 
 QPushButton#curveActionBtn {{
-    background: {colors["card"]};
+    background: {colors["panel"]};
     border: none;
     border-radius: 0;
     color: {button_text};
@@ -852,7 +854,7 @@ QPushButton#curveActionBtn {{
 }}
 
 QPushButton#curveActionBtn:hover {{
-    background: {colors["accent"]};
+    background: {colors["raised"]};
     color: {colors["window"]};
 }}
 
@@ -895,24 +897,26 @@ QDoubleSpinBox {{
 QComboBox {{
     background: {colors["base"]};
     border: none;
+    padding-left: 28px;
+    padding-right: 10px;
 }}
 
 QComboBox::drop-down {{
     border: none;
     width: 28px;
+    background: {colors["raised"]};
+    border-left: none;
+    subcontrol-origin: padding;
+    subcontrol-position: left center;
 }}
 
 QComboBox::down-arrow {{
     image: none;
-    width: 10px;
-    height: 10px;
-}}
-
-QComboBox::down-arrow:after {{
-    content: "▼";
-    color: {colors["text"]};
-    font-size: 10px;
-    font-weight: 700;
+    width: 0;
+    height: 0;
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 8px solid {colors["accent"]};
 }}
 
 QComboBox:hover {{
@@ -979,6 +983,7 @@ QHeaderView::section {{
 QTableWidget#pointsTable {{
     border-radius: 0;
     background: {colors["base"]};
+    gridline-color: transparent;
 }}
 
 QTableWidget#pointsTable QHeaderView::section {{
@@ -1130,13 +1135,13 @@ QWidget#curvesLeftColumn {{
         QFrame#previewGroup {{
             background: {colors["raised"]};
             border: none;
-            border-left: 4px solid {colors["accent"]};
+            border-left: 4px solid #a78bfa;
             border-radius: 0;
         }}
 
         QLabel#previewResultLabel {{
             background: {colors["panel"]};
-            border: 1px solid rgba(94, 180, 255, 0.45);
+            border: 1px solid rgba(167, 139, 250, 0.45);
             border-radius: 0px;
             padding: 10px 12px;
             color: {colors["text"]};
