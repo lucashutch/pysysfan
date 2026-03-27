@@ -106,12 +106,27 @@ class ServicePage(QWidget):
         self.refresh_button.clicked.connect(self.refresh_data)
         toolbar.addWidget(self.refresh_button)
 
+        self.clear_diagnostics_button = QPushButton("Clear", self)
+        self.clear_diagnostics_button.setObjectName("serviceRefreshBtn")
+        self.clear_diagnostics_button.clicked.connect(
+            lambda: self.diagnostics_view.clear()
+        )
+
+        self.copy_diagnostics_button = QPushButton("Copy All", self)
+        self.copy_diagnostics_button.setObjectName("serviceRefreshBtn")
+        self.copy_diagnostics_button.clicked.connect(
+            self._copy_diagnostics_to_clipboard
+        )
+
         self.message_label = QLabel("", self)
         self.message_label.setObjectName("serviceMessageLabel")
         self.message_label.setWordWrap(False)
         self.message_label.hide()
         toolbar.addWidget(self.message_label)
+
         toolbar.addStretch(1)
+        toolbar.addWidget(self.clear_diagnostics_button)
+        toolbar.addWidget(self.copy_diagnostics_button)
         layout.addLayout(toolbar)
 
         self.start_stop_button = QPushButton("▶ Start", self)
@@ -321,33 +336,19 @@ class ServicePage(QWidget):
         self._diagnostics_panel.setObjectName("serviceDiagnosticsPanel")
         diagnostics_layout = QVBoxLayout(self._diagnostics_panel)
         diagnostics_layout.setContentsMargins(16, 0, 16, 16)
-        diagnostics_layout.setSpacing(10)
+        diagnostics_layout.setSpacing(12)
 
         diagnostics_header = QHBoxLayout()
-        diagnostics_title = QLabel("Diagnostics Log", self._diagnostics_panel)
+        diagnostics_title = QLabel("LOG", self._diagnostics_panel)
         diagnostics_title.setObjectName("serviceDiagnosticsTitle")
         diagnostics_header.addWidget(diagnostics_title)
         diagnostics_header.addStretch(1)
-
-        self.clear_diagnostics_button = QPushButton("Clear", self)
-        self.clear_diagnostics_button.setObjectName("serviceRefreshBtn")
-        self.clear_diagnostics_button.clicked.connect(
-            lambda: self.diagnostics_view.clear()
-        )
-        diagnostics_header.addWidget(self.clear_diagnostics_button)
-
-        self.copy_diagnostics_button = QPushButton("Copy All", self)
-        self.copy_diagnostics_button.setObjectName("serviceRefreshBtn")
-        self.copy_diagnostics_button.clicked.connect(
-            self._copy_diagnostics_to_clipboard
-        )
-        diagnostics_header.addWidget(self.copy_diagnostics_button)
         diagnostics_layout.addLayout(diagnostics_header)
 
         self.diagnostics_view = QTextEdit(self)
         self.diagnostics_view.setObjectName("diagnosticsView")
         self.diagnostics_view.setReadOnly(True)
-        self.diagnostics_view.setMinimumHeight(260)
+        self.diagnostics_view.setMinimumHeight(290)
         self.diagnostics_view.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
         self.diagnostics_view.setHorizontalScrollBarPolicy(
             Qt.ScrollBarPolicy.ScrollBarAsNeeded

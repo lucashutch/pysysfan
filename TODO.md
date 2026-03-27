@@ -1,7 +1,9 @@
 # TODO
 ## Bug Fixes
 
-- fix alignment fo diagnostic logs. it should be the same as the serivce running indicator in the left panel.
+- Fix alignment of diagnostic logs so it matches the service running indicator in the left panel.
+- Rename diagnostics log header to `LOG` and square the log corners.
+- Improve minimise-to-tray toggle contrast and match running-state green.
 
 ---
 
