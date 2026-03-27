@@ -1007,17 +1007,69 @@ QTableWidget#pointsTable::item:selected {{
     color: {colors["window"]};
 }}
 
-QFrame[accordionSection="true"] {{
+QFrame[accordionSection="true"][accordionAccentIndex="0"] {{
     background: {colors["raised"]};
     border: none;
-    border-left: 4px solid rgba(94, 180, 255, 0.25);
+    border-left: 4px solid rgba(96, 165, 250, 0.35);
     border-radius: 0;
     max-width: 400px;
 }}
 
-QFrame[accordionSection="true"][accordionOpen="true"] {{
+QFrame[accordionSection="true"][accordionAccentIndex="1"] {{
+    background: {colors["raised"]};
+    border: none;
+    border-left: 4px solid rgba(111, 251, 133, 0.75);
+    border-radius: 0;
+    max-width: 400px;
+}}
+
+QFrame[accordionSection="true"][accordionAccentIndex="2"] {{
+    background: {colors["raised"]};
+    border: none;
+    border-left: 4px solid rgba(255, 168, 79, 0.75);
+    border-radius: 0;
+    max-width: 400px;
+}}
+
+QFrame[accordionSection="true"][accordionAccentIndex="3"] {{
+    background: {colors["raised"]};
+    border: none;
+    border-left: 4px solid rgba(34, 211, 238, 0.75);
+    border-radius: 0;
+    max-width: 400px;
+}}
+
+QFrame[accordionSection="true"][accordionAccentIndex="4"] {{
+    background: {colors["raised"]};
+    border: none;
+    border-left: 4px solid rgba(167, 139, 250, 0.75);
+    border-radius: 0;
+    max-width: 400px;
+}}
+
+QFrame[accordionSection="true"][accordionOpen="true"][accordionAccentIndex="0"] {{
     background: {colors["panel"]};
-    border-left: 4px solid {colors["accent"]};
+    border-left: 4px solid #60a5fa;
+}}
+
+QFrame[accordionSection="true"][accordionOpen="true"][accordionAccentIndex="1"] {{
+    background: {colors["panel"]};
+    border-left: 4px solid #6ffb85;
+}}
+
+QFrame[accordionSection="true"][accordionOpen="true"][accordionAccentIndex="2"] {{
+    background: {colors["panel"]};
+    border-left: 4px solid #ffa84f;
+}}
+
+QFrame[accordionSection="true"][accordionOpen="true"][accordionAccentIndex="3"] {{
+    background: {colors["panel"]};
+    border-left: 4px solid #22d3ee;
+}}
+
+QFrame[accordionSection="true"][accordionOpen="true"][accordionAccentIndex="4"] {{
+    background: {colors["panel"]};
+    border-left: 4px solid #a78bfa;
 }}
 
 QWidget[accordionHeaderContainer="true"] {{

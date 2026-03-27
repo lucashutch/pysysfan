@@ -226,6 +226,7 @@ class CurvesPage(QWidget):
             summary="3 points · Hysteresis 3.0°C",
             open_=True,
         )
+        self.curve_points_section.setProperty("accordionAccentIndex", 0)
         curve_points_actions_top = QHBoxLayout()
         curve_points_actions_top.setSpacing(8)
         curve_points_actions_top.addStretch(1)
@@ -251,29 +252,59 @@ class CurvesPage(QWidget):
             "Fan Assignment",
             summary="No fan selected",
         )
+        self.fan_assignment_section.setProperty("accordionAccentIndex", 1)
         fan_assignment_layout = QGridLayout()
         fan_assignment_layout.setHorizontalSpacing(10)
         fan_assignment_layout.setVerticalSpacing(10)
+        fan_assignment_layout.setContentsMargins(0, 0, 0, 0)
+        fan_assignment_layout.setColumnStretch(0, 0)
+        fan_assignment_layout.setColumnStretch(1, 1)
         fan_assignment_layout.addWidget(QLabel("Fan", self), 0, 0)
-        fan_assignment_layout.addWidget(self.fan_selector, 0, 1)
+        fan_assignment_layout.addWidget(
+            self.fan_selector,
+            0,
+            1,
+            1,
+            1,
+            Qt.AlignmentFlag.AlignRight,
+        )
         fan_assignment_layout.addWidget(QLabel("Assigned curve", self), 1, 0)
-        fan_assignment_layout.addWidget(self.fan_curve_selector, 1, 1)
+        fan_assignment_layout.addWidget(
+            self.fan_curve_selector,
+            1,
+            1,
+            1,
+            1,
+            Qt.AlignmentFlag.AlignRight,
+        )
         self.fan_assignment_section.add_layout(fan_assignment_layout)
 
         self.sensor_mapping_section = self.accordion.add_section(
             "Sensor Mapping",
             summary="No sensors selected",
         )
+        self.sensor_mapping_section.setProperty("accordionAccentIndex", 2)
         sensor_mapping_layout = QGridLayout()
         sensor_mapping_layout.setHorizontalSpacing(10)
         sensor_mapping_layout.setVerticalSpacing(10)
+        sensor_mapping_layout.setContentsMargins(0, 0, 0, 0)
+        sensor_mapping_layout.setColumnStretch(0, 0)
+        sensor_mapping_layout.setColumnStretch(1, 1)
         sensor_mapping_layout.addWidget(QLabel("Temp sensor IDs", self), 0, 0)
-        sensor_mapping_layout.addWidget(self.temp_ids_edit, 0, 1)
+        sensor_mapping_layout.addWidget(
+            self.temp_ids_edit,
+            0,
+            1,
+            1,
+            1,
+            Qt.AlignmentFlag.AlignRight,
+        )
         sensor_mapping_layout.addWidget(QLabel("Aggregation", self), 1, 0)
         aggregation_wrapper = QHBoxLayout()
-        aggregation_wrapper.addWidget(self.aggregation_selector)
-        aggregation_wrapper.addStretch(1)
-        self.aggregation_selector.setMaximumWidth(150)
+        aggregation_wrapper.setContentsMargins(0, 0, 0, 0)
+        aggregation_wrapper.addWidget(
+            self.aggregation_selector, 0, Qt.AlignmentFlag.AlignRight
+        )
         sensor_mapping_layout.addLayout(aggregation_wrapper, 1, 1)
         sensor_mapping_layout.addWidget(self.save_fan_button, 2, 0, 1, 2)
         self.sensor_mapping_section.add_layout(sensor_mapping_layout)
@@ -282,9 +313,13 @@ class CurvesPage(QWidget):
             "General Settings",
             summary="Poll 1.0s · Hysteresis 3.0°C",
         )
+        self.general_settings_section.setProperty("accordionAccentIndex", 3)
         general_settings_layout = QGridLayout()
         general_settings_layout.setHorizontalSpacing(10)
         general_settings_layout.setVerticalSpacing(10)
+        general_settings_layout.setContentsMargins(0, 0, 0, 0)
+        general_settings_layout.setColumnStretch(0, 0)
+        general_settings_layout.setColumnStretch(1, 1)
         general_settings_layout.addWidget(QLabel("Poll interval (s)", self), 0, 0)
         general_settings_layout.addWidget(self.poll_interval_spin, 0, 1)
         general_settings_layout.addWidget(QLabel("Hysteresis (°C)", self), 1, 0)
@@ -296,11 +331,22 @@ class CurvesPage(QWidget):
             "Profiles",
             summary="default",
         )
+        self.profiles_section.setProperty("accordionAccentIndex", 4)
         profile_layout = QGridLayout()
         profile_layout.setHorizontalSpacing(10)
         profile_layout.setVerticalSpacing(10)
+        profile_layout.setContentsMargins(0, 0, 0, 0)
+        profile_layout.setColumnStretch(0, 0)
+        profile_layout.setColumnStretch(1, 1)
         profile_layout.addWidget(QLabel("Profile", self), 0, 0)
-        profile_layout.addWidget(self.profile_selector, 0, 1)
+        profile_layout.addWidget(
+            self.profile_selector,
+            0,
+            1,
+            1,
+            1,
+            Qt.AlignmentFlag.AlignRight,
+        )
         profile_btn_container = QWidget()
         profile_btn_layout = QVBoxLayout(profile_btn_container)
         profile_btn_layout.setSpacing(8)
@@ -427,10 +473,27 @@ class CurvesPage(QWidget):
             self.save_settings_button,
         ]
         for btn in buttons:
+            if btn in {
+                self.new_curve_button,
+                self.save_curve_button,
+                self.delete_curve_button,
+            }:
+                min_width = 110
+            else:
+                min_width = 130
             btn.setSizePolicy(
                 QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed
             )
-            btn.setMinimumWidth(130)
+            btn.setMinimumWidth(min_width)
+
+        # Ensure profile buttons are all the same width.
+        profile_btn_width = self.switch_profile_button.minimumWidth()
+        for btn in (
+            self.new_profile_button,
+            self.rename_profile_button,
+            self.profile_refresh_button,
+        ):
+            btn.setMinimumWidth(profile_btn_width)
 
     def _align_combo_items(self, combo: QComboBox) -> None:
         """Ensure combo box dropdown items are right-aligned."""
