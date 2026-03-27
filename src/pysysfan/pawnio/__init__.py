@@ -7,6 +7,8 @@ See https://pawnio.eu/ for details.
 
 import logging
 import subprocess
+import sys
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +18,77 @@ PAWNIO_API_URL = f"https://api.github.com/repos/{PAWNIO_REPO}/releases/latest"
 
 # Windows service name registered by the PawnIO driver
 PAWNIO_SERVICE_NAME = "PawnIO"
+
+
+_PAWNIO_VERSION_MARKER_FILE = Path.home() / ".pysysfan" / ".pawnio_version"
+
+
+def _read_pawnio_version_marker(marker_file: Path | None = None) -> str | None:
+    """Read PawnIO version from the local marker file (if present)."""
+    if marker_file is None:
+        marker_file = _PAWNIO_VERSION_MARKER_FILE
+    try:
+        if marker_file.is_file():
+            lines = marker_file.read_text(encoding="utf-8").strip().splitlines()
+            if lines:
+                return lines[0]
+    except OSError:
+        return None
+    return None
+
+
+def get_installed_pawnio_version() -> str | None:
+    """Return the installed PawnIO version.
+
+    Windows "Installed apps" reads the version from the uninstaller registry
+    entry (DisplayVersion). We do the same for a UI-accurate result.
+
+    Falls back to the local marker file used by the installer.
+    """
+
+    if sys.platform != "win32":
+        return _read_pawnio_version_marker()
+
+    try:
+        import winreg  # type: ignore
+    except Exception:
+        return _read_pawnio_version_marker()
+
+    uninstall_keys = [
+        r"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+        r"SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+    ]
+
+    for root in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+        for key_path in uninstall_keys:
+            try:
+                with winreg.OpenKey(root, key_path) as key:
+                    subkey_count = winreg.QueryInfoKey(key)[0]
+                    for i in range(subkey_count):
+                        subkey_name = winreg.EnumKey(key, i)
+                        with winreg.OpenKey(
+                            root, f"{key_path}\\{subkey_name}"
+                        ) as subkey:
+                            display_name, _ = winreg.QueryValueEx(subkey, "DisplayName")
+                            if "pawnio" not in str(display_name).lower():
+                                continue
+                            try:
+                                display_version, _ = winreg.QueryValueEx(
+                                    subkey, "DisplayVersion"
+                                )
+                            except FileNotFoundError:
+                                display_version = None
+
+                            if display_version:
+                                version = str(display_version).strip()
+                                if version and not version.lower().startswith("v"):
+                                    version = f"v{version}"
+                                return version
+            except Exception:
+                # Ignore missing keys or access failures.
+                continue
+
+    return _read_pawnio_version_marker()
 
 
 def is_pawnio_installed() -> bool:

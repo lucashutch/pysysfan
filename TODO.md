@@ -1,7 +1,7 @@
 # TODO
 ## Bug Fixes
 
-- pawnio version is incorrectly being obtained. i have 2.2 installed but the ui is showing 1.2
+- [x] pawnio version is now read from the Windows "Installed apps" registry (fixes mismatch with local markers)
 - fix alignment fo diagnostic logs. it should be the same as the serivce running indicator in the left panel.
 
 ---
