@@ -7,6 +7,7 @@ individual series visibility.
 
 from __future__ import annotations
 
+import re
 from math import ceil
 from typing import Callable
 
@@ -509,7 +510,7 @@ class GraphsPage(QWidget):
         return {
             series_id: label
             for series_id, label in catalog.items()
-            if self._is_selectable_series_id(series_id)
+            if self._is_selectable_series_id(series_id, label)
         }
 
     def _current_history(self) -> dict:
@@ -656,9 +657,15 @@ class GraphsPage(QWidget):
         return (last_x, series_data[-1][1])
 
     @staticmethod
-    def _is_selectable_series_id(series_id: str) -> bool:
+    def _is_selectable_series_id(series_id: str, label: str = "") -> bool:
         blocked_prefixes = ("const::", "min::", "max::", "marker::")
-        return not series_id.startswith(blocked_prefixes)
+        if series_id.startswith(blocked_prefixes):
+            return False
+        if label:
+            label_lower = label.lower()
+            if re.search(r"core\s+\d+", label_lower):
+                return False
+        return True
 
     # ------------------------------------------------------------------
     # Theming
