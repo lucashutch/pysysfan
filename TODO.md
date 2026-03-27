@@ -12,4 +12,4 @@
 ## UI Redesign
 - **[x] Config tab color/styling** - Phase 1 (preview accent + tooltip card styling)
 - **[x] Config tab color/styling** - Phase 2 (accordion cards)
-- **[ ] Config tab color/styling** - Phase 3 (points table)
+- **[x] Config tab color/styling** - Phase 3 (points table)

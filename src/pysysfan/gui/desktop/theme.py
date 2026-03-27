@@ -947,6 +947,36 @@ QHeaderView::section {{
     font-weight: 700;
 }}
 
+QTableWidget#pointsTable {{
+    border-radius: 0;
+    background: {colors["base"]};
+}}
+
+QTableWidget#pointsTable QHeaderView::section {{
+    background: {colors["panel"]};
+    color: {colors["muted"]};
+    border-bottom: 1px solid {colors["border"]};
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+}}
+
+QTableWidget#pointsTable::item {{
+    font-family: Consolas, monospace;
+    font-size: 11px;
+    font-weight: 900;
+    padding: 6px;
+}}
+
+QTableWidget#pointsTable::item:alternate {{
+    background: {colors["raised"]};
+}}
+
+QTableWidget#pointsTable::item:selected {{
+    background: rgba(94, 180, 255, 0.25);
+    color: {colors["window"]};
+}}
+
 QFrame[accordionSection="true"] {{
     background: {colors["raised"]};
     border: none;
