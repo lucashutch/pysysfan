@@ -108,6 +108,7 @@ class MainWindow(QMainWindow):
         super().showEvent(event)
         if not self._first_show_done:
             self._first_show_done = True
+            self.data_provider.start_polling()
             for page in (
                 self.dashboard_page,
                 self.graphs_page,
