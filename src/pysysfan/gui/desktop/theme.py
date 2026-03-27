@@ -204,7 +204,6 @@ QToolButton#alertsButton::menu-indicator {{
 def graphs_page_stylesheet(palette: QPalette) -> str:
     """Return a palette-aware stylesheet for the graphs page."""
     colors = desktop_colors(palette)
-    active_border = colors["accent"]
     return f"""
 QWidget#graphsRoot {{
     background: {colors["window"]};
@@ -227,41 +226,36 @@ QLabel#graphsHeaderSubtitle {{
 }}
 
 QPushButton[graphTab="true"] {{
-    border: 1px solid {colors["border"]};
-    border-radius: 8px;
+    border: none;
     padding: 6px 16px;
     font-weight: 700;
     font-size: 12px;
-    background: {colors["raised"]};
+    background: transparent;
     color: {colors["muted"]};
 }}
 
 QPushButton[graphTab="true"]:checked {{
-    background: {colors["panel"]};
-    border-color: {active_border};
-    color: {colors["text"]};
+    background: {colors["accent"]};
+    color: {colors["window"]};
 }}
 
 QPushButton[historyBtn="true"] {{
-    border: 1px solid {colors["border"]};
-    border-radius: 8px;
+    border: none;
     padding: 4px 12px;
     font-size: 11px;
     font-weight: 600;
-    background: {colors["raised"]};
+    background: transparent;
     color: {colors["muted"]};
 }}
 
 QPushButton[historyBtn="true"]:checked {{
-    background: {colors["panel"]};
-    border-color: {active_border};
-    color: {colors["text"]};
+    background: {colors["accent"]};
+    color: {colors["window"]};
 }}
 
 QFrame#graphsDrawer {{
     background: {colors["raised"]};
-    border: 1px solid {colors["border"]};
-    border-radius: 14px;
+    border: none;
 }}
 
 QFrame#graphsStatsRow {{
@@ -275,9 +269,8 @@ QLabel#graphsStatsLabel {{
 }}
 
 QFrame#graphsLegendBar {{
-    background: {colors["panel"]};
-    border: 1px solid {colors["border"]};
-    border-radius: 12px;
+    background: transparent;
+    border: none;
     min-height: 32px;
 }}
 
