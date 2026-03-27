@@ -116,7 +116,12 @@ def test_service_page_shows_popup_for_admin_elevation(qtbot, tmp_path) -> None:
     with patch.object(QMessageBox, "information") as mock_information:
         page.install_uninstall_button.click()
 
-    mock_information.assert_called_once()
+    mock_information.assert_not_called()
+    assert page.message_label.text() == (
+        "Windows asked for Administrator permission for `pysysfan service install`. "
+        "Approve the Windows UAC prompt to continue. If no prompt appears, "
+        "close PySysFan and relaunch it as Administrator."
+    )
 
 
 def test_service_page_confirms_repair_when_task_already_installed(
