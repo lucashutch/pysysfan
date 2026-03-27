@@ -251,7 +251,7 @@ QPushButton[historyBtn="true"]:checked {{
 }}
 
 QFrame#graphsDrawer {{
-    background: {colors["raised"]};
+    background: {colors["panel"]};
     border: none;
 }}
 
@@ -268,13 +268,18 @@ QLabel#graphsStatsLabel {{
 }}
 
 QFrame#graphsLegendBar {{
-    background: transparent;
+    background: {colors["raised"]};
     border: none;
     min-height: 32px;
 }}
 
 QFrame#graphsControlsRow {{
     background: transparent;
+}}
+
+QLabel#graphsHoverLabel {{
+    color: {colors["muted"]};
+    font-size: 10px;
 }}
 """
 
