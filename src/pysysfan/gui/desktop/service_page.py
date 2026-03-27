@@ -38,6 +38,7 @@ from pysysfan.gui.desktop.theme import (
 )
 from pysysfan.config import DEFAULT_CONFIG_DIR
 from pysysfan.platforms import windows_service
+from pysysfan.pawnio import get_installed_pawnio_version
 from pysysfan.state_file import DEFAULT_STATE_PATH
 
 
@@ -290,9 +291,9 @@ class ServicePage(QWidget):
 
         pawnio_text = QVBoxLayout()
         pawnio_text.setSpacing(2)
-        pawnio_title = QLabel("PawnIO v1.2.0", pawnio_card)
-        pawnio_title.setObjectName("serviceComponentTitle")
-        pawnio_text.addWidget(pawnio_title)
+        self.pawnio_version_label = QLabel("PawnIO ...", pawnio_card)
+        self.pawnio_version_label.setObjectName("serviceComponentTitle")
+        pawnio_text.addWidget(self.pawnio_version_label)
         pawnio_layout.addLayout(pawnio_text, stretch=1)
         pawnio_layout.addWidget(self.install_pawnio_button)
 
@@ -396,6 +397,12 @@ class ServicePage(QWidget):
         self._apply_status(service_status, daemon_state)
         self._apply_details(task_details, service_status)
         self._apply_diagnostics(task_details, daemon_state)
+
+        pawnio_version = get_installed_pawnio_version()
+        if pawnio_version:
+            self.pawnio_version_label.setText(f"PawnIO {pawnio_version}")
+        else:
+            self.pawnio_version_label.setText("PawnIO not installed")
 
     def _run_action(self, action: str, confirm_message: str | None = None) -> None:
         if action == "install" and self._task_installed and confirm_message is None:

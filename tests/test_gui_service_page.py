@@ -55,7 +55,11 @@ def test_service_page_refresh_populates_status_and_diagnostics(qtbot, tmp_path) 
     )
     qtbot.addWidget(page)
 
-    page.refresh_data()
+    with patch(
+        "pysysfan.gui.desktop.service_page.get_installed_pawnio_version",
+        return_value="v2.2.0.0",
+    ):
+        page.refresh_data()
 
     assert page.connection_label.text() == "Service state: Ready"
     assert page.findChild(QFrame, "serviceSidebar") is not None
@@ -65,6 +69,7 @@ def test_service_page_refresh_populates_status_and_diagnostics(qtbot, tmp_path) 
     assert page.detail_task_value.text() == "Installed"
     assert page.detail_schedule_value.text() == "Enabled"
     assert page.detail_trigger_value.text() == "On Logon"
+    assert page.pawnio_version_label.text() == "PawnIO v2.2.0.0"
 
 
 def test_service_page_sets_button_states_from_status(qtbot, tmp_path) -> None:
