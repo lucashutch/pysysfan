@@ -29,6 +29,13 @@
 - Run `uv run ruff check --fix` and `uv run ruff format`
 - Run `uv run pytest tests/`
 
+## Curve Points Table Visibility Fix
+- Fix the Configuration tab curve points table getting clipped when multiple accordion sections are expanded.
+
+## Verification
+- Run `uv run ruff check --fix` and `uv run ruff format`
+- Run `uv run python -m pytest tests/`
+
 ## Service Diagnostics Log Improvements
 - Renamed diagnostics header to `LOG` and squared log corners.
 - Increased diagnostics log height to extend further toward the bottom.

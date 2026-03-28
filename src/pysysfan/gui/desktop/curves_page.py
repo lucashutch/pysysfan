@@ -532,6 +532,41 @@ class CurvesPage(QWidget):
         ):
             btn.setMinimumWidth(profile_btn_width)
 
+    def _sync_curve_points_accordion_min_height(self) -> None:
+        """Prevent the points table from collapsing inside the accordion."""
+
+        # QTableWidget.sizeHint()/minimumHeight can lag behind during rapid
+        # curve swaps (rowCount set -> items inserted -> layout pass). To
+        # avoid using a stale hint, base the minimum height strictly on the
+        # current row count and known per-row/header metrics.
+        row_count = self.points_table.rowCount()
+        if row_count <= 0:
+            self.points_table.setMinimumHeight(90)
+            return
+
+        # These metrics can temporarily lag right after we swap curve types
+        # (rowCount -> insertRow -> layout). For min-height purposes we want
+        # stable, not “best effort”.
+        row_height = self.points_table.verticalHeader().defaultSectionSize()
+        if row_height <= 0:
+            row_height = 24
+
+        # Matches the styled header view used in the points table.
+        header_height = 28
+
+        padding = 16  # header spacing + a bit of breathing room
+        min_height = int(header_height + row_count * row_height + padding)
+        self.points_table.setMinimumHeight(max(min_height, 90))
+
+        # Ensure the containing accordion keeps up with the table's updated
+        # minimum size hint.
+        section_hint = self.curve_points_section.sizeHint().height()
+        if section_hint > 0:
+            self.curve_points_section.setMinimumHeight(section_hint)
+
+        self.points_table.updateGeometry()
+        self.curve_points_section.updateGeometry()
+
     def _align_combo_items(self, combo: QComboBox) -> None:
         """Ensure combo box dropdown items are right-aligned."""
         model = combo.model()
@@ -846,6 +881,9 @@ class CurvesPage(QWidget):
                 last_temp = float(temp_item.text())
 
         self._append_point_row(min(last_temp + 10.0, 100.0), 50.0)
+        self._sync_curve_points_accordion_min_height()
+        self.preview_curve()
+        self._update_section_summaries()
 
     def remove_selected_point(self) -> None:
         """Remove the selected point if enough remain."""
@@ -859,6 +897,7 @@ class CurvesPage(QWidget):
             return
         self.points_table.removeRow(row)
         self._refresh_point_indices()
+        self._sync_curve_points_accordion_min_height()
         self.preview_curve()
 
     def _refresh_point_indices(self) -> None:
@@ -970,6 +1009,7 @@ class CurvesPage(QWidget):
         for temp, speed in points:
             self._append_point_row(float(temp), float(speed))
         self._syncing_points = False
+        self._sync_curve_points_accordion_min_height()
         self.preview_curve()
         self._update_section_summaries()
 
@@ -1057,6 +1097,7 @@ class CurvesPage(QWidget):
         for temperature, speed in points:
             self._append_point_row(temperature, speed)
         self._syncing_points = False
+        self._sync_curve_points_accordion_min_height()
         self.preview_curve()
 
     def _update_live_preview_summary(self) -> None:

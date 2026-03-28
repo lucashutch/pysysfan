@@ -20,3 +20,5 @@
 - **[x] Config tab dropdown arrow polish** - Match the arrow background to the combo box and switch to a larger SVG chevron for clearer affordance.
 - **[x] Dashboard hierarchy + label polish** - Improve desktop typography, split dashboard sensor names and values into separate columns, humanize sensor/fan labels, add raw-name tooltips, and align curve/actual accents with the redesign mockup.
 - **[x] Sidebar compact tuning** - Reduce sidebar text sizes, enlarge the running line, move notifications to the footer, flatten the alerts button, and keep the left rail visually compact.
+
+- **[x] Config tab curve points accordion clipping fix** - Set points table/accordion minimum height to prevent the table from collapsing when other accordions are expanded.
