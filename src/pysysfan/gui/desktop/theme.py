@@ -2,7 +2,28 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
+from functools import lru_cache
+
 from PySide6.QtGui import QColor, QPalette
+
+# Heroicons chevron-down used for QComboBox drop-down arrows.
+_CHEVRON_DOWN_SVG = """\
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 9l6 6 6-6"/>
+</svg>"""
+
+
+@lru_cache(maxsize=8)
+def _combo_arrow_path(color: str) -> str:
+    """Return a temp-file path to a chevron-down SVG with the given fill."""
+    svg = _CHEVRON_DOWN_SVG.format(color=color)
+    fd, path = tempfile.mkstemp(suffix=".svg", prefix="pysysfan_arrow_")
+    os.write(fd, svg.encode("utf-8"))
+    os.close(fd)
+    return path.replace("\\", "/")
+
 
 PAGE_HEADING_STYLE = "font-size: 24px; font-weight: 800;"
 SECTION_HINT_STYLE = "font-size: 12px;"
@@ -346,6 +367,7 @@ def management_page_stylesheet(palette: QPalette) -> str:
     """Return a shared stylesheet for the Config and Service management pages."""
     colors = desktop_colors(palette)
     button_text = colors["text"]
+    arrow_path = _combo_arrow_path(colors["muted"])
     return f"""
 QWidget#managementPageRoot {{
     background: {colors["window"]};
@@ -575,8 +597,13 @@ QDoubleSpinBox {{
 QComboBox::drop-down {{
     border: 0;
     width: 22px;
-    background: {colors["raised"]};
-    border-left: 1px solid {colors["border"]};
+    background: {colors["base"]};
+}}
+
+QComboBox::down-arrow {{
+    image: url({arrow_path});
+    width: 16px;
+    height: 16px;
 }}
 
 QTableWidget,
@@ -624,6 +651,7 @@ def flat_management_page_stylesheet(palette: QPalette) -> str:
     """Return a flat, borderless stylesheet for Config and Service pages."""
     colors = desktop_colors(palette)
     button_text = colors["text"]
+    arrow_path = _combo_arrow_path(colors["accent"])
     return f"""
 QWidget#managementPageRoot {{
     background: {colors["window"]};
@@ -904,19 +932,16 @@ QComboBox {{
 QComboBox::drop-down {{
     border: none;
     width: 28px;
-    background: {colors["raised"]};
+    background: {colors["base"]};
     border-left: none;
     subcontrol-origin: padding;
     subcontrol-position: left center;
 }}
 
 QComboBox::down-arrow {{
-    image: none;
-    width: 0;
-    height: 0;
-    border-left: 6px solid transparent;
-    border-right: 6px solid transparent;
-    border-top: 8px solid {colors["accent"]};
+    image: url({arrow_path});
+    width: 16px;
+    height: 16px;
 }}
 
 QComboBox:hover {{

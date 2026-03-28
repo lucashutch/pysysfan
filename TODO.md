@@ -16,3 +16,4 @@
 
 ## UI Redesign Follow-ups
 - **[x] Config tab behavior + polish** - Fix accordion initial state, integer table + labeling, hover tooltip follows cursor, dropdown border removal, and save/delete button accents.
+- **[x] Config tab dropdown arrow polish** - Match the arrow background to the combo box and switch to a larger SVG chevron for clearer affordance.
