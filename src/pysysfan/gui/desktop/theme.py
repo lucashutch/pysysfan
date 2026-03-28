@@ -2,7 +2,28 @@
 
 from __future__ import annotations
 
+import os
+import tempfile
+from functools import lru_cache
+
 from PySide6.QtGui import QColor, QPalette
+
+# Heroicons chevron-down used for QComboBox drop-down arrows.
+_CHEVRON_DOWN_SVG = """\
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="{color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M6 9l6 6 6-6"/>
+</svg>"""
+
+
+@lru_cache(maxsize=8)
+def _combo_arrow_path(color: str) -> str:
+    """Return a temp-file path to a chevron-down SVG with the given fill."""
+    svg = _CHEVRON_DOWN_SVG.format(color=color)
+    fd, path = tempfile.mkstemp(suffix=".svg", prefix="pysysfan_arrow_")
+    os.write(fd, svg.encode("utf-8"))
+    os.close(fd)
+    return path.replace("\\", "/")
+
 
 PAGE_HEADING_STYLE = "font-size: 24px; font-weight: 800;"
 SECTION_HINT_STYLE = "font-size: 12px;"
@@ -346,6 +367,7 @@ def management_page_stylesheet(palette: QPalette) -> str:
     """Return a shared stylesheet for the Config and Service management pages."""
     colors = desktop_colors(palette)
     button_text = colors["text"]
+    arrow_path = _combo_arrow_path(colors["muted"])
     return f"""
 QWidget#managementPageRoot {{
     background: {colors["window"]};
@@ -575,6 +597,13 @@ QDoubleSpinBox {{
 QComboBox::drop-down {{
     border: 0;
     width: 22px;
+    background: {colors["base"]};
+}}
+
+QComboBox::down-arrow {{
+    image: url({arrow_path});
+    width: 16px;
+    height: 16px;
 }}
 
 QTableWidget,
@@ -622,6 +651,7 @@ def flat_management_page_stylesheet(palette: QPalette) -> str:
     """Return a flat, borderless stylesheet for Config and Service pages."""
     colors = desktop_colors(palette)
     button_text = colors["text"]
+    arrow_path = _combo_arrow_path(colors["accent"])
     return f"""
 QWidget#managementPageRoot {{
     background: {colors["window"]};
@@ -844,7 +874,7 @@ QPushButton:pressed {{
 }}
 
 QPushButton#curveActionBtn {{
-    background: {colors["card"]};
+    background: {colors["panel"]};
     border: none;
     border-radius: 0;
     color: {button_text};
@@ -852,7 +882,36 @@ QPushButton#curveActionBtn {{
 }}
 
 QPushButton#curveActionBtn:hover {{
+    background: {colors["raised"]};
+    color: {colors["window"]};
+}}
+
+QPushButton#saveCurveBtn {{
     background: {colors["accent"]};
+    border: none;
+    border-radius: 0;
+    color: {colors["window"]};
+    padding: 8px 16px;
+    font-weight: 900;
+}}
+
+QPushButton#saveCurveBtn:hover {{
+    background: rgba(94, 180, 255, 0.9);
+    color: {colors["window"]};
+}}
+
+QPushButton#deleteCurveBtn {{
+    background: transparent;
+    border: 1px solid {colors["error"]};
+    border-radius: 0;
+    color: {colors["error"]};
+    padding: 8px 16px;
+    font-weight: 900;
+}}
+
+QPushButton#deleteCurveBtn:hover {{
+    background: {colors["error"]};
+    border-color: {colors["error"]};
     color: {colors["window"]};
 }}
 
@@ -864,31 +923,30 @@ QDoubleSpinBox {{
 }}
 
 QComboBox {{
-    border: 1px solid {colors["border"]};
     background: {colors["base"]};
+    border: none;
+    padding-left: 28px;
+    padding-right: 10px;
 }}
 
 QComboBox::drop-down {{
     border: none;
     width: 28px;
+    background: {colors["base"]};
+    border-left: none;
+    subcontrol-origin: padding;
+    subcontrol-position: left center;
 }}
 
 QComboBox::down-arrow {{
-    image: none;
-    width: 10px;
-    height: 10px;
-}}
-
-QComboBox::down-arrow:after {{
-    content: "▼";
-    color: {colors["text"]};
-    font-size: 10px;
-    font-weight: 700;
+    image: url({arrow_path});
+    width: 16px;
+    height: 16px;
 }}
 
 QComboBox:hover {{
     background: {colors["raised"]};
-    border-color: {colors["accent"]};
+    border: none;
 }}
 
 QComboBox::item:hover {{
@@ -947,11 +1005,115 @@ QHeaderView::section {{
     font-weight: 700;
 }}
 
-QFrame[accordionSection="true"] {{
+QTableWidget#pointsTable {{
+    border-radius: 0;
+    background: {colors["base"]};
+    gridline-color: transparent;
+}}
+
+QTableWidget#pointsTable QHeaderView::section {{
+    background: {colors["panel"]};
+    color: {colors["muted"]};
+    border-bottom: 1px solid {colors["border"]};
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+}}
+
+QTableWidget#pointsTable::item {{
+    font-family: Consolas, monospace;
+    font-size: 11px;
+    font-weight: 900;
+    padding: 6px;
+    background: {colors["base"]};
+}}
+
+QTableWidget#pointsTable::item:alternate {{
+    background: {colors["raised"]};
+}}
+
+QTableWidget#pointsTable::item:selected {{
+    background: rgba(94, 180, 255, 0.25);
+    color: {colors["window"]};
+}}
+
+QFrame[accordionSection="true"][accordionAccentIndex="0"] {{
     background: {colors["raised"]};
     border: none;
+    border-left: 4px solid rgba(96, 165, 250, 0.35);
     border-radius: 0;
     max-width: 400px;
+}}
+
+QFrame[accordionSection="true"][accordionAccentIndex="1"] {{
+    background: {colors["raised"]};
+    border: none;
+    border-left: 4px solid rgba(111, 251, 133, 0.75);
+    border-radius: 0;
+    max-width: 400px;
+}}
+
+QFrame[accordionSection="true"][accordionAccentIndex="2"] {{
+    background: {colors["raised"]};
+    border: none;
+    border-left: 4px solid rgba(255, 168, 79, 0.75);
+    border-radius: 0;
+    max-width: 400px;
+}}
+
+QFrame[accordionSection="true"][accordionAccentIndex="3"] {{
+    background: {colors["raised"]};
+    border: none;
+    border-left: 4px solid rgba(34, 211, 238, 0.75);
+    border-radius: 0;
+    max-width: 400px;
+}}
+
+QFrame[accordionSection="true"][accordionAccentIndex="4"] {{
+    background: {colors["raised"]};
+    border: none;
+    border-left: 4px solid rgba(167, 139, 250, 0.75);
+    border-radius: 0;
+    max-width: 400px;
+}}
+
+QFrame[accordionSection="true"][accordionOpen="true"][accordionAccentIndex="0"] {{
+    background: {colors["panel"]};
+    border-left: 4px solid #60a5fa;
+}}
+
+QFrame[accordionSection="true"][accordionOpen="true"][accordionAccentIndex="1"] {{
+    background: {colors["panel"]};
+    border-left: 4px solid #6ffb85;
+}}
+
+QFrame[accordionSection="true"][accordionOpen="true"][accordionAccentIndex="2"] {{
+    background: {colors["panel"]};
+    border-left: 4px solid #ffa84f;
+}}
+
+QFrame[accordionSection="true"][accordionOpen="true"][accordionAccentIndex="3"] {{
+    background: {colors["panel"]};
+    border-left: 4px solid #22d3ee;
+}}
+
+QFrame[accordionSection="true"][accordionOpen="true"][accordionAccentIndex="4"] {{
+    background: {colors["panel"]};
+    border-left: 4px solid #a78bfa;
+}}
+
+QWidget[accordionHeaderContainer="true"] {{
+    background: transparent;
+}}
+
+QWidget[accordionHeaderContainer="true"]:hover {{
+    background: rgba(94, 180, 255, 0.08);
+}}
+
+QLabel[accordionIndicator="true"] {{
+    color: {colors["accent"]};
+    font-size: 14px;
+    font-weight: 900;
 }}
 
 QLabel[accordionHeader="true"] {{
@@ -960,13 +1122,14 @@ QLabel[accordionHeader="true"] {{
     padding: 8px 0;
     color: {colors["text"]};
     font-size: 12px;
-    font-weight: 700;
+    font-weight: 900;
+    letter-spacing: 0.06em;
 }}
 
 QLabel[accordionSummary="true"] {{
     color: {colors["muted"]};
     font-size: 11px;
-    font-weight: 600;
+    font-weight: 700;
 }}
 
 QWidget[accordionBody="true"] {{
@@ -989,16 +1152,28 @@ QWidget#curvesLeftColumn {{
     max-width: 400px;
 }}
 
-QWidget#curvesRightColumn {{
-    background: {colors["window"]};
-    border: none;
-}}
+        QWidget#curvesRightColumn {{
+            background: {colors["window"]};
+            border: none;
+        }}
 
-QFrame#previewGroup {{
-    background: {colors["raised"]};
-    border: none;
-    border-radius: 0;
-}}
+        QFrame#previewGroup {{
+            background: {colors["raised"]};
+            border: none;
+            border-left: 4px solid #a78bfa;
+            border-radius: 0;
+        }}
+
+        QLabel#previewResultLabel {{
+            background: {colors["panel"]};
+            border: 1px solid rgba(167, 139, 250, 0.45);
+            border-radius: 0px;
+            padding: 10px 12px;
+            color: {colors["text"]};
+            font-size: 11px;
+            font-weight: 800;
+            line-height: 1.25;
+        }}
 """
 
 

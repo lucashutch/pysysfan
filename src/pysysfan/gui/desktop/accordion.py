@@ -37,6 +37,7 @@ class AccordionSection(QFrame):
         self._title = title
         self._summary = summary
         self._is_open = False
+        self._state_applied = False
 
         outer_layout = QVBoxLayout(self)
         outer_layout.setContentsMargins(0, 0, 0, 0)
@@ -92,7 +93,9 @@ class AccordionSection(QFrame):
         self.body_widget.setObjectName("accordionBody")
         self.body_widget.setProperty("accordionBody", True)
         self.body_layout = QVBoxLayout(self.body_widget)
-        self.body_layout.setContentsMargins(12, 12, 12, 12)
+        # Reduce right padding so right-aligned controls sit closer
+        # to the accordion edge (mockup tighter inset).
+        self.body_layout.setContentsMargins(12, 12, 43, 12)
         self.body_layout.setSpacing(10)
 
         outer_layout.addWidget(header)
@@ -113,8 +116,18 @@ class AccordionSection(QFrame):
         return self._is_open
 
     def set_open(self, open_: bool) -> None:
+        if open_ == self._is_open and self._state_applied:
+            return
+
         self._is_open = open_
+        self.setProperty("accordionOpen", open_)
         self._apply_state(open_)
+        self._state_applied = True
+
+        # Re-polish so dynamic properties (used by QSS) take effect.
+        self.style().unpolish(self)
+        self.style().polish(self)
+        self.update()
 
     def add_widget(self, widget: QWidget) -> None:
         self.body_layout.addWidget(widget)

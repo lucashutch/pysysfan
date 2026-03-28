@@ -62,7 +62,7 @@ def test_curves_page_refresh_populates_curve_and_fan_data(qtbot, tmp_path) -> No
     assert page.temp_ids_edit.text() == "/cpu/temp/0"
     assert page.preview_plot.minimumWidth() >= 300
     assert page.preview_plot.minimumHeight() >= 400
-    assert page.points_table.columnWidth(0) >= 180
+    assert page.points_table.columnWidth(1) >= 180
     assert getattr(page, "allow_fan_off_checkbox", None) is None
 
 
@@ -95,7 +95,7 @@ def test_curves_page_save_persists_curve_to_yaml(qtbot, tmp_path) -> None:
     qtbot.addWidget(page)
     page.refresh_data()
 
-    page.points_table.item(0, 1).setText("35.0")
+    page.points_table.item(0, 2).setText("35.0")
     page.hysteresis_spin.setValue(5.0)
     page.save_curve()
 
