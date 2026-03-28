@@ -912,12 +912,14 @@ QPushButton#curveActionBtn {{
     border: none;
     border-radius: 0;
     color: {button_text};
+    font-weight: 900;
     padding: 8px 16px;
 }}
 
 QPushButton#curveActionBtn:hover {{
     background: {colors["raised"]};
-    color: {colors["window"]};
+    color: {button_text};
+    font-weight: 900;
 }}
 
 QPushButton#saveCurveBtn {{
@@ -1253,7 +1255,7 @@ QLabel#sidebarBrand {{
     letter-spacing: 0.08em;
 }}
 QLabel#sidebarSubtitle {{
-    font-size: 16px;
+    font-size: 11.2px;
     color: {colors["muted"]};
     font-weight: 700;
     letter-spacing: 0.12em;
@@ -1320,13 +1322,15 @@ QToolButton#alertsButton::menu-indicator {{
 def plot_theme(palette: QPalette) -> dict[str, str | list[str]]:
     """Return palette-aware colors for pyqtgraph widgets."""
     colors = desktop_colors(palette)
+    # Keep pyqtgraph series colors aligned with dashboard highlight colors.
     series = [
-        "#60a5fa",  # blue
-        "#f59e0b",  # amber
-        "#f87171",  # red
+        colors["accent"],  # blue
+        colors["tertiary"],  # amber
+        "#ef4444",  # red
+        colors["secondary"],  # green
         "#a78bfa",  # purple
         "#f472b6",  # pink
-        "#c084fc",  # violet
+        "#22d3ee",  # cyan
     ]
     return {
         "background": colors["graph"],

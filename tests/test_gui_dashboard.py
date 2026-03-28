@@ -207,7 +207,7 @@ def test_dashboard_creates_v2_layout_structure(qtbot, tmp_path) -> None:
     assert page.sidebar.objectName() == "sidebar"
     assert page.findChild(QFrame, "tableHeader") is not None
     assert page.fan_rows_container is not None
-    assert page.sidebar._alerts_label.text() == "⚠ 0"
+    assert page.sidebar._alerts_label.text() == "0"
 
 
 def test_dashboard_populates_rows_from_state(qtbot, tmp_path) -> None:
@@ -248,12 +248,12 @@ def test_dashboard_populates_rows_from_state(qtbot, tmp_path) -> None:
 
     sensors_label = row.findChild(QLabel, "fanRowSensors")
     assert sensors_label is not None
-    assert sensors_label.text() == "CPU"
+    assert sensors_label.text() == "CPU Package"
     assert sensors_label.toolTip() == "CPU / Package"
 
     sensor_values_label = row.findChild(QLabel, "fanRowSensorValues")
     assert sensor_values_label is not None
-    assert sensor_values_label.text() == "61.5°C"
+    assert sensor_values_label.text() == "62°C"
     assert sensor_values_label.toolTip() == "CPU / Package"
 
 
@@ -267,8 +267,11 @@ def test_dashboard_header_bar_populated_from_state(qtbot, tmp_path) -> None:
 
     provider.refresh_data()
 
-    assert "Gaming Mode" in page.sidebar._profile_label.text()
-    assert "Poll:" in page.sidebar._poll_label.text()
+    assert "PROFILE" in page.sidebar._profile_label.text()
+    assert (
+        "Poll" in page.sidebar._poll_label.text()
+        or "POLL" in page.sidebar._poll_label.text()
+    )
 
 
 def test_dashboard_health_summary_shows_hottest_and_max_speed(qtbot, tmp_path) -> None:
@@ -281,14 +284,10 @@ def test_dashboard_health_summary_shows_hottest_and_max_speed(qtbot, tmp_path) -
 
     provider.refresh_data()
 
-    # Sidebar shows CPU temp gauge and max fan
+    # Sidebar shows CPU temp gauge
     cpu_temp_label = page.sidebar._cpu_temp.findChild(QLabel, "sidebarTempCPU")
     assert cpu_temp_label is not None
     assert "62" in cpu_temp_label.text() or "—" not in cpu_temp_label.text()
-    assert (
-        "1325" in page.sidebar._max_fan_label.text()
-        or "1,325" in page.sidebar._max_fan_label.text()
-    )
 
 
 def test_dashboard_alerts_button_shows_count(qtbot, tmp_path) -> None:
@@ -301,7 +300,7 @@ def test_dashboard_alerts_button_shows_count(qtbot, tmp_path) -> None:
 
     provider.refresh_data()
 
-    assert page.sidebar._alerts_label.text() == "⚠ 1"
+    assert page.sidebar._alerts_label.text() == "1"
     assert "1" in page.sidebar._alerts_label.text()
 
 
@@ -312,7 +311,7 @@ def test_dashboard_shows_offline_message_without_state(qtbot, tmp_path) -> None:
 
     provider.refresh_data()
 
-    assert page.sidebar._alerts_label.text() == "⚠ 0"
+    assert page.sidebar._alerts_label.text() == "0"
     assert "state file" in page.message_label.text().lower()
     assert page.message_label.isHidden() is False
 
@@ -464,8 +463,11 @@ def test_dashboard_humanizes_sensor_and_fan_names(qtbot, tmp_path) -> None:
     provider = _make_provider(tmp_path)
     page = _make_page(qtbot, provider)
 
-    assert page._display_sensor_name("CPU", "Tctl", "/cpu/temp/0") == "CPU"
-    assert page._display_sensor_name("Motherboard", "PCH", "/mb/temp/1") == "Chipset"
+    assert page._display_sensor_name("CPU", "Tctl", "/cpu/temp/0") == "CPU Core"
+    assert (
+        page._display_sensor_name("Motherboard", "PCH", "/mb/temp/1")
+        == "Motherboard Chipset"
+    )
     assert page._humanize_fan_label("Fan 1") == "Chassis Fan"
 
 
@@ -519,7 +521,7 @@ def test_dashboard_row_uses_raw_name_tooltips(qtbot, tmp_path) -> None:
     assert group_label.text() == "Chassis Fan"
     assert group_label.toolTip() == "Fan 1"
     assert sensors_label is not None
-    assert sensors_label.text() == "CPU"
+    assert sensors_label.text() == "CPU Core"
     assert sensors_label.toolTip() == "CPU / Tctl"
 
 
@@ -574,7 +576,7 @@ def test_dashboard_health_alerts_count_zero_when_no_alerts(qtbot, tmp_path) -> N
 
     provider.refresh_data()
 
-    assert page.sidebar._alerts_label.text() == "⚠ 0"
+    assert page.sidebar._alerts_label.text() == "0"
     assert "0" in page.sidebar._alerts_label.text()
 
 

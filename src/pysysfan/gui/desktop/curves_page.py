@@ -162,13 +162,13 @@ class CurvesPage(QWidget):
         self.curve_selector.setSizePolicy(
             QSizePolicy.Policy.MinimumExpanding, QSizePolicy.Policy.Fixed
         )
-        self.new_curve_button = QPushButton("New Curve", self)
+        self.new_curve_button = QPushButton("NEW", self)
         self.new_curve_button.setObjectName("curveActionBtn")
         self.new_curve_button.clicked.connect(self.create_curve)
-        self.save_curve_button = QPushButton("Save Curve", self)
+        self.save_curve_button = QPushButton("SAVE", self)
         self.save_curve_button.setObjectName("saveCurveBtn")
         self.save_curve_button.clicked.connect(self.save_curve)
-        self.delete_curve_button = QPushButton("Delete Curve", self)
+        self.delete_curve_button = QPushButton("DELETE", self)
         self.delete_curve_button.setObjectName("deleteCurveBtn")
         self.delete_curve_button.clicked.connect(self.delete_curve)
 
@@ -246,14 +246,15 @@ class CurvesPage(QWidget):
             summary="3 points · Hysteresis 3.0°C",
             open_=True,
         )
+        # Tighten spacing inside the accordion to reduce side padding.
+        self.curve_points_section.setContentsMargins(0, 0, 0, 0)
         self.curve_points_section.setProperty("accordionAccentIndex", 0)
         curve_points_actions_top = QHBoxLayout()
-        curve_points_actions_top.setSpacing(8)
-        curve_points_actions_top.addStretch(1)
+        curve_points_actions_top.setSpacing(6)
         curve_points_actions_top.addWidget(self.new_curve_button, 1)
         curve_points_actions_top.addWidget(self.save_curve_button, 1)
         curve_points_actions_top.addWidget(self.delete_curve_button, 1)
-        curve_points_actions_top.addStretch(1)
+        curve_points_actions_top.setContentsMargins(0, 0, 0, 0)
         self.curve_points_section.add_layout(curve_points_actions_top)
         curve_points_header_layout = QHBoxLayout()
         curve_points_header_layout.setContentsMargins(0, 0, 0, 0)
@@ -262,13 +263,17 @@ class CurvesPage(QWidget):
         curve_points_header_layout.addStretch(1)
         curve_points_header_layout.addWidget(self.curve_selector, 1)
         self.curve_points_section.add_layout(curve_points_header_layout)
+        # Make the table fill the left section width with tight side padding.
+        self.points_table.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+        )
+        self.points_table.setMinimumWidth(0)
         self.curve_points_section.add_widget(self.points_table)
         curve_points_actions_bottom = QHBoxLayout()
-        curve_points_actions_bottom.setSpacing(8)
-        curve_points_actions_bottom.addStretch(1)
+        curve_points_actions_bottom.setSpacing(6)
         curve_points_actions_bottom.addWidget(self.add_point_button, 1)
         curve_points_actions_bottom.addWidget(self.remove_point_button, 1)
-        curve_points_actions_bottom.addStretch(1)
+        curve_points_actions_bottom.setContentsMargins(0, 0, 0, 0)
         self.curve_points_section.add_layout(curve_points_actions_bottom)
 
         self.fan_assignment_section = self.accordion.add_section(
@@ -482,6 +487,17 @@ class CurvesPage(QWidget):
         self.setStyleSheet(flat_management_page_stylesheet(self.palette()))
 
     def _apply_uniform_button_sizing(self) -> None:
+        profile_buttons = {
+            self.switch_profile_button,
+            self.new_profile_button,
+            self.rename_profile_button,
+            self.profile_refresh_button,
+        }
+        curve_action_buttons = {
+            self.new_curve_button,
+            self.save_curve_button,
+            self.delete_curve_button,
+        }
         buttons = [
             self.switch_profile_button,
             self.new_profile_button,
@@ -496,12 +512,10 @@ class CurvesPage(QWidget):
             self.save_settings_button,
         ]
         for btn in buttons:
-            if btn in {
-                self.new_curve_button,
-                self.save_curve_button,
-                self.delete_curve_button,
-            }:
+            if btn in curve_action_buttons:
                 min_width = 110
+            elif btn in profile_buttons:
+                min_width = 156  # 130 * 1.2 — profile buttons 20% wider
             else:
                 min_width = 130
             btn.setSizePolicy(

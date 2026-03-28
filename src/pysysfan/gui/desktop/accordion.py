@@ -93,9 +93,7 @@ class AccordionSection(QFrame):
         self.body_widget.setObjectName("accordionBody")
         self.body_widget.setProperty("accordionBody", True)
         self.body_layout = QVBoxLayout(self.body_widget)
-        # Reduce right padding so right-aligned controls sit closer
-        # to the accordion edge (mockup tighter inset).
-        self.body_layout.setContentsMargins(12, 12, 43, 12)
+        self.body_layout.setContentsMargins(12, 12, 20, 12)
         self.body_layout.setSpacing(10)
 
         outer_layout.addWidget(header)

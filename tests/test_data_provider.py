@@ -363,7 +363,7 @@ class TestLabelRecording:
         provider.refresh_data()
 
         assert "/cpu/temp/0" in provider.temperature_labels
-        assert provider.temperature_labels["/cpu/temp/0"] == "CPU"
+        assert provider.temperature_labels["/cpu/temp/0"] == "CPU Package"
 
     def test_humanizes_model_specific_temperature_names(self, qtbot, tmp_path):
         provider = DashboardDataProvider(
@@ -378,7 +378,7 @@ class TestLabelRecording:
                 "Core (Tctl/Tdie)",
                 "/cpu/temp/0",
             )
-            == "Ryzen 7 7700X CPU Core"
+            == "Ryzen 7 7700X Core"
         )
         assert (
             provider._display_sensor_name(
@@ -386,7 +386,7 @@ class TestLabelRecording:
                 "GPU Core",
                 "/gpu/temp/0",
             )
-            == "GTX 1070 GPU Core"
+            == "GTX 1070 Core"
         )
         assert (
             provider._display_sensor_name(
@@ -402,7 +402,7 @@ class TestLabelRecording:
                 "Composite Temperature",
                 "/ssd/temp/0",
             )
-            == "Samsung SSD 980 composite temp"
+            == "Samsung SSD 980 Temp"
         )
 
     def test_records_fan_labels_and_groups(self, qtbot, tmp_path):
@@ -673,7 +673,7 @@ class TestCatalogs:
 
         catalog = provider.build_temperature_catalog()
         assert "/cpu/temp/0" in catalog
-        assert catalog["/cpu/temp/0"] == "CPU"
+        assert catalog["/cpu/temp/0"] == "CPU Package"
 
     def test_fan_rpm_catalog_has_groups(self, qtbot, tmp_path):
         profile_manager = _create_profile_manager(tmp_path)

@@ -557,65 +557,163 @@ class DashboardDataProvider(QObject):
         sensor_name: str,
         identifier: str,
     ) -> str:
+        """Return ``<model> <sensor_type>`` — e.g. ``Ryzen 7 7700X Core``."""
         hardware_key = cls._normalize_lookup_key(hardware_name)
         sensor_key = cls._normalize_lookup_key(sensor_name)
         identifier_key = cls._normalize_lookup_key(identifier)
+        model = cls._trim_model_suffix(cls._trim_brand_prefix(hardware_name.strip()))
+
+        # CPU package / overall temp
         if sensor_key in {"package", "package temp"}:
-            return "CPU"
+            if model:
+                return f"{model} Package"
+            return "CPU Package"
+
+        # CPU core / Tctl / Tdie / CCD sensors
         if sensor_key in {"tctl", "tdie"} or sensor_key.startswith("core"):
             return cls._cpu_core_name(hardware_name, sensor_name, identifier)
+
+        # AMD CCD temps (e.g. "CCD1 (Tdie)", "CCD2 (Tdie)")
+        if sensor_key.startswith("ccd"):
+            return cls._cpu_ccd_name(hardware_name, sensor_name)
+
+        # RAM / DIMM
         if sensor_key.startswith("dimm") or "dimm" in sensor_key:
-            return cls._sensor_tail(sensor_name)
+            return cls._ram_name(hardware_name, sensor_name)
+
+        # Chipset / PCH
         if sensor_key in {"pch", "chipset"} or hardware_key == "pch":
+            if model:
+                return f"{model} Chipset"
             return "Chipset"
+
+        # GPU Core / Edge / Hotspot
         if "gpu" in hardware_key and any(
             token in sensor_key for token in {"core", "edge", "hotspot"}
         ):
             return cls._gpu_core_name(hardware_name, sensor_name)
+
+        # GPU VR / VRAM / VRM
         if "gpu" in hardware_key and any(
             token in sensor_key for token in {"vram", "vrm", "vrs", "vr soc", "vr"}
         ):
             return cls._gpu_vr_name(hardware_name, sensor_name)
-        if "temperature #" in sensor_key or "composite temperature" in sensor_key:
-            return cls._ssd_composite_name(hardware_name, sensor_name, identifier)
-        if "ssd" in hardware_key or "nvme" in hardware_key or "ssd" in identifier_key:
-            if "composite" in sensor_key:
-                return cls._ssd_composite_name(hardware_name, sensor_name, identifier)
-        if sensor_key.startswith("temperature #"):
+
+        # Detect "Temperature #N" in the raw sensor name (# is lost in
+        # the normalized key).
+        _is_numbered_temp = bool(
+            re.match(r"temperature\s*#\d+", sensor_name.strip(), re.IGNORECASE)
+        )
+        _is_composite_temp = "composite" in sensor_key and "temperature" in sensor_key
+
+        # Motherboard sensor chips (Nuvoton, ITE, etc.) — route before SSD.
+        _is_motherboard_hw = any(
+            token in hardware_key
+            for token in {"nuvoton", "motherboard", "ite ", "nct", "it87"}
+        )
+        if _is_motherboard_hw and (_is_numbered_temp or sensor_name.strip()):
             return cls._motherboard_temp_name(hardware_name, sensor_name, identifier)
+
+        # SSD / NVMe — composite or numbered temperature
+        if (
+            "ssd" in hardware_key
+            or "nvme" in hardware_key
+            or "ssd" in identifier_key
+            or _is_composite_temp
+        ):
+            return cls._ssd_temp_name(hardware_name, sensor_name, identifier)
+
+        # Generic numbered temperature sensors not caught above
+        if _is_numbered_temp:
+            return cls._motherboard_temp_name(hardware_name, sensor_name, identifier)
+
+        # Fallback: model + humanized sensor label
         if sensor_name.strip():
-            return cls._sensor_tail(sensor_name)
+            tail = cls._sensor_tail(sensor_name)
+            if model and tail:
+                return f"{model} {tail}".strip()
+            return tail or cls._compact_identifier(identifier)
         return cls._compact_identifier(identifier)
 
     @classmethod
     def _cpu_core_name(
         cls, hardware_name: str, sensor_name: str, identifier: str
     ) -> str:
-        raw_model = cls._trim_brand_prefix(hardware_name.strip())
-        model = cls._trim_model_suffix(raw_model)
+        model = cls._trim_model_suffix(cls._trim_brand_prefix(hardware_name.strip()))
+        sensor_tail = cls._cpu_sensor_tail(sensor_name)
+        if model and sensor_tail:
+            return f"{model} {sensor_tail}".strip()
         if model:
-            return f"{model} CPU Core"
-        tail = cls._sensor_tail(sensor_name)
-        if tail:
-            return f"CPU Core {tail}".strip()
+            return f"{model} Core"
+        if sensor_tail:
+            return sensor_tail
         return cls._compact_identifier(identifier)
+
+    @classmethod
+    def _cpu_ccd_name(cls, hardware_name: str, sensor_name: str) -> str:
+        model = cls._trim_model_suffix(cls._trim_brand_prefix(hardware_name.strip()))
+        # Extract CCD number, e.g. "CCD1 (Tdie)" → "CCD1"
+        match = re.match(r"(CCD\s*\d+)", sensor_name.strip(), re.IGNORECASE)
+        ccd_label = match.group(1).upper().replace(" ", "") if match else "CCD"
+        if model:
+            return f"{model} {ccd_label}"
+        return f"CPU {ccd_label}"
+
+    @classmethod
+    def _cpu_sensor_tail(cls, sensor_name: str) -> str:
+        """Return the short sensor qualifier for a CPU temp sensor."""
+        lowered = sensor_name.strip().lower()
+        if lowered in {"tctl", "tdie"}:
+            return "Core"
+        if lowered.startswith("core (") and "tctl/tdie" in lowered:
+            return "Core"
+        if lowered.startswith("core #"):
+            # Individual core, e.g. "Core #3"
+            num = sensor_name.strip()[5:].strip()
+            return f"Core {num}".strip()
+        if lowered == "core":
+            return "Core"
+        return cls._sensor_tail(sensor_name)
 
     @classmethod
     def _gpu_core_name(cls, hardware_name: str, sensor_name: str) -> str:
         model = cls._trim_model_suffix(cls._trim_brand_prefix(hardware_name.strip()))
-        sensor_tail = cls._sensor_tail(sensor_name)
+        sensor_tail = cls._gpu_sensor_tail(sensor_name)
         if model and sensor_tail:
             return f"{model} {sensor_tail}".strip()
-        return model or sensor_tail
+        if model:
+            return f"{model} Core"
+        return sensor_tail or "GPU Core"
 
     @classmethod
     def _gpu_vr_name(cls, hardware_name: str, sensor_name: str) -> str:
         model = cls._trim_model_suffix(cls._trim_brand_prefix(hardware_name.strip()))
-        sensor_tail = cls._sensor_tail(sensor_name)
+        sensor_tail = cls._gpu_sensor_tail(sensor_name)
         if model and sensor_tail:
-            # e.g. "GTX 1070" + "VR Soc" -> "GTX 1070 VR Soc"
             return f"{model} {sensor_tail}".strip()
-        return model or sensor_tail
+        if model:
+            return f"{model} VR"
+        return sensor_tail or "GPU VR"
+
+    @classmethod
+    def _gpu_sensor_tail(cls, sensor_name: str) -> str:
+        """Return the short qualifier for a GPU sensor, stripping 'GPU' prefix."""
+        lowered = sensor_name.strip().lower()
+        # Strip leading "gpu" since the model already implies it.
+        cleaned = re.sub(r"^gpu\s+", "", lowered).strip()
+        if not cleaned:
+            return "Core"
+        return cls._humanize_words(cleaned)
+
+    @classmethod
+    def _ram_name(cls, hardware_name: str, sensor_name: str) -> str:
+        model = cls._trim_model_suffix(cls._trim_brand_prefix(hardware_name.strip()))
+        tail = cls._sensor_tail(sensor_name)
+        if model and tail:
+            return f"{model} {tail}".strip()
+        if model:
+            return f"{model} Temp"
+        return tail or "RAM"
 
     @classmethod
     def _motherboard_temp_name(
@@ -633,14 +731,18 @@ class DashboardDataProvider(QObject):
         return sensor_tail or cls._compact_identifier(identifier)
 
     @classmethod
-    def _ssd_composite_name(
+    def _ssd_temp_name(
         cls, hardware_name: str, sensor_name: str, identifier: str
     ) -> str:
         model = cls._trim_model_suffix(cls._trim_brand_prefix(hardware_name.strip()))
+        sensor_key = cls._normalize_lookup_key(sensor_name)
         if model:
-            # e.g. "Samsung SSD 970 EVO 500GB" + "Composite temp"
-            # -> "970 EVO 500GB Composite temp"
-            return f"{model} Composite temp".strip()
+            if "composite" in sensor_key:
+                return f"{model} Temp"
+            tail = cls._sensor_tail(sensor_name)
+            if tail:
+                return f"{model} {tail}".strip()
+            return f"{model} Temp"
         return cls._sensor_tail(sensor_name) or cls._compact_identifier(identifier)
 
     @classmethod
@@ -649,18 +751,18 @@ class DashboardDataProvider(QObject):
         if not normalized:
             return ""
         replacements = {
-            "tctl": "CPU",
-            "tdie": "CPU",
-            "temperature #1": "Motherboard Temp #1",
-            "temperature #2": "Motherboard Temp #2",
-            "temperature #3": "Motherboard Temp #3",
-            "temperature #4": "Motherboard Temp #4",
+            "tctl": "Core",
+            "tdie": "Core",
+            "temperature #1": "Temp #1",
+            "temperature #2": "Temp #2",
+            "temperature #3": "Temp #3",
+            "temperature #4": "Temp #4",
         }
         lowered = normalized.lower()
         if lowered in replacements:
             return replacements[lowered]
         if lowered.startswith("core (") and "tctl/tdie" in lowered:
-            return "CPU Core"
+            return "Core"
         if any(token in lowered for token in {"vr soc", "vrsoc", "vrm", "vram", "vr"}):
             if "soc" in lowered:
                 return "VR Soc"

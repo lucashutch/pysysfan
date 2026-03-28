@@ -164,7 +164,7 @@ class SidebarWidget(QFrame):
         footer_layout.addWidget(self._alerts_title)
 
         self._alerts_label = QToolButton(footer)
-        self._alerts_label.setObjectName("sidebarAlertsButton")
+        self._alerts_label.setObjectName("alertsButton")
         self._alerts_label.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
         self._alerts_label.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         self._alerts_label.setMinimumWidth(52)
