@@ -228,6 +228,7 @@ def test_dashboard_populates_rows_from_state(qtbot, tmp_path) -> None:
     group_label = row.findChild(QLabel, "fanRowGroup")
     assert group_label is not None
     assert group_label.text() == "CPU Fan"
+    assert group_label.toolTip() == "CPU Fan"
 
     curve_label = row.findChild(QLabel, "fanRowCurve")
     assert curve_label is not None
@@ -239,7 +240,7 @@ def test_dashboard_populates_rows_from_state(qtbot, tmp_path) -> None:
 
     actual_label = row.findChild(QLabel, "fanRowActual")
     assert actual_label is not None
-    assert actual_label.text() == "55.0%"
+    assert actual_label.text() == "55%"
 
     rpm_label = row.findChild(QLabel, "fanRowRpm")
     assert rpm_label is not None
@@ -247,7 +248,13 @@ def test_dashboard_populates_rows_from_state(qtbot, tmp_path) -> None:
 
     sensors_label = row.findChild(QLabel, "fanRowSensors")
     assert sensors_label is not None
-    assert "CPU / Package · 61.5°C" in sensors_label.text()
+    assert sensors_label.text() == "CPU"
+    assert sensors_label.toolTip() == "CPU / Package"
+
+    sensor_values_label = row.findChild(QLabel, "fanRowSensorValues")
+    assert sensor_values_label is not None
+    assert sensor_values_label.text() == "61.5°C"
+    assert sensor_values_label.toolTip() == "CPU / Package"
 
 
 def test_dashboard_header_bar_populated_from_state(qtbot, tmp_path) -> None:
@@ -450,6 +457,70 @@ def test_dashboard_display_group_name_formatting(qtbot, tmp_path) -> None:
     assert page._display_group_name("cpu_fan") == "CPU Fan"
     assert page._display_group_name("gpu_pump") == "GPU Pump"
     assert page._display_group_name("chassis_fan") == "Chassis Fan"
+
+
+def test_dashboard_humanizes_sensor_and_fan_names(qtbot, tmp_path) -> None:
+    """Dashboard-specific labels should be human-friendly."""
+    provider = _make_provider(tmp_path)
+    page = _make_page(qtbot, provider)
+
+    assert page._display_sensor_name("CPU", "Tctl", "/cpu/temp/0") == "CPU"
+    assert page._display_sensor_name("Motherboard", "PCH", "/mb/temp/1") == "Chipset"
+    assert page._humanize_fan_label("Fan 1") == "Chassis Fan"
+
+
+def test_dashboard_row_uses_raw_name_tooltips(qtbot, tmp_path) -> None:
+    """Humanized dashboard labels should preserve raw names in tooltips."""
+    profile_manager = _create_profile_manager(tmp_path)
+    config_path = profile_manager.get_profile_config_path("gaming")
+    state = DaemonStateFile(
+        timestamp=time.time(),
+        pid=4321,
+        running=True,
+        uptime_seconds=25.0,
+        active_profile="gaming",
+        poll_interval=1.0,
+        config_path=str(config_path),
+        fans_configured=1,
+        curves_configured=1,
+        temperatures=[
+            TemperatureState(
+                identifier="/cpu/temp/0",
+                hardware_name="CPU",
+                sensor_name="Tctl",
+                value=58.0,
+            )
+        ],
+        fan_speeds=[
+            FanSpeedState(
+                identifier="/mb/fan/0",
+                control_identifier="/mb/control/0",
+                hardware_name="Motherboard",
+                sensor_name="Fan 1",
+                rpm=1100.0,
+                current_control_pct=44.2,
+                controllable=True,
+            )
+        ],
+        fan_targets={"/mb/control/0": 45.0},
+        recent_alerts=[],
+    )
+    profile_manager.get_profile("gaming").config.fans["cpu_fan"].header_name = "Fan 1"
+    provider = _make_provider(tmp_path, state=state, profile_manager=profile_manager)
+    page = _make_page(qtbot, provider)
+
+    provider.refresh_data()
+
+    row = page._fan_rows[0]
+    group_label = row.findChild(QLabel, "fanRowGroup")
+    sensors_label = row.findChild(QLabel, "fanRowSensors")
+
+    assert group_label is not None
+    assert group_label.text() == "Chassis Fan"
+    assert group_label.toolTip() == "Fan 1"
+    assert sensors_label is not None
+    assert sensors_label.text() == "CPU"
+    assert sensors_label.toolTip() == "CPU / Tctl"
 
 
 def test_dashboard_format_uptime(qtbot, tmp_path) -> None:

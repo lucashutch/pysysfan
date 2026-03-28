@@ -358,8 +358,10 @@ class DashboardDataProvider(QObject):
         for sensor in state.temperatures:
             if not self._is_relevant_temperature(sensor):
                 continue
-            self._temperature_labels[sensor.identifier] = (
-                f"{sensor.hardware_name} / {sensor.sensor_name}"
+            self._temperature_labels[sensor.identifier] = self._display_sensor_name(
+                str(sensor.hardware_name),
+                str(sensor.sensor_name),
+                sensor.identifier,
             )
 
         for fan in state.fan_speeds:
@@ -479,11 +481,11 @@ class DashboardDataProvider(QObject):
         group_label = self._display_group_name(group_name)
         detail = ""
         if fan_config is not None and fan_config.header_name:
-            detail = fan_config.header_name
+            detail = self._humanize_fan_label(fan_config.header_name)
         elif getattr(live_fan, "sensor_name", None):
-            detail = str(live_fan.sensor_name)
+            detail = self._humanize_fan_label(str(live_fan.sensor_name))
         elif getattr(live_fan, "hardware_name", None):
-            detail = str(live_fan.hardware_name)
+            detail = self._humanize_fan_label(str(live_fan.hardware_name))
         if detail:
             if detail.strip().lower() == group_label.strip().lower():
                 return group_label
@@ -544,6 +546,172 @@ class DashboardDataProvider(QObject):
             lowered = part.lower()
             if lowered in acronyms:
                 rendered.append(lowered.upper())
+                continue
+            rendered.append(part.capitalize())
+        return " ".join(rendered)
+
+    @classmethod
+    def _display_sensor_name(
+        cls,
+        hardware_name: str,
+        sensor_name: str,
+        identifier: str,
+    ) -> str:
+        hardware_key = cls._normalize_lookup_key(hardware_name)
+        sensor_key = cls._normalize_lookup_key(sensor_name)
+        identifier_key = cls._normalize_lookup_key(identifier)
+        if sensor_key in {"package", "package temp"}:
+            return "CPU"
+        if sensor_key in {"tctl", "tdie"} or sensor_key.startswith("core"):
+            return cls._cpu_core_name(hardware_name, sensor_name, identifier)
+        if sensor_key.startswith("dimm") or "dimm" in sensor_key:
+            return cls._sensor_tail(sensor_name)
+        if sensor_key in {"pch", "chipset"} or hardware_key == "pch":
+            return "Chipset"
+        if "gpu" in hardware_key and any(
+            token in sensor_key for token in {"core", "edge", "hotspot"}
+        ):
+            return cls._gpu_core_name(hardware_name, sensor_name)
+        if "temperature #" in sensor_key or "composite temperature" in sensor_key:
+            return cls._ssd_composite_name(hardware_name, sensor_name, identifier)
+        if "ssd" in hardware_key or "nvme" in hardware_key or "ssd" in identifier_key:
+            if "composite" in sensor_key:
+                return cls._ssd_composite_name(hardware_name, sensor_name, identifier)
+        if sensor_key.startswith("temperature #"):
+            return cls._motherboard_temp_name(hardware_name, sensor_name, identifier)
+        if sensor_name.strip():
+            return cls._sensor_tail(sensor_name)
+        return cls._compact_identifier(identifier)
+
+    @classmethod
+    def _cpu_core_name(
+        cls, hardware_name: str, sensor_name: str, identifier: str
+    ) -> str:
+        raw_model = cls._trim_brand_prefix(hardware_name.strip())
+        model = cls._trim_model_suffix(raw_model)
+        if model:
+            return f"{model} CPU Core"
+        tail = cls._sensor_tail(sensor_name)
+        if tail:
+            return f"CPU Core {tail}".strip()
+        return cls._compact_identifier(identifier)
+
+    @classmethod
+    def _gpu_core_name(cls, hardware_name: str, sensor_name: str) -> str:
+        model = cls._trim_model_suffix(cls._trim_brand_prefix(hardware_name.strip()))
+        sensor_tail = cls._sensor_tail(sensor_name)
+        if model and sensor_tail:
+            return f"{model} {sensor_tail}".strip()
+        return model or sensor_tail
+
+    @classmethod
+    def _motherboard_temp_name(
+        cls, hardware_name: str, sensor_name: str, identifier: str
+    ) -> str:
+        hardware_label = cls._trim_brand_prefix(hardware_name.strip())
+        model = cls._trim_model_suffix(hardware_label)
+        sensor_tail = cls._sensor_tail(sensor_name)
+        hardware_key = cls._normalize_lookup_key(hardware_name)
+        if "nuvoton" in hardware_key or "motherboard" in hardware_key:
+            if sensor_tail:
+                return f"Motherboard {sensor_tail}".strip()
+        if model and sensor_tail:
+            return f"{model} {sensor_tail}".strip()
+        return sensor_tail or cls._compact_identifier(identifier)
+
+    @classmethod
+    def _ssd_composite_name(
+        cls, hardware_name: str, sensor_name: str, identifier: str
+    ) -> str:
+        model = cls._trim_model_suffix(cls._trim_brand_prefix(hardware_name.strip()))
+        if model:
+            return f"{model} composite temp"
+        return cls._sensor_tail(sensor_name) or cls._compact_identifier(identifier)
+
+    @classmethod
+    def _sensor_tail(cls, label: str) -> str:
+        normalized = label.strip()
+        if not normalized:
+            return ""
+        replacements = {
+            "tctl": "CPU",
+            "tdie": "CPU",
+            "temperature #1": "Motherboard Temp #1",
+            "temperature #2": "Motherboard Temp #2",
+            "temperature #3": "Motherboard Temp #3",
+            "temperature #4": "Motherboard Temp #4",
+        }
+        lowered = normalized.lower()
+        if lowered in replacements:
+            return replacements[lowered]
+        if lowered.startswith("core (") and "tctl/tdie" in lowered:
+            return "CPU Core"
+        if "(" in normalized and ")" in normalized:
+            prefix = normalized.split("(", 1)[0].strip()
+            suffix = normalized[normalized.index("(") :].strip()
+            prefix = cls._humanize_words(prefix)
+            return f"{prefix} {suffix}".strip()
+        return cls._humanize_words(normalized)
+
+    @staticmethod
+    def _trim_brand_prefix(label: str) -> str:
+        prefixes = (
+            "AMD ",
+            "Intel ",
+            "NVIDIA ",
+            "Nvidia ",
+            "GeForce ",
+            "Geforce ",
+            "Nuvoton",
+            "Team Group Inc",
+        )
+        trimmed = label.strip()
+        changed = True
+        while changed:
+            changed = False
+            for prefix in prefixes:
+                if trimmed.startswith(prefix):
+                    trimmed = trimmed[len(prefix) :].strip()
+                    changed = True
+                    break
+        return trimmed
+
+    @staticmethod
+    def _trim_model_suffix(label: str) -> str:
+        lowered = label.lower().strip()
+        for suffix in (" core", " gpu", " package", " composite"):
+            if lowered.endswith(suffix):
+                return label[: -len(suffix)].strip()
+        return label
+
+    @classmethod
+    def _humanize_fan_label(cls, label: str) -> str:
+        lowered = label.strip().lower()
+        if lowered == "fan 1":
+            return "Chassis Fan"
+        if lowered.startswith("fan "):
+            suffix = label.strip()[4:].strip()
+            return f"Chassis Fan {suffix}".strip()
+        return cls._humanize_words(label)
+
+    @staticmethod
+    def _normalize_lookup_key(value: str) -> str:
+        return re.sub(r"[^a-z0-9]+", " ", value.lower()).strip()
+
+    @classmethod
+    def _humanize_words(cls, label: str) -> str:
+        acronyms = {"cpu", "gpu", "ram", "aio", "vrm", "pch", "dimm"}
+        parts = [part for part in re.split(r"[\s/_-]+", label.strip()) if part]
+        if not parts:
+            return label
+        rendered: list[str] = []
+        for part in parts:
+            lowered = part.lower()
+            if lowered in acronyms:
+                rendered.append(lowered.upper())
+                continue
+            if part.isupper() and len(part) <= 4:
+                rendered.append(part)
                 continue
             rendered.append(part.capitalize())
         return " ".join(rendered)

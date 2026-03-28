@@ -14,6 +14,10 @@ _CHEVRON_DOWN_SVG = """\
     <path d="M6 9l6 6 6-6"/>
 </svg>"""
 
+DESKTOP_FONT_FAMILY = (
+    'Inter, "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", sans-serif'
+)
+
 
 @lru_cache(maxsize=8)
 def _combo_arrow_path(color: str) -> str:
@@ -25,12 +29,12 @@ def _combo_arrow_path(color: str) -> str:
     return path.replace("\\", "/")
 
 
-PAGE_HEADING_STYLE = "font-size: 24px; font-weight: 800;"
-SECTION_HINT_STYLE = "font-size: 12px;"
-SUBTLE_TEXT_STYLE = "font-size: 12px;"
-EMPHASIS_TEXT_STYLE = "font-size: 13px; font-weight: 600;"
-SECTION_TITLE_STYLE = "font-size: 16px; font-weight: 700;"
-SECTION_SUBTITLE_STYLE = "font-size: 12px;"
+PAGE_HEADING_STYLE = "font-size: 26px; font-weight: 700; letter-spacing: 0.02em;"
+SECTION_HINT_STYLE = "font-size: 12px; color: #adaaaa;"
+SUBTLE_TEXT_STYLE = "font-size: 12px; color: #adaaaa;"
+EMPHASIS_TEXT_STYLE = "font-size: 13px; font-weight: 700;"
+SECTION_TITLE_STYLE = "font-size: 17px; font-weight: 800; letter-spacing: 0.04em;"
+SECTION_SUBTITLE_STYLE = "font-size: 12px; color: #adaaaa;"
 
 
 class DesktopColors(dict[str, str]):
@@ -87,6 +91,7 @@ def dashboard_page_stylesheet(palette: QPalette) -> str:
 QWidget#dashboardRoot {{
     background: {colors["window"]};
     color: {colors["text"]};
+    font-family: {DESKTOP_FONT_FAMILY};
 }}
 
 QScrollArea#dashboardScrollArea {{
@@ -148,9 +153,11 @@ QLabel#dashboardMessageLabel {{
 }}
 
 QLabel[sectionRole="title"] {{
-    font-size: 18px;
+    font-size: 13px;
     font-weight: 800;
-    color: {colors["text"]};
+    color: {colors["muted"]};
+    text-transform: uppercase;
+    letter-spacing: 0.18em;
 }}
 
 QLabel[sectionRole="subtitle"] {{
@@ -159,15 +166,15 @@ QLabel[sectionRole="subtitle"] {{
 }}
 
 QLabel[cardTextRole="eyebrow"] {{
-    font-size: 11px;
-    font-weight: 700;
+    font-size: 10px;
+    font-weight: 800;
     color: {colors["muted"]};
     text-transform: uppercase;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.16em;
 }}
 
 QLabel[cardTextRole="title"] {{
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 800;
     color: {colors["text"]};
 }}
@@ -187,7 +194,7 @@ QLabel[cardTextRole="metricTitle"] {{
 }}
 
 QLabel[cardTextRole="metricValue"] {{
-    font-size: 15px;
+    font-size: 16px;
     font-weight: 800;
     color: {colors["text"]};
 }}
@@ -195,6 +202,30 @@ QLabel[cardTextRole="metricValue"] {{
 QLabel[cardTextRole="body"] {{
     font-size: 12px;
     color: {colors["muted"]};
+    font-weight: 600;
+}}
+
+QLabel[cardTextRole="sensorValue"] {{
+    font-size: 13px;
+    font-weight: 700;
+    color: {colors["text"]};
+    font-family: Consolas, monospace;
+}}
+
+QLabel[cardTextRole="accentValue"] {{
+    font-size: 16px;
+    font-weight: 900;
+    color: {colors["accent"]};
+    font-family: Consolas, monospace;
+}}
+
+QLabel[cardTextRole="chip"] {{
+    font-size: 10px;
+    font-weight: 800;
+    padding: 5px 10px;
+    border-radius: 9px;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
 }}
 
 QLabel[cardTextRole="muted"] {{
@@ -207,12 +238,14 @@ QLabel[cardTextRole="icon"] {{
 }}
 
 QToolButton#alertsButton {{
-    border: 1px solid {colors["border"]};
-    border-radius: 12px;
-    padding: 5px 10px;
+    border: none;
+    border-radius: 0;
+    padding: 6px 14px;
+    min-width: 84px;
     background: {colors["raised"]};
     color: {colors["text"]};
     font-weight: 700;
+    font-size: 14px;
 }}
 
 QToolButton#alertsButton::menu-indicator {{
@@ -229,6 +262,7 @@ def graphs_page_stylesheet(palette: QPalette) -> str:
 QWidget#graphsRoot {{
     background: {colors["window"]};
     color: {colors["text"]};
+    font-family: {DESKTOP_FONT_FAMILY};
 }}
 
 QFrame#graphsHeader {{
@@ -372,6 +406,7 @@ def management_page_stylesheet(palette: QPalette) -> str:
 QWidget#managementPageRoot {{
     background: {colors["window"]};
     color: {colors["text"]};
+    font-family: {DESKTOP_FONT_FAMILY};
 }}
 
 QGroupBox {{
@@ -1210,43 +1245,75 @@ def sidebar_stylesheet(palette: QPalette) -> str:
 QFrame#sidebar {{
     background: #131313;
     border-right: 1px solid {colors["border"]};
+    font-family: {DESKTOP_FONT_FAMILY};
 }}
 QLabel#sidebarBrand {{
-    font-size: 16px;
+    font-size: 17px;
     font-weight: 800;
     color: {colors["text"]};
+    letter-spacing: 0.08em;
 }}
 QLabel#sidebarSubtitle {{
-    font-size: 10px;
+    font-size: 16px;
     color: {colors["muted"]};
+    font-weight: 700;
+    letter-spacing: 0.12em;
 }}
 QPushButton[sidebarNav="true"] {{
     text-align: left;
-    padding: 8px 16px;
+    padding: 10px 16px;
     border: none;
     border-radius: 8px;
-    font-size: 12px;
-    font-weight: 600;
+    font-size: 15px;
+    font-weight: 700;
     color: {colors["muted"]};
     background: transparent;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
 }}
 QPushButton[sidebarNav="true"]:checked {{
     background: rgba(94, 180, 255, 0.15);
     color: #5eb4ff;
     font-weight: 700;
+    border-radius: 0;
 }}
 QLabel#sidebarSeparator {{
     background: {colors["border"]};
     max-height: 1px;
 }}
 QLabel.sidebarMuted {{
-    font-size: 10px;
+    font-size: 16px;
     color: {colors["muted"]};
 }}
 QLabel.sidebarValue {{
-    font-size: 11px;
+    font-size: 14px;
     font-weight: 700;
     color: {colors["text"]};
+}}
+QLabel#sidebarStatusLine {{
+    font-size: 13px;
+    font-weight: 700;
+    color: {colors["text"]};
+}}
+QLabel#sidebarStatusDot {{
+    font-size: 16px;
+    font-weight: 700;
+}}
+QToolButton#alertsButton {{
+    border: none;
+    border-radius: 0;
+    padding: 4px 8px;
+    min-width: 52px;
+    background: transparent;
+    color: {colors["text"]};
+    font-weight: 700;
+    font-size: 19px;
+    min-height: 28px;
+}}
+QToolButton#alertsButton::menu-indicator {{
+    image: none;
+    width: 0;
+    height: 0;
 }}
 """
 
@@ -1256,11 +1323,9 @@ def plot_theme(palette: QPalette) -> dict[str, str | list[str]]:
     colors = desktop_colors(palette)
     series = [
         "#60a5fa",  # blue
-        "#34d399",  # green
         "#f59e0b",  # amber
         "#f87171",  # red
         "#a78bfa",  # purple
-        "#22d3ee",  # cyan
         "#f472b6",  # pink
         "#c084fc",  # violet
     ]
