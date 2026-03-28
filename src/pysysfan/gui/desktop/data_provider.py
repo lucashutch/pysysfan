@@ -572,6 +572,10 @@ class DashboardDataProvider(QObject):
             token in sensor_key for token in {"core", "edge", "hotspot"}
         ):
             return cls._gpu_core_name(hardware_name, sensor_name)
+        if "gpu" in hardware_key and any(
+            token in sensor_key for token in {"vram", "vrm", "vrs", "vr soc", "vr"}
+        ):
+            return cls._gpu_vr_name(hardware_name, sensor_name)
         if "temperature #" in sensor_key or "composite temperature" in sensor_key:
             return cls._ssd_composite_name(hardware_name, sensor_name, identifier)
         if "ssd" in hardware_key or "nvme" in hardware_key or "ssd" in identifier_key:
@@ -605,6 +609,15 @@ class DashboardDataProvider(QObject):
         return model or sensor_tail
 
     @classmethod
+    def _gpu_vr_name(cls, hardware_name: str, sensor_name: str) -> str:
+        model = cls._trim_model_suffix(cls._trim_brand_prefix(hardware_name.strip()))
+        sensor_tail = cls._sensor_tail(sensor_name)
+        if model and sensor_tail:
+            # e.g. "GTX 1070" + "VR Soc" -> "GTX 1070 VR Soc"
+            return f"{model} {sensor_tail}".strip()
+        return model or sensor_tail
+
+    @classmethod
     def _motherboard_temp_name(
         cls, hardware_name: str, sensor_name: str, identifier: str
     ) -> str:
@@ -625,7 +638,9 @@ class DashboardDataProvider(QObject):
     ) -> str:
         model = cls._trim_model_suffix(cls._trim_brand_prefix(hardware_name.strip()))
         if model:
-            return f"{model} composite temp"
+            # e.g. "Samsung SSD 970 EVO 500GB" + "Composite temp"
+            # -> "970 EVO 500GB Composite temp"
+            return f"{model} Composite temp".strip()
         return cls._sensor_tail(sensor_name) or cls._compact_identifier(identifier)
 
     @classmethod
@@ -646,6 +661,14 @@ class DashboardDataProvider(QObject):
             return replacements[lowered]
         if lowered.startswith("core (") and "tctl/tdie" in lowered:
             return "CPU Core"
+        if any(token in lowered for token in {"vr soc", "vrsoc", "vrm", "vram", "vr"}):
+            if "soc" in lowered:
+                return "VR Soc"
+            if "vram" in lowered:
+                return "VRAM"
+            if "vrm" in lowered:
+                return "VRM"
+            return "VR"
         if "(" in normalized and ")" in normalized:
             prefix = normalized.split("(", 1)[0].strip()
             suffix = normalized[normalized.index("(") :].strip()

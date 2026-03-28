@@ -17,6 +17,7 @@ from pysysfan.gui.desktop.main_window import MainWindow
 def _preferred_ui_font() -> QFont:
     """Return the preferred application font for the desktop shell."""
     preferred_families = [
+        "IBM Plex Mono",
         "Inter",
         "Segoe UI Variable Text",
         "Segoe UI Variable",

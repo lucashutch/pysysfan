@@ -545,7 +545,7 @@ class DashboardPage(QWidget):
     @staticmethod
     def _curve_chip_stylesheet(color: str, accent_text: str | None = None) -> str:
         base = QColor(color)
-        text = base.lighter(170)
+        base.lighter(170)
         if accent_text is None:
             accent_text = color
         accent_rgb = QColor(accent_text)

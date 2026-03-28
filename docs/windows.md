@@ -184,6 +184,7 @@ Main areas:
 
 When the Windows notification area is available, closing the window minimizes the app to the tray instead of fully exiting it.
 The Service page also exposes a preference that lets the title-bar minimize button send the GUI to the tray instead of leaving it minimized on the taskbar.
+The Windows installer also provisions IBM Plex Mono for the desktop GUI and falls back to Inter if the font is not already available.
 
 ## Troubleshooting
 

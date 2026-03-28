@@ -14,9 +14,8 @@ _CHEVRON_DOWN_SVG = """\
     <path d="M6 9l6 6 6-6"/>
 </svg>"""
 
-DESKTOP_FONT_FAMILY = (
-    'Inter, "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", sans-serif'
-)
+DESKTOP_FONT_FAMILY = '"IBM Plex Mono", "Inter", "Segoe UI Variable Text", "Segoe UI Variable", "Segoe UI", sans-serif'
+DESKTOP_MONO_FONT_FAMILY = '"IBM Plex Mono", Consolas, monospace'
 
 
 @lru_cache(maxsize=8)
@@ -209,14 +208,14 @@ QLabel[cardTextRole="sensorValue"] {{
     font-size: 13px;
     font-weight: 700;
     color: {colors["text"]};
-    font-family: Consolas, monospace;
+    font-family: {DESKTOP_MONO_FONT_FAMILY};
 }}
 
 QLabel[cardTextRole="accentValue"] {{
     font-size: 16px;
     font-weight: 900;
     color: {colors["accent"]};
-    font-family: Consolas, monospace;
+    font-family: {DESKTOP_MONO_FONT_FAMILY};
 }}
 
 QLabel[cardTextRole="chip"] {{
@@ -564,7 +563,7 @@ QSplitter::handle {{
     background: {colors["base"]};
     border: none;
     border-radius: 0px;
-    font-family: Consolas, monospace;
+    font-family: {DESKTOP_MONO_FONT_FAMILY};
     font-size: 11px;
 }}
 
@@ -850,7 +849,7 @@ QSplitter::handle {{
     background: {colors["base"]};
     border: none;
     border-radius: 0px;
-    font-family: Consolas, monospace;
+    font-family: {DESKTOP_MONO_FONT_FAMILY};
     font-size: 11px;
 }}
 
@@ -1056,7 +1055,7 @@ QTableWidget#pointsTable QHeaderView::section {{
 }}
 
 QTableWidget#pointsTable::item {{
-    font-family: Consolas, monospace;
+    font-family: {DESKTOP_MONO_FONT_FAMILY};
     font-size: 11px;
     font-weight: 900;
     padding: 6px;
