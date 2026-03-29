@@ -8,7 +8,8 @@ import pytest
 
 pytest.importorskip("PySide6")
 
-from pysysfan.gui.desktop.app import get_or_create_application
+from pysysfan.gui.desktop import app as desktop_app
+from pysysfan.gui.desktop.app import _preferred_ui_font, get_or_create_application
 from pysysfan.gui.desktop.main_window import MainWindow
 
 
@@ -20,6 +21,37 @@ def test_get_or_create_application_reuses_instance() -> None:
     assert app_one is app_two
     assert app_one.applicationName() == "PySysFan"
     assert app_one.windowIcon().isNull() is False
+
+
+@pytest.mark.parametrize(
+    ("installed_families", "expected_family"),
+    [
+        ({"IBM Plex Mono", "Inter"}, "IBM Plex Mono"),
+        ({"Inter"}, "Inter"),
+    ],
+)
+def test_preferred_ui_font_prefers_ibm_plex_mono_then_inter(
+    monkeypatch: pytest.MonkeyPatch,
+    installed_families: set[str],
+    expected_family: str,
+) -> None:
+    """The desktop font preference should fall back from IBM Plex Mono to Inter."""
+
+    class FakeFontInfo:
+        def __init__(self, candidate_font) -> None:
+            self._family = candidate_font.family()
+
+        def family(self) -> str:
+            if self._family in installed_families:
+                return self._family
+            return ""
+
+    monkeypatch.setattr(desktop_app, "QFontInfo", FakeFontInfo)
+
+    font = _preferred_ui_font()
+
+    assert font.family() == expected_family
+    assert font.pointSize() == 10
 
 
 def test_main_window_uses_sidebar_stack_navigation(qtbot) -> None:

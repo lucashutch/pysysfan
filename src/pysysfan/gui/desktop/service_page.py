@@ -44,13 +44,69 @@ from pysysfan.state_file import DEFAULT_STATE_PATH
 def _action_state_stylesheet() -> str:
     """Return CSS selectors for button actionState properties."""
     return """
-QPushButton#serviceStartStopBtn[actionState="start"] {}
-QPushButton#serviceStartStopBtn[actionState="stop"] {}
-QPushButton#serviceInstallUninstallBtn[actionState="install"] {}
-QPushButton#serviceInstallUninstallBtn[actionState="uninstall"] {}
-QPushButton#serviceEnableDisableBtn[actionState="enable"] {}
-QPushButton#serviceEnableDisableBtn[actionState="disable"] {}
-QPushButton#serviceRestartBtn {}
+QPushButton#serviceStartStopBtn[actionState="start"] {
+    background: #1a3a2a;
+    color: #34d399;
+    border-left: 3px solid #34d399;
+    font-weight: 900;
+}
+QPushButton#serviceStartStopBtn[actionState="start"]:hover {
+    background: #22473a;
+}
+QPushButton#serviceStartStopBtn[actionState="stop"] {
+    background: #3a1a1a;
+    color: #ef4444;
+    border-left: 3px solid #ef4444;
+    font-weight: 900;
+}
+QPushButton#serviceStartStopBtn[actionState="stop"]:hover {
+    background: #4a2222;
+}
+QPushButton#serviceRestartBtn {
+    background: #1a2a3a;
+    color: #60a5fa;
+    border-left: 3px solid #60a5fa;
+    font-weight: 900;
+}
+QPushButton#serviceRestartBtn:hover {
+    background: #223a4a;
+}
+QPushButton#serviceInstallUninstallBtn[actionState="install"] {
+    background: #2a2a1a;
+    color: #f59e0b;
+    border-left: 3px solid #f59e0b;
+    font-weight: 900;
+}
+QPushButton#serviceInstallUninstallBtn[actionState="install"]:hover {
+    background: #3a3a22;
+}
+QPushButton#serviceInstallUninstallBtn[actionState="uninstall"] {
+    background: #2a1a2a;
+    color: #a78bfa;
+    border-left: 3px solid #a78bfa;
+    font-weight: 900;
+}
+QPushButton#serviceInstallUninstallBtn[actionState="uninstall"]:hover {
+    background: #3a223a;
+}
+QPushButton#serviceEnableDisableBtn[actionState="enable"] {
+    background: #1a2a2a;
+    color: #22d3ee;
+    border-left: 3px solid #22d3ee;
+    font-weight: 900;
+}
+QPushButton#serviceEnableDisableBtn[actionState="enable"]:hover {
+    background: #223a3a;
+}
+QPushButton#serviceEnableDisableBtn[actionState="disable"] {
+    background: #2a2020;
+    color: #f472b6;
+    border-left: 3px solid #f472b6;
+    font-weight: 900;
+}
+QPushButton#serviceEnableDisableBtn[actionState="disable"]:hover {
+    background: #3a2a2a;
+}
 """
 
 

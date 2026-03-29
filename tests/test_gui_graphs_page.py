@@ -492,8 +492,8 @@ def test_hover_summary_lists_visible_series_values(qtbot, tmp_path) -> None:
 
     hover_text = page._hover_label.text()
     assert hover_text.startswith("Hover @")
-    assert "CPU / Package: 61.5 °C" in hover_text
-    assert "GPU / Edge: 58 °C" in hover_text
+    assert "CPU Package: 61.5 °C" in hover_text
+    assert "GPU Edge: 58 °C" in hover_text
     assert page._hover_marker_item is not None
     assert page._hover_marker_item.isVisible() is True
     assert len(page._hover_marker_item.points()) == 2

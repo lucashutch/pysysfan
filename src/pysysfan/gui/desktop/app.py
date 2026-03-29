@@ -6,12 +6,34 @@ import sys
 from collections.abc import Sequence
 
 from PySide6.QtCore import QObject
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QFont, QFontInfo
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
 from pysysfan import __version__
 from pysysfan.gui.desktop.icons import app_icon, configure_windows_app_id
 from pysysfan.gui.desktop.main_window import MainWindow
+
+
+def _preferred_ui_font() -> QFont:
+    """Return the preferred application font for the desktop shell."""
+    preferred_families = [
+        "IBM Plex Mono",
+        "Inter",
+        "Segoe UI Variable Text",
+        "Segoe UI Variable",
+        "Segoe UI",
+    ]
+    font = QFont()
+    font.setPointSize(10)
+    font.setWeight(QFont.Weight.Medium)
+    font.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
+    for family in preferred_families:
+        candidate = QFont(family, 10)
+        if QFontInfo(candidate).family().lower() == family.lower():
+            candidate.setWeight(QFont.Weight.Medium)
+            candidate.setStyleStrategy(QFont.StyleStrategy.PreferAntialias)
+            return candidate
+    return font
 
 
 class TrayController(QObject):
@@ -102,6 +124,7 @@ def get_or_create_application(argv: Sequence[str] | None = None) -> QApplication
     app.setOrganizationName("pysysfan")
     app.setOrganizationDomain("github.com/lucashutch/pysysfan")
     app.setWindowIcon(app_icon())
+    app.setFont(_preferred_ui_font())
     return app
 
 

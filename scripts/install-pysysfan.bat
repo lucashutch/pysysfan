@@ -42,6 +42,7 @@ set "ICON_PATH=%APP_DATA_DIR%\pysysfan.ico"
 set "PYSYSFAN_STATUS=SKIPPED"
 set "LHM_STATUS=SKIPPED"
 set "PAWNIO_STATUS=SKIPPED"
+set "FONT_STATUS=SKIPPED"
 set "GUI_APP_STATUS=SKIPPED"
 
 call :print_banner
@@ -158,7 +159,21 @@ if !ERRORLEVEL! NEQ 0 (
 
 echo.
 echo  ------------------------------------------------------------
-echo  [4/4]  Configuring desktop app assets...
+echo  [4/5]  Installing IBM Plex Mono...
+echo  ------------------------------------------------------------
+echo.
+
+call :install_plex_mono_font
+if !ERRORLEVEL! NEQ 0 (
+    echo  [!] IBM Plex Mono installation failed.
+    set "FONT_STATUS=FAILED"
+) else (
+    set "FONT_STATUS=OK"
+)
+
+echo.
+echo  ------------------------------------------------------------
+echo  [5/5]  Configuring desktop app assets...
 echo  ------------------------------------------------------------
 echo.
 
@@ -179,6 +194,7 @@ echo.
 echo   PySysFan         : !PYSYSFAN_STATUS!
 echo   LibreHardwareMonitor: !LHM_STATUS!
 echo   PawnIO           : !PAWNIO_STATUS!
+echo   IBM Plex Mono    : !FONT_STATUS!
 echo   GUI app shortcut : !GUI_APP_STATUS!
 echo.
 echo  ------------------------------------------------------------
@@ -289,6 +305,31 @@ if exist "%ICON_PATH%" del /f /q "%ICON_PATH%" >nul 2>&1
 if exist "%APP_DATA_DIR%" rmdir "%APP_DATA_DIR%" >nul 2>&1
 goto :eof
 
+:install_plex_mono_font
+if exist "%LOCALAPPDATA%\Microsoft\Windows\Fonts\IBMPlexMono-*.ttf" (
+    echo  IBM Plex Mono already available.
+    set "FONT_STATUS=OK"
+    goto :eof
+)
+
+if exist "%WINDIR%\Fonts\IBMPlexMono-*.ttf" (
+    echo  IBM Plex Mono already available.
+    set "FONT_STATUS=OK"
+    goto :eof
+)
+
+echo  Downloading IBM Plex Mono from Google Fonts...
+powershell -NoProfile -ExecutionPolicy Bypass -Command "$downloadUrl = 'https://fonts.google.com/download?family=IBM%20Plex%20Mono'; $tempRoot = Join-Path $env:TEMP ('pysysfan-ibm-plex-mono-' + [guid]::NewGuid().ToString('N')); $zipPath = Join-Path $tempRoot 'ibm-plex-mono.zip'; $fontDir = Join-Path $env:LOCALAPPDATA 'Microsoft\Windows\Fonts'; $fontsKey = 'HKCU:\Software\Microsoft\Windows NT\CurrentVersion\Fonts'; New-Item -ItemType Directory -Force -Path $tempRoot, $fontDir | Out-Null; try { Invoke-WebRequest -Uri $downloadUrl -OutFile $zipPath; Expand-Archive -Path $zipPath -DestinationPath $tempRoot -Force; $fontFiles = Get-ChildItem -Path $tempRoot -Recurse -Filter 'IBMPlexMono*.ttf'; if (-not $fontFiles) { throw 'IBM Plex Mono archive did not contain any TTF files.' }; foreach ($fontFile in $fontFiles) { $targetPath = Join-Path $fontDir $fontFile.Name; Copy-Item $fontFile.FullName $targetPath -Force; New-ItemProperty -Path $fontsKey -Name ($fontFile.BaseName + ' (TrueType)') -Value $targetPath -PropertyType String -Force | Out-Null } } finally { Remove-Item -Path $tempRoot -Recurse -Force -ErrorAction SilentlyContinue }"
+if !ERRORLEVEL! NEQ 0 (
+    echo  [!] Failed to download or register IBM Plex Mono.
+    set "FONT_STATUS=FAILED"
+    exit /b 1
+)
+
+echo  IBM Plex Mono installed successfully.
+set "FONT_STATUS=OK"
+goto :eof
+
 :print_banner
 echo.
 echo  ============================================================
@@ -309,7 +350,8 @@ echo    1. Install uv ^(Python package manager^) if needed
 echo    2. Install PySysFan as daemon-only or daemon + GUI
 echo    3. Download LibreHardwareMonitor
 echo    4. Install the PawnIO driver
-echo    5. Create a Start Menu app shortcut when the GUI is selected
+echo    5. Install IBM Plex Mono for the desktop GUI
+echo    6. Create a Start Menu app shortcut when the GUI is selected
 echo.
 echo  The background service ^(pysysfan-service.exe^) runs invisibly at logon -
 echo  no CMD window will appear. Logs are written to:
