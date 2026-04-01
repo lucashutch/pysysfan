@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Callable
+from typing import Callable, Protocol
 
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor
@@ -25,6 +25,15 @@ from pysysfan.gui.desktop.theme import (
     message_stylesheet,
 )
 from pysysfan.state_file import DaemonStateFile
+
+
+class _SensorLike(Protocol):
+    """Protocol for sensor objects with hardware_name, sensor_name, and identifier."""
+
+    hardware_name: str
+    sensor_name: str
+    identifier: str
+
 
 GROUP_ACCENT_COLORS = [
     "#5eb4ff",  # blue (primary)
@@ -596,7 +605,7 @@ class DashboardPage(QWidget):
         return " / ".join(parts[-2:]) if len(parts) >= 2 else parts[-1]
 
     @staticmethod
-    def _is_relevant_temperature(sensor: object) -> bool:
+    def _is_relevant_temperature(sensor: _SensorLike) -> bool:
         combined = (
             f"{sensor.hardware_name} {sensor.sensor_name} {sensor.identifier}"
         ).lower()

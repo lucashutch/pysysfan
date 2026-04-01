@@ -292,6 +292,9 @@ class FanDaemon:
         """Use cached scan results if available, otherwise perform a new scan."""
         import time as time_module
 
+        if self._hw is None:
+            raise RuntimeError("Hardware not initialized")
+
         t0 = time_module.perf_counter()
 
         self._cache_manager.load()
@@ -332,6 +335,9 @@ class FanDaemon:
         """
         if self._cfg is None:
             return
+
+        if self._hw is None:
+            raise RuntimeError("Hardware not initialized")
 
         configured_fan_ids = {fan.fan_id for fan in self._cfg.fans.values()}
 
@@ -648,6 +654,9 @@ class FanDaemon:
 
     def _run_once(self, cfg: Config) -> dict[str, float]:
         """Perform a single control pass. Returns {fan_name: speed_percent}."""
+        if self._hw is None:
+            raise RuntimeError("Hardware not initialized")
+
         applied: dict[str, float] = {}
 
         refresh = getattr(self._hw, "refresh", None)
@@ -812,9 +821,10 @@ class FanDaemon:
             return
 
         cfg = self._cfg
+        assert cfg is not None, "Config should be loaded after reload_config"
 
         # Start update check in background thread (non-blocking)
-        if cfg and cfg.update.auto_check:
+        if cfg.update.auto_check:
             self._update_thread = threading.Thread(
                 target=self._check_for_updates,
                 args=(cfg,),
@@ -861,6 +871,7 @@ class FanDaemon:
             while self._running:
                 # Get current config (may have been reloaded)
                 current_cfg = self._cfg if self._cfg is not None else cfg
+                assert current_cfg is not None, "current_cfg should never be None"
 
                 tick_start = time.perf_counter()
                 interval_s = float(current_cfg.poll_interval)
