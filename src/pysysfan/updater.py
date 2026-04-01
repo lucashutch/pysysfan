@@ -13,7 +13,7 @@ from dataclasses import dataclass
 import requests
 from packaging.version import Version, InvalidVersion
 
-from pysysfan import __version__
+from pysysfan import __version__  # type: ignore[unresolved-attribute]
 
 logger = logging.getLogger(__name__)
 

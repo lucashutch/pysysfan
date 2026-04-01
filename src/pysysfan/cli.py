@@ -8,7 +8,7 @@ from rich.table import Table
 from rich.panel import Panel
 from rich.text import Text
 
-from pysysfan import __version__
+from pysysfan import __version__  # type: ignore[unresolved-attribute]
 
 # Ensure stdout/stderr use UTF-8 with a replace policy where supported so
 # printing Unicode glyphs (e.g. check marks) does not raise a
@@ -17,9 +17,9 @@ import sys
 
 try:
     if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[call-non-callable]
     if hasattr(sys.stderr, "reconfigure"):
-        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")  # type: ignore[call-non-callable]
 except Exception:
     # Best-effort only; if reconfigure isn't available or fails, fall back.
     pass

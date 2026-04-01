@@ -9,7 +9,7 @@ from PySide6.QtCore import QObject
 from PySide6.QtGui import QAction, QFont, QFontInfo
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
-from pysysfan import __version__
+from pysysfan import __version__  # type: ignore[unresolved-attribute]
 from pysysfan.gui.desktop.icons import app_icon, configure_windows_app_id
 from pysysfan.gui.desktop.main_window import MainWindow
 

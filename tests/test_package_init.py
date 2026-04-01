@@ -14,7 +14,7 @@ class TestPackageVersion:
             import pysysfan
 
             importlib.reload(pysysfan)
-            assert pysysfan.__version__ == "1.2.3"
+            assert pysysfan.__version__ == "1.2.3"  # type: ignore
 
     def test_version_when_package_not_found(self):
         """Should return dev version when package not installed."""
@@ -28,4 +28,4 @@ class TestPackageVersion:
             import pysysfan
 
             importlib.reload(pysysfan)
-            assert pysysfan.__version__ == "0.0.0-dev"
+            assert pysysfan.__version__ == "0.0.0-dev"  # type: ignore
