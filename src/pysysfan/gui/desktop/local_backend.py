@@ -11,7 +11,7 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import Sequence
+from typing import Any, Sequence
 
 from pysysfan.config import Config, DEFAULT_CONFIG_PATH
 from pysysfan.curves import FanCurve, InvalidCurveError, parse_curve
@@ -36,7 +36,7 @@ _HISTORY_CACHE_SIZE: int | None = None
 _HISTORY_CACHE_VALUE: list[HistorySample] | None = None
 
 
-def _hidden_process_kwargs() -> dict[str, object]:
+def _hidden_process_kwargs() -> dict[str, Any]:
     """Return subprocess kwargs that suppress console windows on Windows."""
     return hidden_process_kwargs()
 

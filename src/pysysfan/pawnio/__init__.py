@@ -50,7 +50,7 @@ def get_installed_pawnio_version() -> str | None:
         return _read_pawnio_version_marker()
 
     try:
-        import winreg  # type: ignore
+        import winreg
     except Exception:
         return _read_pawnio_version_marker()
 

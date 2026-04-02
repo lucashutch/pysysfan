@@ -18,6 +18,7 @@ import textwrap
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from pysysfan.config import DEFAULT_CONFIG_DIR, DEFAULT_CONFIG_PATH
 from pysysfan.platforms._process import hidden_process_kwargs
@@ -33,7 +34,7 @@ STATE_FILE_PATH = DEFAULT_CONFIG_DIR / "daemon_state.json"
 HISTORY_FILE_PATH = DEFAULT_CONFIG_DIR / "daemon_history.ndjson"
 
 
-def _hidden_process_kwargs() -> dict[str, object]:
+def _hidden_process_kwargs() -> dict[str, Any]:
     """Return subprocess kwargs that suppress console windows on Windows."""
     return hidden_process_kwargs()
 

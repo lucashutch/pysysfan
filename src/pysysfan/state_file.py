@@ -151,11 +151,13 @@ def write_state(
         handle.flush()
         temp_path = Path(handle.name)
 
+    success = False
     try:
         for attempt in range(permission_retry_attempts):
             try:
                 os.replace(temp_path, path)
-                return True
+                success = True
+                break
             except PermissionError as exc:
                 if attempt >= permission_retry_attempts - 1:
                     logger.warning(
@@ -163,7 +165,7 @@ def write_state(
                         "Skipping this state update: %s",
                         exc,
                     )
-                    return False
+                    break
 
                 time.sleep(permission_retry_delay_seconds)
     finally:
@@ -173,6 +175,8 @@ def write_state(
                 temp_path.unlink()
             except OSError:
                 pass
+
+    return success
 
 
 def delete_state(path: Path = DEFAULT_STATE_PATH) -> None:

@@ -39,7 +39,7 @@ class ConfigFileHandler(FileSystemEventHandler):
 
     def on_modified(self, event):
         """Called when a file or directory is modified."""
-        if not isinstance(event, FileModifiedEvent):
+        if not isinstance(event, FileModifiedEvent):  # type: ignore
             return
 
         event_path = Path(event.src_path).resolve()
@@ -115,7 +115,7 @@ class ConfigWatcher:
             return False
 
         try:
-            self._observer = Observer()
+            self._observer = Observer()  # type: ignore
             handler = ConfigFileHandler(
                 config_path=self.config_path,
                 on_modified=self.on_reload,

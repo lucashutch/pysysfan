@@ -34,7 +34,7 @@ build-backend = "hatchling.build"
 source = "vcs"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/pysysfan"]
+packages = ["src/pysysfan", "src/pysysfan-stubs"]
 
 [dependency-groups]
 dev = [
@@ -45,6 +45,7 @@ dev = [
     "pytest-timeout>=2.3.0",
     "ruff",
     "httpx",
+    "ty",
 ]
 
 [tool.pytest.ini_options]
@@ -69,3 +70,40 @@ omit = ["*/tests/*", "*/__pycache__/*"]
 fail_under = 80
 show_missing = true
 skip_empty = true
+
+[tool.ty]
+[tool.ty.environment]
+python-version = "3.11"
+python-platform = "win32"
+root = ["."]
+
+[tool.ty.src]
+include = ["src", "tests"]
+
+[tool.ty.analysis]
+allowed-unresolved-imports = [
+    "pysysfan.**",
+    "test.**",
+]
+replace-imports-with-any = [
+    "clr.**",
+    "pythonnet",
+    "LibreHardwareMonitor.**",
+    "System.**",
+    "PySide6.**",
+    "pyqtgraph.**",
+    "watchdog.**",
+    "click.**",
+    "rich.**",
+    "yaml.**",
+    "requests.**",
+    "packaging.**",
+]
+
+[tool.ty.rules]
+all = "warn"
+
+[[tool.ty.overrides]]
+include = ["tests/**", "**/test_*.py"]
+[tool.ty.overrides.rules]
+all = "warn"

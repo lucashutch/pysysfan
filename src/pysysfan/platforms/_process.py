@@ -4,14 +4,15 @@ from __future__ import annotations
 
 import os
 import subprocess
+from typing import Any
 
 
-def hidden_process_kwargs() -> dict[str, object]:
+def hidden_process_kwargs() -> dict[str, Any]:
     """Return subprocess kwargs that suppress console windows on Windows."""
     if os.name != "nt":
         return {}
 
-    kwargs: dict[str, object] = {
+    kwargs: dict[str, Any] = {
         "creationflags": getattr(subprocess, "CREATE_NO_WINDOW", 0),
     }
     startupinfo_factory = getattr(subprocess, "STARTUPINFO", None)

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PySide6.QtCore import QPointF, Qt, Signal
 from PySide6.QtGui import QWheelEvent
 
@@ -9,6 +11,9 @@ try:  # pragma: no cover - optional GUI dependency
     import pyqtgraph as pg
 except ImportError:  # pragma: no cover - optional GUI dependency
     pg = None
+
+if TYPE_CHECKING:  # pragma: no cover
+    from pyqtgraph import PlotDataItem
 
 
 class ElapsedSecondsAxis(pg.AxisItem if pg is not None else object):
@@ -50,7 +55,7 @@ class DashboardPlotWidget(pg.PlotWidget if pg is not None else object):
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setMouseTracking(True)
         self.viewport().setMouseTracking(True)
-        self._series_items: dict[str, pg.PlotDataItem] = {}
+        self._series_items: dict[str, PlotDataItem] = {}
         self._vertical_crosshair = pg.InfiniteLine(angle=90, movable=False)
         self._horizontal_crosshair = pg.InfiniteLine(angle=0, movable=False)
         self.addItem(self._vertical_crosshair, ignoreBounds=True)
@@ -69,7 +74,7 @@ class DashboardPlotWidget(pg.PlotWidget if pg is not None else object):
             self._series_items[series_id].setData(xs, ys)
             self._series_items[series_id].setPen(pen)
         else:
-            item = pg.PlotDataItem(xs, ys, pen=pen, antialias=True)
+            item = pg.PlotDataItem(xs, ys, pen=pen, antialias=True)  # type: ignore
             self._series_items[series_id] = item
             self.addItem(item)
 

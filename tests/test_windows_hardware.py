@@ -350,7 +350,7 @@ class TestWindowsHardwareManagerHardwareTypeName:
         """Should return Unknown for errors."""
         _, _ = mock_lhm
         hw = MagicMock()
-        hw.HardwareType.__str__ = lambda self: 1 / 0  # Raises exception
+        hw.HardwareType.__str__ = lambda self: 1 / 0  # type: ignore[division-by-zero]
 
         manager = WindowsHardwareManager()
         manager.open()

@@ -273,7 +273,7 @@ class TestProfileManager:
             profile_manager.set_active_profile("")
 
         with pytest.raises(ValueError):
-            profile_manager.set_active_profile(None)  # type: ignore
+            profile_manager.set_active_profile(None)
 
     def test_update_profile(self, profile_manager, sample_config):
         """Test updating a profile."""

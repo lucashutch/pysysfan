@@ -11,6 +11,7 @@ from __future__ import annotations
 import re
 from collections import defaultdict, deque
 from pathlib import Path
+from typing import Protocol
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
@@ -24,6 +25,14 @@ from pysysfan.history_file import DEFAULT_HISTORY_PATH, HistorySample
 from pysysfan.platforms import windows_service
 from pysysfan.profiles import ProfileManager
 from pysysfan.state_file import DEFAULT_STATE_PATH, DaemonStateFile
+
+
+class _HasSensorAttrs(Protocol):
+    """Protocol for objects with sensor attributes."""
+
+    hardware_name: str
+    sensor_name: str
+    identifier: str
 
 
 class DashboardDataProvider(QObject):
@@ -482,10 +491,14 @@ class DashboardDataProvider(QObject):
         detail = ""
         if fan_config is not None and fan_config.header_name:
             detail = self._humanize_fan_label(fan_config.header_name)
-        elif getattr(live_fan, "sensor_name", None):
-            detail = self._humanize_fan_label(str(live_fan.sensor_name))
-        elif getattr(live_fan, "hardware_name", None):
-            detail = self._humanize_fan_label(str(live_fan.hardware_name))
+        elif live_fan is not None:
+            sensor_name = getattr(live_fan, "sensor_name", None)
+            if sensor_name is not None:
+                detail = self._humanize_fan_label(str(sensor_name))
+            else:
+                hardware_name = getattr(live_fan, "hardware_name", None)
+                if hardware_name is not None:
+                    detail = self._humanize_fan_label(str(hardware_name))
         if detail:
             if detail.strip().lower() == group_label.strip().lower():
                 return group_label
@@ -850,7 +863,7 @@ class DashboardDataProvider(QObject):
         return " / ".join(parts[-2:]) if len(parts) >= 2 else parts[-1]
 
     @staticmethod
-    def _is_relevant_temperature(sensor: object) -> bool:
+    def _is_relevant_temperature(sensor: _HasSensorAttrs) -> bool:
         combined = (
             f"{sensor.hardware_name} {sensor.sensor_name} {sensor.identifier}"
         ).lower()
